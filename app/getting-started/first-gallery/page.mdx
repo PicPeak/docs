@@ -1,0 +1,50 @@
+import { Steps, Callout } from 'nextra/components'
+
+# Your First Gallery
+
+Now that you're logged in, let's create a gallery and share it with a client.
+
+<Steps>
+
+### Create an event
+
+Click **Create Event** on the dashboard. Fill in:
+
+- **Event type** — Wedding, Birthday, Corporate, etc.
+- **Event name** — this becomes the gallery title (e.g. "Smith Wedding")
+- **Event date**
+- **Customer email** — the client who'll receive the gallery link
+- **Password** — guests need this to access the gallery
+
+Click **Create Event**. The event is created as a **draft** — your client won't receive any email yet.
+
+<img src="/images/screenshots-events.png" alt="Event Management" style={{ borderRadius: '8px', marginTop: '0.5rem', marginBottom: '1rem', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }} />
+
+### Upload photos
+
+Open the event and go to the **Photos** tab. Drag and drop your images — PicPeak accepts JPEG, PNG, and WebP up to 50 MB each. Thumbnails are generated automatically.
+
+You can organize photos into **categories** (e.g. Ceremony, Reception, Portraits) from the Categories tab.
+
+### Preview the gallery
+
+While the event is still a draft, click **View Gallery** in the event header. As an admin, you'll see a preview of exactly what your client will see. This preview uses a temporary token — the gallery is not publicly accessible yet.
+
+### Publish and notify
+
+When everything looks good, click **Publish & Notify Client** in the yellow draft banner. This does two things:
+
+1. Makes the gallery publicly accessible (with password protection)
+2. Sends the gallery link and password to your client's email
+
+</Steps>
+
+<Callout>
+You can edit the client's email address after creation if you didn't have it when you set up the event. Click **Edit** on the event details page.
+</Callout>
+
+## What's next
+
+- [Features](/features) — explore themes, photo protection, analytics, and more
+- [Deployment](/deployment) — configure your domain, SSL, and email for production
+- [Guides](/guides) — detailed walkthroughs for common tasks

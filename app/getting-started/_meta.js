@@ -1,7 +1,6 @@
 export default {
-  index: 'Overview',
-  installation: 'Installation',
+  index: '',
   'quick-start': 'Quick Start',
   'first-login': 'First Login',
-  configuration: 'Configuration',
+  'first-gallery': 'Your First Gallery',
 }

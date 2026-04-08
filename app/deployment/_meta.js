@@ -1,8 +1,8 @@
 export default {
-  index: 'Overview',
-  docker: 'Docker',
+  index: '',
+  docker: 'Docker Configuration',
+  'environment-variables': 'Environment Variables',
   'reverse-proxy': 'Reverse Proxy',
   ssl: 'SSL Certificates',
-  'environment-variables': 'Environment Variables',
   'release-channels': 'Release Channels',
 }

@@ -1,38 +1,31 @@
-import { Steps, Callout } from 'nextra/components'
+import { Steps, Callout, Tabs } from 'nextra/components'
 
 # Quick Start
 
-Get PicPeak running in under five minutes.
+Get PicPeak running in under five minutes with Docker.
+
+**Requirements:** Docker v20.10+ and Docker Compose v2.0+. At least 2 CPU cores, 2 GB RAM, 20 GB storage.
 
 <Steps>
 
-### Clone the repository
+### Clone and configure
 
 ```bash
 git clone https://github.com/the-luap/picpeak.git
 cd picpeak
-```
-
-### Create and edit the environment file
-
-```bash
 cp .env.example .env
 ```
 
-Generate a secure JWT secret and database password:
+Generate secure secrets and edit `.env`:
 
 ```bash
-# JWT Secret
-openssl rand -base64 64
-
-# Database password (avoid $ characters)
-openssl rand -base64 32 | tr -d '$'
-
-# Redis password
-openssl rand -base64 32 | tr -d '$'
+# Generate values
+openssl rand -base64 64    # use for JWT_SECRET
+openssl rand -base64 32 | tr -d '$'  # use for DB_PASSWORD
+openssl rand -base64 32 | tr -d '$'  # use for REDIS_PASSWORD
 ```
 
-Open `.env` and set at least these values:
+Open `.env` and set these three values:
 
 ```env
 JWT_SECRET=<paste generated value>
@@ -40,7 +33,22 @@ DB_PASSWORD=<paste generated value>
 REDIS_PASSWORD=<paste generated value>
 ```
 
-### Create storage directories
+### Set file permissions
+
+Docker needs write access to storage directories. Set `PUID` and `PGID` in `.env` to match your host user:
+
+```bash
+# Find your user/group IDs
+id -u   # → e.g. 1000
+id -g   # → e.g. 1000
+```
+
+```env
+PUID=1000
+PGID=1000
+```
+
+Then create the directories:
 
 ```bash
 mkdir -p events/active events/archived data logs backup storage
@@ -49,29 +57,34 @@ chmod -R 755 events data logs backup storage
 
 ### Start PicPeak
 
+<Tabs items={['Production (recommended)', 'Development']}>
+<Tabs.Tab>
 ```bash
+docker compose -f docker-compose.production.yml pull
 docker compose -f docker-compose.production.yml up -d
 ```
+</Tabs.Tab>
+<Tabs.Tab>
+```bash
+docker compose up -d
+```
+</Tabs.Tab>
+</Tabs>
 
-### Verify the services
+Wait for all containers to report as healthy:
 
 ```bash
-docker compose -f docker-compose.production.yml ps
+docker compose ps
 ```
 
-Wait for all containers to report as healthy.
-
-### Access PicPeak
+### Open PicPeak
 
 Open `http://localhost:3000` in your browser. The admin panel is at `http://localhost:3000/admin`.
 
 </Steps>
 
 <Callout>
-The backend API listens on port 3001. The frontend on port 3000 serves the UI and proxies `/api` requests to the backend. You do not need to access port 3001 directly in a standard setup.
+The frontend (port 3000) serves the UI and proxies API requests to the backend (port 3001). You don't need to access port 3001 directly.
 </Callout>
 
-## Next steps
-
-- [First Login](/getting-started/first-login) --- find the admin password and change it.
-- [Configuration](/getting-started/configuration) --- set your domain URL and email provider.
+**Next:** [First Login](/getting-started/first-login) — find your admin password and complete the mandatory password change.
