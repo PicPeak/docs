@@ -1,0 +1,33 @@
+# API Reference
+
+PicPeak provides an Admin API for automation and integration. The machine-readable OpenAPI spec is at `docs/picpeak-admin-api.openapi.yaml` in the repository.
+
+## Base URL
+
+```
+http://localhost:3001/api
+```
+
+Behind a reverse proxy: `https://your-domain.com/api`
+
+## Key endpoints
+
+- **[Authentication](/api/authentication)** --- obtain and use admin API tokens.
+- **[Events](/api/events)** --- create, list, update, and publish events.
+- **[Photos](/api/photos)** --- upload photos and manage event media.
+
+## OpenAPI documentation
+
+Preview the spec interactively:
+
+```bash
+npx --yes @redocly/cli preview-docs docs/picpeak-admin-api.openapi.yaml
+```
+
+Import it into Postman, Insomnia, or any OpenAPI-compatible tool.
+
+Validate after changes:
+
+```bash
+npx --yes @apidevtools/swagger-cli@4.0.4 validate docs/picpeak-admin-api.openapi.yaml
+```

@@ -1,0 +1,57 @@
+import { Callout } from 'nextra/components'
+
+# Gallery Management
+
+Galleries in PicPeak are organized as **events**. Each event has its own slug, password, expiration date, and set of photos organized into categories.
+
+## Creating events
+
+From the admin dashboard, create a new event by providing:
+
+- **Event type** --- wedding, corporate, birthday, portrait, or custom.
+- **Event name** --- displayed as the gallery title.
+- **Event date** --- the date of the event.
+- **Customer name and email** --- used for email notifications.
+- **Password** --- optional; when set, guests must enter it to view the gallery.
+- **Expiration** --- number of days until the gallery expires (default: 30 days).
+
+Each event receives a unique slug and a shareable gallery link.
+
+## Categories
+
+Photos within an event can be organized into categories (e.g., "Ceremony", "Reception", "Portraits"). Categories help guests navigate large galleries.
+
+## Uploads
+
+PicPeak supports drag-and-drop upload directly in the admin panel. Files can also be uploaded via the API.
+
+- Supported image formats: JPEG, PNG, WebP
+- Maximum file size: 50 MB per image
+- Batch uploads respect the `general_max_files_per_upload` setting (default: 500)
+- Thumbnails are generated automatically during upload
+
+## Expiration and archiving
+
+When an event reaches its expiration date:
+
+- The gallery becomes inaccessible to guests.
+- PicPeak automatically archives the event and its photos to the `events/archived` directory.
+
+Expiration warnings can be sent via email before the gallery expires.
+
+## Guest uploads
+
+Events can optionally allow guests to upload their own photos. This is useful for collaborative events where multiple people contribute photos.
+
+## Bulk downloads
+
+Guests can download all photos from a gallery (or a filtered subset) as a ZIP archive with a single click.
+
+## Filtering and search
+
+The gallery interface supports:
+
+- Filtering by likes, ratings, comments, or favorites
+- Searching by filename
+- Sorting by date, name, size, or rating
+- Exporting filtered selections as ZIP or generating Capture One/Lightroom-compatible file lists

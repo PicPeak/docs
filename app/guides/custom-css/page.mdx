@@ -1,0 +1,53 @@
+# Custom CSS
+
+PicPeak supports custom CSS at two levels for complete visual control over galleries.
+
+## Global custom CSS
+
+Apply CSS to all galleries from **Admin > Settings > Appearance** (or the theme/CSS section). This is useful for site-wide branding changes.
+
+## Per-event custom CSS
+
+Each event can have its own CSS overrides. Edit the custom CSS field in the event settings. Per-event CSS takes precedence over global CSS for that gallery.
+
+## Gallery layout templates
+
+PicPeak includes multiple gallery layouts (grid, masonry, carousel, timeline, hero, mosaic) and starter CSS templates such as "Apple Liquid Glass". Select a layout from the event settings, then refine with custom CSS.
+
+## Examples
+
+### Change gallery background
+
+```css
+.gallery-container {
+  background-color: #1a1a1a;
+}
+```
+
+### Customize the header
+
+```css
+.gallery-header {
+  font-family: 'Georgia', serif;
+  color: #333;
+}
+```
+
+### Adjust thumbnail sizing
+
+```css
+.photo-thumbnail {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+```
+
+## Public landing page CSS
+
+The public landing page (configured under **Admin > CMS Pages**) accepts optional CSS overrides separate from gallery CSS. PicPeak sanitizes all submitted CSS server-side, stripping `@import` rules and `javascript:` URLs.
+
+## Tips
+
+- Use browser developer tools to inspect gallery elements and find the correct selectors.
+- Test custom CSS on a draft event before applying it to a live gallery.
+- The CSS is applied after the default theme, so your rules override the defaults.

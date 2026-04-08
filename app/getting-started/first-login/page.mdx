@@ -1,0 +1,95 @@
+import { Steps, Callout } from 'nextra/components'
+
+# First Login
+
+When PicPeak starts for the first time, it creates an admin account with a randomly generated password. You must change this password on first login.
+
+## Finding the admin password
+
+There are several ways to retrieve the auto-generated password:
+
+**Option 1: Search Docker logs** (recommended)
+
+```bash
+docker compose logs backend | grep "Admin password"
+```
+
+Output:
+
+```
+Admin password generated: BraveTiger6231!
+```
+
+**Option 2: Read the credentials file**
+
+```bash
+docker exec picpeak-backend cat data/ADMIN_CREDENTIALS.txt
+```
+
+**Option 3: Use the helper script**
+
+```bash
+# Show admin username and email
+docker exec picpeak-backend node scripts/show-admin-credentials.js
+
+# Reset to a new random password
+docker exec picpeak-backend node scripts/show-admin-credentials.js --reset
+```
+
+<Callout type="warning">
+When using `--reset`, the new password is displayed once in the console. Save it immediately.
+</Callout>
+
+## Logging in
+
+<Steps>
+
+### Open the admin panel
+
+Navigate to `http://localhost:3000/admin` (or `https://your-domain.com/admin` behind a reverse proxy).
+
+### Enter credentials
+
+- **Email**: `admin@example.com` (or the value of `ADMIN_EMAIL` from your `.env`)
+- **Password**: the auto-generated password from the logs
+
+<Callout>
+Login requires the **email address**, not the username.
+</Callout>
+
+### Change your password
+
+The system will force a password change on first login. You cannot skip this step. The new password must meet these requirements:
+
+- Minimum 12 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one number
+- At least one special character (`!@#$%^&*`)
+
+</Steps>
+
+## If you lose access
+
+If you lose your admin credentials after the initial password change:
+
+```bash
+# Reset to a new random password
+docker exec picpeak-backend node scripts/show-admin-credentials.js --reset
+```
+
+You can also use the setup script with the force-reset flag:
+
+```bash
+sudo ./picpeak-setup.sh --docker --force-admin-password-reset
+```
+
+## Configuring the admin email
+
+The default admin email is `admin@example.com`. To use a different email, set `ADMIN_EMAIL` in your `.env` **before** first deployment:
+
+```env
+ADMIN_EMAIL=photographer@yourdomain.com
+```
+
+This only applies on first deployment. To change it afterward, update it through the admin panel or directly in the database.

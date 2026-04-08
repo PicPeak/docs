@@ -1,0 +1,29 @@
+# Multi-Admin
+
+PicPeak supports multiple administrator accounts with role-based permissions.
+
+## Roles
+
+| Role | Description |
+|------|-------------|
+| `super_admin` | Full access. Can manage other admin accounts, system settings, and all events. |
+| `admin` | Can create and manage events, upload photos, and access analytics. Cannot manage other admin accounts or system-level settings. |
+| `editor` | Limited access. Can edit existing events and manage photos within assigned events. |
+
+## Managing administrators
+
+From the admin panel (as `super_admin`):
+
+1. Navigate to **Settings > Users** (or the admin management section).
+2. Create new admin accounts with the appropriate role.
+3. Each admin logs in with their own email and password.
+
+## Activity tracking
+
+Admin actions are logged for audit purposes. The activity log records who performed which actions and when, providing accountability across the team.
+
+## Security
+
+- Each admin has independent credentials.
+- Password requirements apply to all accounts (minimum 12 characters, mixed case, numbers, special characters).
+- Login attempt thresholds and lockouts apply per account. Defaults: 5 failed attempts per IP within 15 minutes, resulting in a 30-minute lockout. These can be configured in **Admin > Settings > Security**.

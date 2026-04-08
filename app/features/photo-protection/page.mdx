@@ -1,0 +1,31 @@
+# Photo Protection
+
+PicPeak includes an advanced download protection system to help prevent unauthorized use of photos.
+
+## Protection layers
+
+### Canvas rendering
+
+Instead of serving images as standard `<img>` elements, PicPeak can render photos using HTML5 Canvas. This makes it harder to save images via right-click or browser extensions.
+
+### Right-click prevention
+
+When enabled, right-click context menus are disabled on gallery pages, preventing the standard "Save image as" option.
+
+### Invisible watermarking
+
+PicPeak can apply invisible watermarks to gallery images. These watermarks are imperceptible to viewers but can be detected if images are redistributed without authorization.
+
+### DevTools detection
+
+The protection system detects when browser developer tools are open and can take action (such as displaying a warning or hiding content) to prevent image extraction through the browser inspector.
+
+## Configuration
+
+Photo protection settings are configured per-event from the admin panel. You can enable or disable individual protection layers depending on the client and event requirements.
+
+## Important notes
+
+No client-side protection is foolproof --- a determined user can always capture screen content. These features raise the barrier for casual downloading and demonstrate professional image handling to clients.
+
+For stronger protection, consider using visible watermarks on preview images and delivering full-resolution files only through controlled download channels.

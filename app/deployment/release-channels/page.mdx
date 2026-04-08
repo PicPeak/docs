@@ -1,0 +1,57 @@
+# Release Channels
+
+PicPeak offers two release channels for different needs.
+
+## Stable (recommended)
+
+- Production-ready releases.
+- Thoroughly tested before publication.
+- Docker tags: `stable`, `latest`, or a specific version like `v2.3.0`.
+
+## Beta
+
+- Early access to new features.
+- May contain bugs or incomplete functionality.
+- Docker tags: `beta`, or a specific version like `v2.3.0-beta.1`.
+
+## Configuring your channel
+
+Set `PICPEAK_CHANNEL` in your `.env`:
+
+```env
+# Stable (default)
+PICPEAK_CHANNEL=stable
+
+# Beta
+PICPEAK_CHANNEL=beta
+
+# Pin to a specific version
+PICPEAK_CHANNEL=v2.3.0
+```
+
+The production compose file uses this variable for both images:
+
+```yaml
+image: ghcr.io/the-luap/picpeak/backend:${PICPEAK_CHANNEL:-stable}
+```
+
+## Switching channels
+
+```bash
+# Edit .env and change PICPEAK_CHANNEL
+nano .env
+
+# Pull new images and restart
+docker compose -f docker-compose.production.yml pull
+docker compose -f docker-compose.production.yml up -d
+```
+
+## Update notifications
+
+The admin dashboard checks GitHub releases hourly (cached to avoid rate limits) and notifies you when updates are available for your channel.
+
+To disable update checks:
+
+```env
+UPDATE_CHECK_ENABLED=false
+```

@@ -1,0 +1,41 @@
+# Email Templates
+
+PicPeak uses customizable HTML email templates for all automated notifications.
+
+## Available templates
+
+- **Gallery creation** --- sent to the customer with the gallery link.
+- **Expiration warning** --- sent before a gallery expires.
+- **Gallery link resend** --- sent when you manually resend the link.
+
+## Editing templates
+
+1. Go to **Admin > Settings > Email** (or the email template section).
+2. Select the template to edit.
+3. Modify the HTML. Available placeholders include event name, gallery link, password, expiration date, and customer name.
+4. Preview the rendered result.
+5. Send a test email to verify formatting.
+
+## Multilingual support
+
+PicPeak includes English and German email templates out of the box. The template language is selected based on system or event settings.
+
+Translations are managed through the i18n system. Locale files are in `frontend/src/i18n/locales/` for the UI and in the backend email service for email content.
+
+## Email wrapper
+
+All outgoing emails are wrapped with a consistent layout using the `wrapEmailHtml()` function in `emailProcessor.js`. This wrapper applies:
+
+- Standard header with logo
+- Consistent typography and spacing
+- Footer with branding
+
+The logo URL is derived from `FRONTEND_URL`. Set this to your publicly accessible domain so email recipients can see images.
+
+## Testing
+
+Send test emails from the admin panel to verify your SMTP configuration and template rendering. Check the backend logs if emails are not arriving:
+
+```bash
+docker compose logs backend | grep email
+```

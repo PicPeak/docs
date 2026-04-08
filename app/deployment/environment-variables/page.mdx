@@ -1,0 +1,108 @@
+import { Callout } from 'nextra/components'
+
+# Environment Variables
+
+Complete reference for all PicPeak environment variables. Set these in the `.env` file at the project root.
+
+<Callout type="warning">
+Avoid `$` characters in passwords. Docker Compose interprets `$` as variable substitution. Either omit `$` entirely or escape it as `$$`.
+</Callout>
+
+## Core
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `NODE_ENV` | No | `production` | Environment mode |
+| `JWT_SECRET` | **Yes** | --- | Authentication secret. Generate with `openssl rand -base64 64` |
+| `TZ` | No | `UTC` | Timezone |
+
+## Database
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_CLIENT` | No | `pg` | Database client (`pg` or `sqlite3`) |
+| `DB_HOST` | No | `postgres` | PostgreSQL host (defaults to bundled container) |
+| `DB_PORT` | No | `5432` | PostgreSQL port |
+| `DB_USER` | No | `picpeak` | Database username |
+| `DB_PASSWORD` | **Yes** | --- | Database password |
+| `DB_NAME` | No | `picpeak_prod` | Database name |
+
+## Redis
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `REDIS_PASSWORD` | **Yes** | --- | Redis password |
+
+## Admin account
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ADMIN_USERNAME` | No | `admin` | Initial admin username |
+| `ADMIN_EMAIL` | No | `admin@yourdomain.com` | Initial admin email (used for login) |
+| `ADMIN_PASSWORD` | No | auto-generated | Initial admin password |
+
+## Email (SMTP)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SMTP_HOST` | No | --- | SMTP server hostname |
+| `SMTP_PORT` | No | `587` | SMTP server port |
+| `SMTP_SECURE` | No | `false` | Use TLS (`true` for port 465) |
+| `SMTP_USER` | No | --- | SMTP username |
+| `SMTP_PASS` | No | --- | SMTP password or API key |
+| `EMAIL_FROM` | No | `noreply@picpeak.local` | Sender email address |
+
+## Application URLs
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `FRONTEND_URL` | No | `http://localhost:3000` | Frontend origin (scheme + host + port, no trailing slash) |
+| `ADMIN_URL` | No | `http://localhost:3000` | Admin origin (usually same as `FRONTEND_URL`) |
+| `API_URL` | No | `http://localhost:3001` | Public API URL for email assets |
+| `VITE_API_URL` | No | `/api` | Frontend API base path (keep `/api` for Docker) |
+
+## Ports
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `BACKEND_PORT` | No | `3001` | Host port for the backend |
+| `FRONTEND_PORT` | No | `3000` | Host port for the frontend |
+| `DB_PORT` | No | `5432` | Host port for PostgreSQL |
+| `REDIS_PORT` | No | `6379` | Host port for Redis |
+
+## Storage
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `APP_STORAGE` | No | `./storage` | Host path for storage |
+| `APP_DATA` | No | `./data` | Host path for application data |
+| `LOGS` | No | `./logs` | Host path for logs |
+| `EXTERNAL_MEDIA_ROOT` | No | `/app/storage/external-media` | Path to external photo library |
+
+## Docker user mapping
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PUID` | No | `1001` | Container user UID |
+| `PGID` | No | `1001` | Container user GID |
+
+## Release channel
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PICPEAK_CHANNEL` | No | `stable` | Image tag: `stable`, `beta`, or a specific version |
+| `UPDATE_CHECK_ENABLED` | No | `true` | Show update notifications in admin dashboard |
+
+## Analytics
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `VITE_UMAMI_URL` | No | --- | Umami analytics server URL |
+| `VITE_UMAMI_WEBSITE_ID` | No | --- | Umami website ID |
+| `VITE_UMAMI_SHARE_URL` | No | --- | Umami public share URL |
+
+## Public landing page
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PUBLIC_SITE_CACHE_TTL_MS` | No | `60000` | Cache TTL for the landing page in milliseconds |

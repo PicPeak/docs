@@ -1,0 +1,77 @@
+import { Steps, Callout } from 'nextra/components'
+
+# Quick Start
+
+Get PicPeak running in under five minutes.
+
+<Steps>
+
+### Clone the repository
+
+```bash
+git clone https://github.com/the-luap/picpeak.git
+cd picpeak
+```
+
+### Create and edit the environment file
+
+```bash
+cp .env.example .env
+```
+
+Generate a secure JWT secret and database password:
+
+```bash
+# JWT Secret
+openssl rand -base64 64
+
+# Database password (avoid $ characters)
+openssl rand -base64 32 | tr -d '$'
+
+# Redis password
+openssl rand -base64 32 | tr -d '$'
+```
+
+Open `.env` and set at least these values:
+
+```env
+JWT_SECRET=<paste generated value>
+DB_PASSWORD=<paste generated value>
+REDIS_PASSWORD=<paste generated value>
+```
+
+### Create storage directories
+
+```bash
+mkdir -p events/active events/archived data logs backup storage
+chmod -R 755 events data logs backup storage
+```
+
+### Start PicPeak
+
+```bash
+docker compose -f docker-compose.production.yml up -d
+```
+
+### Verify the services
+
+```bash
+docker compose -f docker-compose.production.yml ps
+```
+
+Wait for all containers to report as healthy.
+
+### Access PicPeak
+
+Open `http://localhost:3000` in your browser. The admin panel is at `http://localhost:3000/admin`.
+
+</Steps>
+
+<Callout>
+The backend API listens on port 3001. The frontend on port 3000 serves the UI and proxies `/api` requests to the backend. You do not need to access port 3001 directly in a standard setup.
+</Callout>
+
+## Next steps
+
+- [First Login](/getting-started/first-login) --- find the admin password and change it.
+- [Configuration](/getting-started/configuration) --- set your domain URL and email provider.

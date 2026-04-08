@@ -1,0 +1,60 @@
+import { Steps, Callout } from 'nextra/components'
+
+# Creating Events
+
+Events are the core organizational unit in PicPeak. Each event represents a photo gallery.
+
+<Steps>
+
+### Open the admin panel
+
+Navigate to `https://your-domain.com/admin` and log in.
+
+### Create a new event
+
+Click **New Event** from the dashboard or events list.
+
+### Fill in event details
+
+| Field | Description |
+|-------|-------------|
+| Event type | Wedding, corporate, birthday, portrait, or custom |
+| Event name | Displayed as the gallery title |
+| Event date | The date of the event |
+| Customer name | Client's name (used in emails) |
+| Customer email | Client's email (receives gallery link) |
+| Admin email | Your email (receives notifications) |
+| Password | Optional. If set, guests must enter it to access the gallery |
+| Expiration days | How many days until the gallery expires (default: 30) |
+
+### Save as draft (optional)
+
+If you are not ready to share the gallery yet, save it as a draft. Drafts are not accessible to guests.
+
+### Upload photos
+
+Drag and drop photos into the upload area, or click to browse. You can organize uploads into categories (e.g., "Ceremony", "Reception").
+
+- Supported formats: JPEG, PNG, WebP
+- Max size per file: 50 MB
+- Max files per upload: 500 (configurable)
+
+Thumbnails are generated automatically.
+
+### Configure gallery settings
+
+Set the theme, enable/disable feedback, configure photo protection, and add custom CSS if needed.
+
+### Publish
+
+When ready, publish the event. This makes the gallery accessible via its unique link.
+
+### Send the gallery link
+
+Optionally trigger an email to the customer with the gallery link and password. You can also copy the link manually.
+
+</Steps>
+
+<Callout>
+Published events can be returned to draft state if you need to make changes before the client sees them.
+</Callout>

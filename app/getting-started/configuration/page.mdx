@@ -1,0 +1,97 @@
+import { Callout } from 'nextra/components'
+
+# Configuration
+
+PicPeak is configured through environment variables in the `.env` file at the project root. Copy `.env.example` and customize the values for your deployment.
+
+## Required variables
+
+| Variable | Description |
+|----------|-------------|
+| `JWT_SECRET` | Authentication secret. Generate with `openssl rand -base64 64`. |
+| `DB_PASSWORD` | PostgreSQL password. Avoid `$` characters. |
+| `REDIS_PASSWORD` | Redis password. Avoid `$` characters. |
+
+## Application URLs
+
+These control CORS validation and email links. Always include the scheme (`http://` or `https://`) and never include a trailing slash.
+
+```env
+FRONTEND_URL=https://yourdomain.com
+ADMIN_URL=https://yourdomain.com
+API_URL=https://yourdomain.com/api
+```
+
+<Callout type="warning">
+The backend compares Origin headers against `FRONTEND_URL` for CORS. If the value does not match exactly (including port), login requests will fail with 500 errors.
+</Callout>
+
+For local Docker development without a reverse proxy:
+
+```env
+FRONTEND_URL=http://localhost:3000
+ADMIN_URL=http://localhost:3000
+```
+
+## Email setup
+
+PicPeak sends gallery creation confirmations, expiration warnings, and gallery links via SMTP.
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-specific-password
+EMAIL_FROM=noreply@yourdomain.com
+```
+
+For Gmail, use an [app-specific password](https://myaccount.google.com/apppasswords). For SendGrid:
+
+```env
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=apikey
+SMTP_PASS=your-sendgrid-api-key
+```
+
+## Frontend API base
+
+For pre-built Docker images and production behind a reverse proxy, keep the default:
+
+```env
+VITE_API_URL=/api
+```
+
+The frontend Nginx container proxies `/api` requests to the backend. Only change this if you rebuild the frontend yourself.
+
+## Timezone
+
+```env
+TZ=UTC
+```
+
+## Analytics (optional)
+
+PicPeak includes a built-in analytics dashboard. For additional privacy-focused analytics, integrate with [Umami](https://umami.is/):
+
+```env
+VITE_UMAMI_URL=https://analytics.yourdomain.com
+VITE_UMAMI_WEBSITE_ID=your-website-id
+VITE_UMAMI_SHARE_URL=https://analytics.yourdomain.com/share/...
+```
+
+## Storage paths
+
+These control where PicPeak stores data on the host:
+
+```env
+APP_STORAGE=./storage
+APP_DATA=./data
+LOGS=./logs
+```
+
+## Full reference
+
+See [Environment Variables](/deployment/environment-variables) for a complete table of all available variables.

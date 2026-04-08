@@ -1,0 +1,35 @@
+# PicPeak Documentation
+
+PicPeak is an open-source, self-hosted photo sharing platform for events. It gives photographers and event organizers a way to share beautiful, time-limited, password-protected galleries with clients --- while keeping full control over data and branding.
+
+- **No monthly fees.** Deploy once, run unlimited galleries.
+- **Your data stays on your server.** Full ownership of photos and metadata.
+- **White-label ready.** Custom themes, CSS, branding, and a public landing page.
+- **Mobile-first.** Responsive design that works on every device.
+
+[Try the live demo](https://demo.picpeak.app) --- admin panel at [demo.picpeak.app/admin](https://demo.picpeak.app/admin) (email: `demo@picpeak.app`, password: `Demo2026!`).
+
+---
+
+## Quick links
+
+- [Installation](/getting-started/installation) --- get PicPeak running with Docker in under five minutes.
+- [Features](/features) --- gallery management, themes, email, photo protection, video, analytics, and more.
+- [Deployment](/deployment) --- Docker, reverse proxy, SSL, environment variables.
+- [Guides](/guides) --- step-by-step walkthroughs for common tasks.
+- [API Reference](/api) --- authenticate and automate with the Admin API.
+- [Contributing](/contributing) --- set up a dev environment and submit pull requests.
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Backend | Node.js, Express, Knex |
+| Frontend | React, TypeScript, Tailwind CSS, Framer Motion |
+| Database | PostgreSQL (primary), SQLite (fallback) |
+| Storage | File-based with automatic archiving |
+| Email | SMTP with queue-based processing and retry |
+| Analytics | Built-in dashboard + optional Umami integration |
+| Infrastructure | Docker, Nginx, Redis |

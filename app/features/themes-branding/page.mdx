@@ -1,0 +1,52 @@
+# Themes and Branding
+
+PicPeak provides extensive customization options so galleries can match your studio's brand.
+
+## Gallery layout templates
+
+Multiple gallery layouts are available:
+
+- Grid
+- Masonry
+- Carousel
+- Timeline
+- Hero
+- Mosaic
+
+Each layout can be further customized with CSS. PicPeak also includes starter templates (such as "Apple Liquid Glass") for complete visual customization.
+
+## Theme presets
+
+PicPeak ships with built-in theme presets that control the gallery color scheme and typography. Select a preset from the admin panel under event settings, or set a site-wide default.
+
+## Custom CSS
+
+For full control, add custom CSS at two levels:
+
+- **Global custom CSS** --- applied to all galleries via admin settings.
+- **Per-event custom CSS** --- applied only to a specific gallery.
+
+See [Custom CSS Guide](/guides/custom-css) for details and examples.
+
+## White-label admin and login
+
+PicPeak can be fully white-labeled:
+
+- Replace the logo and branding in the admin panel.
+- Customize the login screen appearance.
+- Use your own domain with a reverse proxy.
+
+## Public landing page
+
+Enable a customizable marketing page at your root URL (`/`):
+
+1. Go to **Admin > CMS Pages** and enable the public landing page toggle.
+2. Edit the provided HTML template (hero section, testimonials, features).
+3. Add optional CSS overrides.
+4. Preview in a sandboxed iframe before publishing.
+
+PicPeak sanitizes all HTML and CSS server-side --- scripts, iframes, and unsafe attributes are stripped automatically. Use **Reset to default** to restore the bundled template at any time.
+
+The landing page is cached for 60 seconds by default. Override with `PUBLIC_SITE_CACHE_TTL_MS` in your `.env` if needed.
+
+When the landing page is disabled, PicPeak serves the admin SPA/login as before.

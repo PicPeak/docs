@@ -1,0 +1,49 @@
+# SSL Certificates
+
+All production deployments should use HTTPS. The simplest approach depends on your reverse proxy.
+
+## Caddy (automatic)
+
+Caddy provisions and renews Let's Encrypt certificates automatically. No additional configuration is needed beyond the `Caddyfile` shown in [Reverse Proxy](/deployment/reverse-proxy).
+
+## Certbot (Nginx)
+
+Install Certbot and obtain a certificate:
+
+```bash
+sudo apt install certbot python3-certbot-nginx
+sudo certbot certonly --webroot -w /var/www/certbot -d your-domain.com
+```
+
+Or use the Nginx plugin:
+
+```bash
+sudo certbot --nginx -d your-domain.com
+```
+
+Certbot sets up automatic renewal via a systemd timer. Verify with:
+
+```bash
+sudo certbot renew --dry-run
+```
+
+## Traefik (automatic)
+
+Traefik handles certificates automatically when a `certresolver` is configured. The labels shown in [Reverse Proxy](/deployment/reverse-proxy) reference a resolver named `letsencrypt`. Define it in your Traefik static configuration:
+
+```yaml
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: your-email@domain.com
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+```
+
+## Security recommendations
+
+- Always redirect HTTP to HTTPS.
+- Only expose ports 80 and 443 through your firewall.
+- Keep your reverse proxy and SSL libraries up to date.
+- Monitor certificate expiration to avoid unexpected downtime.

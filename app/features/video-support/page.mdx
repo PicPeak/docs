@@ -1,0 +1,48 @@
+import { Callout } from 'nextra/components'
+
+# Video Support
+
+PicPeak supports uploading and displaying videos alongside photos in event galleries.
+
+## Supported formats
+
+| Format | Extension |
+|--------|-----------|
+| MP4 | `.mp4` |
+| WebM | `.webm` |
+| MOV | `.mov` |
+| AVI | `.avi` |
+
+## Upload limits
+
+- Maximum file size: **10 GB per video file**
+- Chunked upload support for files over 100 MB (resumable uploads)
+
+## Thumbnail generation
+
+Video thumbnails are automatically extracted from the first few seconds of each video using FFmpeg. FFmpeg is bundled via npm (`@ffmpeg-installer/ffmpeg`) --- no system installation is required.
+
+## Resource requirements
+
+<Callout type="warning">
+Video processing is resource-intensive. Plan your server resources accordingly.
+</Callout>
+
+| Resource | Recommendation |
+|----------|---------------|
+| RAM | 4 GB+ recommended |
+| Storage | Plan for 10-100x more than photo-only galleries |
+| CPU | Additional cores help with thumbnail extraction |
+| Bandwidth | Video streaming requires higher throughput |
+
+## Reverse proxy configuration
+
+If using Nginx as a reverse proxy, increase the body size limit and timeouts:
+
+```nginx
+client_max_body_size 10G;
+proxy_read_timeout 3600;
+proxy_send_timeout 3600;
+```
+
+Without these settings, large video uploads will be rejected by the proxy before reaching PicPeak.

@@ -1,0 +1,43 @@
+# Photos API
+
+## Upload photos
+
+```bash
+API_URL="http://localhost:3001/api"
+TOKEN="your-jwt-token"
+EVENT_ID=512
+
+curl --fail --silent --show-error \
+  -X POST "$API_URL/admin/events/$EVENT_ID/upload" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "photos=@/path/to/DSC_2031.jpg" \
+  -F "photos=@/path/to/DSC_2032.jpg" \
+  -F "category_id=individual" | jq
+```
+
+### Constraints
+
+- Files must be JPEG, PNG, or WebP.
+- Maximum size: 50 MB per file.
+- Maximum files per request: respects the `general_max_files_per_upload` admin setting (default: 500).
+- Uploading more files than allowed returns HTTP 400 with an error message.
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `photos` | file(s) | One or more image files (multipart form data) |
+| `category_id` | string | Optional category to assign photos to |
+
+## Photo access
+
+Gallery photos and thumbnails are served through authenticated endpoints:
+
+- `/photos/{eventSlug}/{filename}` --- full-size photos (requires gallery or admin token)
+- `/thumbnails/{eventSlug}/{filename}` --- thumbnails (requires gallery or admin token)
+
+These paths should be routed to the backend (port 3001) in your reverse proxy configuration.
+
+## Video uploads
+
+Videos follow the same upload endpoint but support MP4, WebM, MOV, and AVI formats up to 10 GB. Files over 100 MB use chunked (resumable) uploads.

@@ -1,0 +1,127 @@
+import { Callout } from 'nextra/components'
+
+# Docker
+
+PicPeak provides two Docker Compose files:
+
+- `docker-compose.yml` --- builds from source, includes MailHog for email testing.
+- `docker-compose.production.yml` --- uses pre-built images from GitHub Container Registry.
+
+## Services
+
+| Service | Image | Port | Description |
+|---------|-------|------|-------------|
+| `backend` | `ghcr.io/the-luap/picpeak/backend` | 3001 | Express API |
+| `frontend` | `ghcr.io/the-luap/picpeak/frontend` | 3000 | React SPA + Nginx |
+| `postgres` | `postgres:15-alpine` | 5432 | PostgreSQL database |
+| `redis` | `redis:7-alpine` | 6379 | Session and cache store |
+
+## Production deployment
+
+```bash
+docker compose -f docker-compose.production.yml up -d
+```
+
+## Volumes
+
+The production compose file mounts these host directories into the backend container:
+
+| Host path | Container path | Purpose |
+|-----------|---------------|---------|
+| `$APP_STORAGE` (default `./storage`) | `/app/storage` | Photos, thumbnails, uploads |
+| `$LOGS` (default `./logs`) | `/app/logs` | Application logs |
+| `$APP_DATA` (default `./data`) | `/app/data` | Credentials, SQLite fallback |
+
+PostgreSQL and Redis use named Docker volumes (`postgres-data`, `redis-data`).
+
+## PUID/PGID
+
+<Callout type="warning">
+Set `PUID` and `PGID` in your `.env` to match your host user. Without this, bind-mounted directories may not be writable.
+</Callout>
+
+```bash
+# On the host
+id -u  # PUID
+id -g  # PGID
+```
+
+```env
+PUID=1000
+PGID=1000
+```
+
+## External database
+
+To use an external PostgreSQL instead of the bundled container, set these variables and remove or disable the `postgres` service:
+
+```env
+DB_HOST=db.example.com
+DB_PORT=5432
+DB_USER=picpeak
+DB_PASSWORD=your_password
+DB_NAME=picpeak_prod
+```
+
+If `DB_HOST` is not set, it defaults to `postgres` (the bundled container).
+
+## Updating
+
+### Pre-built images
+
+```bash
+docker compose -f docker-compose.production.yml pull
+docker compose -f docker-compose.production.yml down
+docker compose -f docker-compose.production.yml up -d
+docker compose -f docker-compose.production.yml ps
+```
+
+### From source
+
+```bash
+git pull
+docker compose build --no-cache
+docker compose down
+docker compose up -d
+```
+
+## Database migrations
+
+Migrations run automatically on startup. To run them manually:
+
+```bash
+docker exec picpeak-backend npm run migrate
+```
+
+## Health checks
+
+```bash
+# Backend
+curl http://localhost:3001/api/health
+
+# Frontend
+curl http://localhost:3000
+
+# PostgreSQL
+docker exec picpeak-postgres pg_isready
+```
+
+## Useful commands
+
+```bash
+# View logs
+docker compose -f docker-compose.production.yml logs -f
+docker compose -f docker-compose.production.yml logs -f backend
+
+# Enter backend container
+docker exec -it picpeak-backend sh
+
+# Enter database
+docker exec -it picpeak-postgres psql -U picpeak picpeak_prod
+
+# Reset admin password
+docker exec picpeak-backend node scripts/show-admin-credentials.js --reset
+
+# Check disk usage
+du -sh events/ storage/ backup/
+```

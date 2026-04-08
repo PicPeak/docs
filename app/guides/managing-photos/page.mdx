@@ -1,0 +1,51 @@
+# Managing Photos
+
+## Uploading
+
+From an event's admin view, use the upload area to add photos:
+
+- **Drag and drop** files or folders directly.
+- **Click to browse** and select files.
+- Supported formats: JPEG, PNG, WebP.
+- Maximum file size: 50 MB per image.
+- Videos: MP4, WebM, MOV, AVI up to 10 GB (see [Video Support](/features/video-support)).
+
+Thumbnails are generated automatically during upload using Sharp (for images) or FFmpeg (for videos).
+
+## Categories
+
+Organize photos into categories within an event:
+
+1. Create categories from the event editor (e.g., "Ceremony", "Reception", "Portraits").
+2. Assign photos to categories during or after upload.
+3. Guests see categories as tabs or sections in the gallery.
+
+## Bulk operations
+
+Select multiple photos to perform batch actions:
+
+- **Move** to a different category.
+- **Delete** selected photos.
+- **Download** selected photos as a ZIP archive.
+
+## Filtering and sorting
+
+The admin photo view supports:
+
+- Filter by likes, ratings, comments, or favorites.
+- Search by filename.
+- Sort by date, name, size, or rating.
+
+## Export for post-processing
+
+Generate Capture One or Lightroom-compatible file lists from filtered selections. This lets you identify client favorites and apply edits to matching RAW files.
+
+## Storage
+
+Photos are stored in the `events/active` directory. When an event expires, its photos are moved to `events/archived`. The `storage` directory holds thumbnails and processed files.
+
+Monitor disk usage:
+
+```bash
+du -sh events/ storage/ backup/
+```

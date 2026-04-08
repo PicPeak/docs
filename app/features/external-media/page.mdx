@@ -1,0 +1,45 @@
+import { Callout } from 'nextra/components'
+
+# External Media (Reference Mode)
+
+Reference mode lets PicPeak browse and import photos from a read-only external folder without copying the original files.
+
+## How it works
+
+Point PicPeak at an existing directory on the host filesystem using the `EXTERNAL_MEDIA_ROOT` environment variable. PicPeak indexes the folder structure and generates thumbnails on demand, but the original files stay in place.
+
+## Configuration
+
+Set the external media root in your `.env`:
+
+```env
+EXTERNAL_MEDIA_ROOT=/path/to/your/photo-library
+```
+
+In Docker, mount the directory into the container:
+
+```yaml
+# docker-compose.yml or docker-compose.override.yml
+services:
+  backend:
+    volumes:
+      - /path/to/your/photo-library:/app/storage/external-media:ro
+```
+
+<Callout>
+Mount the volume as read-only (`:ro`) to prevent PicPeak from modifying your original files.
+</Callout>
+
+## Importing photos
+
+From the admin panel, browse the external media library and select photos to import into an event. PicPeak creates references to the original files and generates optimized thumbnails for the gallery.
+
+## Use cases
+
+- Large existing photo libraries that you do not want to duplicate.
+- Network-attached storage (NAS) where originals are managed by other software.
+- Shared drives in a studio environment.
+
+## Folder structure
+
+PicPeak respects the folder hierarchy of the external directory. Subfolders appear as navigable sections in the import interface.

@@ -1,0 +1,68 @@
+import { Callout } from 'nextra/components'
+
+# Backup and Restore
+
+PicPeak includes a built-in backup service that supports full and incremental backups with optional S3/MinIO storage.
+
+## Manual backup
+
+### Database
+
+```bash
+docker exec picpeak-postgres pg_dump -U picpeak picpeak_prod > backup/db_$(date +%Y%m%d_%H%M%S).sql
+```
+
+### Files
+
+```bash
+tar -czf backup/photos_$(date +%Y%m%d_%H%M%S).tar.gz events/
+```
+
+## Built-in backup service
+
+The admin panel includes a backup configuration section:
+
+1. Go to **Admin > Settings > Backup**.
+2. Configure the backup destination (local or S3/MinIO).
+3. Set the schedule (daily, weekly, or custom).
+4. Enable the backup service.
+
+### Backup types
+
+- **Full backup** --- complete snapshot of the database and all event files.
+- **Incremental backup** --- only files changed since the last backup.
+
+### S3/MinIO support
+
+Configure an S3-compatible storage backend for off-site backups:
+
+- Bucket name
+- Region
+- Access key and secret key
+- Endpoint URL (for MinIO or other S3-compatible services)
+
+## Restore
+
+<Callout type="warning">
+Test your restore process before you need it. Verify backups periodically.
+</Callout>
+
+### Database restore
+
+```bash
+cat backup/db_20240101_120000.sql | docker exec -i picpeak-postgres psql -U picpeak picpeak_prod
+```
+
+### File restore
+
+```bash
+tar -xzf backup/photos_20240101_120000.tar.gz -C /
+```
+
+## Recommendations
+
+- Set up automated backups and verify they complete successfully.
+- Keep multiple backup generations.
+- Store backups off-site (S3, remote server, or external drive).
+- Test restoration regularly.
+- Monitor backup size and disk usage.

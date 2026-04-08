@@ -1,0 +1,137 @@
+import { Steps, Callout, Tabs } from 'nextra/components'
+
+# Installation
+
+PicPeak can be installed using pre-built Docker images (recommended) or built from source.
+
+## System requirements
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| CPU | 2 cores | 4+ cores (if using video) |
+| RAM | 2 GB | 4 GB+ (if using video) |
+| Storage | 20 GB + photo storage | SSD recommended |
+| OS | Linux (Ubuntu 20.04+), macOS, Windows with WSL2 | Linux |
+| Docker | v20.10.0+ | Latest stable |
+| Docker Compose | v2.0.0+ | Latest stable |
+
+<Tabs items={['Docker (pre-built)', 'Build from source', 'Automated script']}>
+<Tabs.Tab>
+
+This is the fastest method. Images are pulled from the GitHub Container Registry.
+
+<Steps>
+
+### Clone the repository
+
+```bash
+git clone https://github.com/the-luap/picpeak.git
+cd picpeak
+```
+
+### Configure the environment
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+At minimum, set `JWT_SECRET` and `DB_PASSWORD`. See [Configuration](/getting-started/configuration) for details.
+
+### Create required directories
+
+```bash
+mkdir -p events/active events/archived data logs backup storage
+chmod -R 755 events data logs backup storage
+```
+
+### Start the services
+
+```bash
+docker compose -f docker-compose.production.yml up -d
+```
+
+### Verify
+
+```bash
+docker compose -f docker-compose.production.yml ps
+```
+
+All services should show as healthy. The frontend is at `http://localhost:3000` and the API at `http://localhost:3001`.
+
+</Steps>
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+Use this if you need to customize the Docker images.
+
+<Steps>
+
+### Clone and configure
+
+```bash
+git clone https://github.com/the-luap/picpeak.git
+cd picpeak
+cp .env.example .env
+nano .env
+```
+
+### Create directories
+
+```bash
+mkdir -p events/active events/archived data logs backup storage
+chmod -R 755 events data logs backup storage
+```
+
+### Build and start
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+To rebuild cleanly:
+
+```bash
+docker compose build --no-cache
+```
+
+</Steps>
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+PicPeak includes a setup script that handles OS detection, dependency installation, and configuration:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/the-luap/picpeak/main/scripts/picpeak-setup.sh -o picpeak-setup.sh
+chmod +x picpeak-setup.sh
+sudo ./picpeak-setup.sh
+```
+
+The script prompts you to choose between Docker and native installation, sets up the database, and optionally configures SSL.
+
+</Tabs.Tab>
+</Tabs>
+
+## File permissions (PUID/PGID)
+
+<Callout type="warning">
+When using bind mounts, the container user must have write access to the host directories. Set `PUID` and `PGID` in your `.env` to match your host user.
+</Callout>
+
+```bash
+# Find your UID and GID
+id -u  # e.g., 1000
+id -g  # e.g., 1000
+```
+
+Then in `.env`:
+
+```env
+PUID=1000
+PGID=1000
+```
+
+Without this, operations like creating events, uploading photos, generating thumbnails, or writing logs may fail with "Permission denied".

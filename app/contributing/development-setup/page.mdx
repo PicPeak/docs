@@ -1,0 +1,146 @@
+import { Steps, FileTree } from 'nextra/components'
+
+# Development Setup
+
+<Steps>
+
+### Prerequisites
+
+- Node.js 18+
+- Docker and Docker Compose
+- Git
+
+### Clone the repository
+
+```bash
+git clone https://github.com/your-username/picpeak.git
+cd picpeak
+```
+
+### Install dependencies
+
+```bash
+cd backend && npm install
+cd ../frontend && npm install
+```
+
+### Configure the environment
+
+```bash
+cp .env.example .env
+# Edit .env with development values
+```
+
+### Start development servers
+
+Using Docker (includes PostgreSQL, Redis, and MailHog):
+
+```bash
+docker compose up
+```
+
+Or run services individually:
+
+```bash
+# Backend (from /backend)
+npm run dev    # Starts with nodemon for hot reload
+
+# Frontend (from /frontend)
+npm run dev    # Starts Vite dev server
+```
+
+</Steps>
+
+## Project structure
+
+<FileTree>
+  <FileTree.Folder name="picpeak" defaultOpen>
+    <FileTree.Folder name="backend" defaultOpen>
+      <FileTree.Folder name="src">
+        <FileTree.Folder name="routes" />
+        <FileTree.Folder name="services" />
+        <FileTree.Folder name="middleware" />
+        <FileTree.Folder name="utils" />
+        <FileTree.Folder name="database" />
+      </FileTree.Folder>
+      <FileTree.Folder name="migrations" />
+      <FileTree.File name="server.js" />
+      <FileTree.File name="knexfile.js" />
+    </FileTree.Folder>
+    <FileTree.Folder name="frontend" defaultOpen>
+      <FileTree.Folder name="src">
+        <FileTree.Folder name="components" />
+        <FileTree.Folder name="services" />
+        <FileTree.Folder name="hooks" />
+        <FileTree.Folder name="i18n" />
+        <FileTree.Folder name="config" />
+      </FileTree.Folder>
+      <FileTree.File name="App.tsx" />
+    </FileTree.Folder>
+  </FileTree.Folder>
+</FileTree>
+
+## Architecture overview
+
+### Backend
+
+- **Entry point**: `server.js` --- Express app with Helmet, CORS, rate limiting, and JWT middleware.
+- **Routes** (`src/routes/`): 20+ route files covering auth, admin operations, gallery access, and feedback.
+- **Services** (`src/services/`): Business logic including image processing (Sharp), video processing (FFmpeg), email queue, backup service, and file watching.
+- **Database**: Knex query builder with PostgreSQL (primary) and SQLite (fallback). Migrations in `migrations/core/`.
+
+### Frontend
+
+- **Entry**: `App.tsx` --- React Router + TanStack Query + context providers for auth, theme, and maintenance mode.
+- **Components**: `admin/` (43 components), `gallery/` (23 components), `common/` (shared UI).
+- **API client** (`src/config/api.ts`): Axios with interceptors for auth token injection and error handling.
+- **i18n**: i18next with EN and DE locales in `src/i18n/locales/`.
+
+### Infrastructure
+
+| Service | Technology | Port |
+|---------|-----------|------|
+| Backend | Express API | 3001 |
+| Frontend | React + Nginx | 3000 |
+| Database | PostgreSQL 15 | 5432 |
+| Cache | Redis 7 | 6379 |
+| Mail (dev) | MailHog | 8025 (UI), 1025 (SMTP) |
+
+## Development commands
+
+### Backend (from `/backend`)
+
+```bash
+npm run dev              # Hot reload with nodemon
+npm run start            # Production start
+npm run test             # Run Jest tests
+npm run test -- --watch  # Watch mode
+npm run test -- path/to/test.js  # Single test
+npm run lint             # ESLint
+npm run migrate          # Run database migrations
+npm run migrate:safe     # Migrations with safety checks
+```
+
+### Frontend (from `/frontend`)
+
+```bash
+npm run dev          # Vite dev server
+npm run build        # Production build
+npm run build:check  # TypeScript check + build
+npm run lint         # ESLint
+npm run test         # Vitest tests
+npm run preview      # Preview production build
+```
+
+### E2E tests (from root)
+
+```bash
+npm run test:e2e     # Playwright (Desktop and Mobile Chrome)
+```
+
+## Key patterns
+
+- JWT tokens have types (`admin`, `gallery`, `refresh`). Middleware validates the token type matches the endpoint.
+- Gallery auth is slug-specific. Tokens are stored in session storage by slug.
+- Photos are served through authenticated endpoints with access control.
+- Image processing uses Sharp. Video processing uses FFmpeg (bundled via npm).

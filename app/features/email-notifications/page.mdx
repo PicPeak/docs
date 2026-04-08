@@ -1,0 +1,66 @@
+import { Callout } from 'nextra/components'
+
+# Email Notifications
+
+PicPeak sends automated emails for gallery lifecycle events using a queue-based processor with retry logic.
+
+## Email types
+
+- **Gallery creation** --- sent to the customer with the gallery link and optional password.
+- **Expiration warning** --- sent before a gallery expires.
+- **Gallery link resend** --- manually triggered from the admin panel or API.
+
+## SMTP configuration
+
+Configure your SMTP provider in `.env`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-specific-password
+EMAIL_FROM=noreply@yourdomain.com
+```
+
+<Callout>
+For Gmail, use an [app-specific password](https://myaccount.google.com/apppasswords). Regular account passwords will not work.
+</Callout>
+
+### SendGrid example
+
+```env
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=apikey
+SMTP_PASS=your-sendgrid-api-key
+```
+
+## Multilingual templates
+
+Email templates support multiple languages. PicPeak includes English and German templates out of the box. The template language is selected based on event or system settings.
+
+## Template editor
+
+Edit email templates from the admin panel. The editor provides:
+
+- HTML template editing with variable placeholders.
+- Live preview of the rendered email.
+- Test email sending to verify formatting.
+
+The email wrapper function (`wrapEmailHtml()`) in `emailProcessor.js` applies consistent styling and layout to all outgoing emails.
+
+## Email queue
+
+Emails are processed through a queue with automatic retry on failure. Monitor the email queue status from the admin panel or by checking the backend logs:
+
+```bash
+docker compose logs backend | grep email
+```
+
+## Logo in emails
+
+Email logos use the `FRONTEND_URL` value to construct the image URL. Make sure this is set to your publicly accessible domain so email recipients can see images correctly.
+
+If `API_URL` is set, it is used for email asset URLs. Otherwise it defaults to `http://localhost:3001`, which will result in broken images for external recipients.

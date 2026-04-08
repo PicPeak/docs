@@ -1,0 +1,26 @@
+# Analytics
+
+PicPeak includes a built-in analytics dashboard and supports integration with Umami for privacy-focused external analytics.
+
+## Built-in dashboard
+
+The admin dashboard tracks:
+
+- **Gallery views** --- how many times each gallery has been accessed.
+- **Photo views** --- individual photo view counts.
+- **Downloads** --- total and per-photo download counts.
+- **Engagement** --- likes, ratings, comments, and feedback metrics.
+
+## Umami integration
+
+[Umami](https://umami.is/) is a privacy-focused, open-source analytics platform. To enable it, set these environment variables:
+
+```env
+VITE_UMAMI_URL=https://analytics.yourdomain.com
+VITE_UMAMI_WEBSITE_ID=your-website-id
+VITE_UMAMI_SHARE_URL=https://analytics.yourdomain.com/share/...
+```
+
+When configured, Umami tracking is added to gallery pages. The share URL can be embedded in the admin dashboard for a combined view.
+
+Umami is optional. The built-in analytics dashboard works without any external services.

@@ -1,0 +1,152 @@
+import { Tabs, Callout } from 'nextra/components'
+
+# Reverse Proxy
+
+For production deployments, place PicPeak behind a reverse proxy for SSL termination and routing.
+
+## Routing schema
+
+| Path | Service | Port | Description |
+|------|---------|------|-------------|
+| `/api/*` | Backend | 3001 | All API endpoints |
+| `/photos/*` | Backend | 3001 | Protected photo files |
+| `/thumbnails/*` | Backend | 3001 | Protected thumbnail files |
+| `/uploads/*` | Backend | 3001 | Upload files |
+| `/*` (everything else) | Frontend | 3000 | React SPA (including `/admin/*`, `/gallery/*`) |
+
+<Callout>
+The `/admin/*` routes are served by the **frontend** (React SPA), not the backend. The backend only handles `/api/admin/*` requests.
+</Callout>
+
+<Tabs items={['Nginx', 'Traefik', 'Caddy']}>
+<Tabs.Tab>
+
+Create `/etc/nginx/sites-available/picpeak`:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+
+    # Backend: API endpoints
+    location /api/ {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Backend: Protected media files
+    location ~ ^/(photos|thumbnails|uploads)/ {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Frontend: Everything else (React SPA)
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Enable the site:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/picpeak /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+For video uploads, increase the body size limit:
+
+```nginx
+client_max_body_size 10G;
+proxy_read_timeout 3600;
+proxy_send_timeout 3600;
+```
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+Add labels to `docker-compose.override.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  frontend:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.picpeak.rule=Host(`your-domain.com`)"
+      - "traefik.http.routers.picpeak.entrypoints=websecure"
+      - "traefik.http.routers.picpeak.tls.certresolver=letsencrypt"
+      - "traefik.http.services.picpeak.loadbalancer.server.port=80"
+
+  backend:
+    labels:
+      - "traefik.enable=true"
+      # API endpoints
+      - "traefik.http.routers.picpeak-api.rule=Host(`your-domain.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.picpeak-api.entrypoints=websecure"
+      - "traefik.http.routers.picpeak-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.picpeak-api.loadbalancer.server.port=3001"
+      # Protected media files
+      - "traefik.http.routers.picpeak-media.rule=Host(`your-domain.com`) && (PathPrefix(`/photos`) || PathPrefix(`/thumbnails`) || PathPrefix(`/uploads`))"
+      - "traefik.http.routers.picpeak-media.entrypoints=websecure"
+      - "traefik.http.routers.picpeak-media.tls.certresolver=letsencrypt"
+      - "traefik.http.services.picpeak-media.loadbalancer.server.port=3001"
+```
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+Create a `Caddyfile`:
+
+```caddyfile
+your-domain.com {
+    # Backend: API endpoints
+    handle /api/* {
+        reverse_proxy localhost:3001
+    }
+
+    # Backend: Protected media files
+    handle /photos/* {
+        reverse_proxy localhost:3001
+    }
+
+    handle /thumbnails/* {
+        reverse_proxy localhost:3001
+    }
+
+    handle /uploads/* {
+        reverse_proxy localhost:3001
+    }
+
+    # Frontend: Everything else
+    handle {
+        reverse_proxy localhost:3000
+    }
+}
+```
+
+Caddy automatically provisions and renews SSL certificates via Let's Encrypt.
+
+</Tabs.Tab>
+</Tabs>

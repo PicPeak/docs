@@ -1,0 +1,62 @@
+import { Callout } from 'nextra/components'
+
+# Authentication
+
+The Admin API uses JWT bearer tokens. Tokens expire after 24 hours.
+
+## Obtaining a token
+
+```bash
+curl --fail --silent --show-error \
+  -X POST "http://localhost:3001/api/auth/admin/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "your-password",
+    "recaptchaToken": ""
+  }' | jq
+```
+
+<Callout>
+If reCAPTCHA is disabled (the default), you can omit or leave `recaptchaToken` empty.
+</Callout>
+
+### Response
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "email": "admin@example.com",
+    "mustChangePassword": false
+  }
+}
+```
+
+## Using the token
+
+Pass the token in the `Authorization` header for all subsequent requests:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/admin/events
+```
+
+PicPeak also sets an `admin_token` cookie on login, but for scripting, the bearer header is recommended.
+
+## Token types
+
+PicPeak uses typed JWT tokens:
+
+| Type | Purpose |
+|------|---------|
+| `admin` | Admin API access |
+| `gallery` | Gallery-specific guest access |
+| `refresh` | Token refresh |
+
+The middleware validates that the token type matches the endpoint requirements.
+
+## Token expiration
+
+Admin tokens expire after 24 hours. Log in again to get a fresh token.
