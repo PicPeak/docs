@@ -9,11 +9,15 @@ export const metadata = {
     template: '%s | PicPeak Docs',
   },
   description: 'Documentation for PicPeak — self-hosted photo sharing for event photographers.',
+  icons: {
+    icon: '/favicon-32x32.png',
+  },
 }
 
 const logo = (
-  <span style={{ fontWeight: 800, fontSize: '1.2em' }}>
-    PicPeak
+  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <img src="/images/picpeak-kamera-transparent.png" alt="PicPeak" style={{ height: '28px', width: 'auto' }} />
+    <span style={{ fontWeight: 800, fontSize: '1.1em' }}>PicPeak</span>
   </span>
 )
 
