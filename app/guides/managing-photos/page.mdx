@@ -40,6 +40,33 @@ The admin photo view supports:
 
 Generate Capture One or Lightroom-compatible file lists from filtered selections. This lets you identify client favorites and apply edits to matching RAW files.
 
+## Adding photos via file system
+
+If you prefer to copy photos directly to the server instead of uploading through the admin UI, PicPeak has a built-in file watcher that detects new files.
+
+import { Callout } from 'nextra/components'
+
+<Callout type="warning">
+You must create the event in the admin panel first. The file watcher only processes photos for events that already exist in the database. Copying files alone does not create a gallery.
+</Callout>
+
+Once an event exists, copy images into its folder:
+
+```bash
+# Find the event slug in the admin panel URL or share link
+cp /path/to/photos/*.jpg storage/events/active/<event-slug>/
+```
+
+The file watcher will automatically:
+- Detect new files (with a 2-second stability delay)
+- Create database records for each photo
+- Generate thumbnails
+- Classify photos in `collages/` or `individual/` subfolders by type
+
+Supported formats: `.jpg`, `.jpeg`, `.png`, `.webp`
+
+When files are deleted from the folder, the file watcher removes the corresponding database records.
+
 ## Storage
 
 Photos are stored in the `events/active` directory. When an event expires, its photos are moved to `events/archived`. The `storage` directory holds thumbnails and processed files.
