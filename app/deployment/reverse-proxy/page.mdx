@@ -150,3 +150,25 @@ Caddy automatically provisions and renews SSL certificates via Let's Encrypt.
 
 </Tabs.Tab>
 </Tabs>
+
+## Mixed HTTPS + LAN HTTP access
+
+Some self-hosted setups want two working entry points to the same PicPeak instance:
+
+- **Public HTTPS** via the reverse proxy on a domain (`https://photos.example.com`)
+- **Direct HTTP** on the LAN for admin access (`http://192.168.1.50:3001`)
+
+With the default `COOKIE_SECURE` setting, only one of these works at a time — the `Secure` cookie flag either blocks LAN HTTP (when `true`) or weakens HTTPS cookies (when `false`).
+
+Set `COOKIE_SECURE=auto` in your `.env` to make PicPeak decide per request:
+
+```bash
+# .env
+COOKIE_SECURE=auto
+```
+
+In this mode the backend reads `req.secure` from Express. The flag is set to `true` when the request arrived over HTTPS (either directly or via a trusted proxy forwarding `X-Forwarded-Proto: https`) and `false` otherwise. The end result: both public HTTPS login and LAN HTTP login work with correctly-flagged cookies.
+
+The Nginx, Traefik, and Caddy configurations shown above already forward `X-Forwarded-Proto` correctly. PicPeak's Express `trust proxy` is preset to `loopback, linklocal, uniquelocal`, which covers Docker networks and private-network proxies out of the box.
+
+See [Environment Variables → Authentication cookies](/deployment/environment-variables#authentication-cookies) for the full reference.

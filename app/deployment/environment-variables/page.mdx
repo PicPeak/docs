@@ -16,6 +16,50 @@ Avoid `$` characters in passwords. Docker Compose interprets `$` as variable sub
 | `JWT_SECRET` | **Yes** | --- | Authentication secret. Generate with `openssl rand -base64 64` |
 | `TZ` | No | `UTC` | Timezone |
 
+## Authentication cookies
+
+Admin, gallery, and guest sessions are carried in HTTP cookies. These variables control how those cookies are set.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `COOKIE_SECURE` | No | follows `NODE_ENV` (production → `true`) | `true`, `false`, or `auto` — see below |
+| `COOKIE_SAMESITE` | No | `Lax` | `Lax`, `Strict`, or `None` |
+| `COOKIE_DOMAIN` | No | --- | Set to `.example.com` only if serving cookies across subdomains |
+
+### `COOKIE_SECURE` values
+
+| Value | Behavior | When to use |
+|---|---|---|
+| _(unset)_ | Follows `NODE_ENV` — `true` in production, `false` in development | Default. Fine for typical HTTPS-only deployments |
+| `true` | Always set the `Secure` flag (HTTPS-only cookies) | Explicit HTTPS-only deployments |
+| `false` | Never set the `Secure` flag | Local/LAN-only deployments with no HTTPS |
+| `auto` | Decide per request based on the actual protocol | Mixed HTTPS + LAN HTTP access (see below) |
+
+### Mixed HTTPS/HTTP deployments (`COOKIE_SECURE=auto`)
+
+A common self-hosted setup:
+
+- **Public**: HTTPS via a reverse proxy like Nginx Proxy Manager, Traefik, or Caddy (e.g. `https://photos.example.com`)
+- **LAN**: Plain HTTP on a private address (e.g. `http://192.168.1.50:3001`) for admin access without going through the proxy
+
+With a static `COOKIE_SECURE=true`, LAN login breaks because browsers refuse to send `Secure` cookies over HTTP. With `COOKIE_SECURE=false`, HTTPS login loses the security of the `Secure` flag. The `auto` value fixes this by deciding the `Secure` flag per request — the backend reads `req.secure` from Express, which reflects the `X-Forwarded-Proto` header forwarded by your reverse proxy.
+
+<Callout type="info">
+**Requirements for `auto` mode:**
+1. **Your reverse proxy must forward `X-Forwarded-Proto: https`** on HTTPS requests. Nginx Proxy Manager, Traefik, and Caddy do this by default. Custom Nginx configs need `proxy_set_header X-Forwarded-Proto $scheme;`.
+2. **Your proxy must be on a trusted IP range.** PicPeak trusts `loopback, linklocal, uniquelocal` (127.0.0.1, 10.x, 172.16–31.x, 192.168.x, link-local, ULA). This covers Docker networks and most self-hosted setups. Proxies outside those ranges won't have their `X-Forwarded-Proto` honored.
+</Callout>
+
+Example `.env` entry:
+
+```bash
+COOKIE_SECURE=auto
+```
+
+<Callout type="warning">
+`auto` is **opt-in**. The default behavior (following `NODE_ENV`) is unchanged — existing deployments see no difference unless they explicitly set `COOKIE_SECURE=auto`.
+</Callout>
+
 ## Database
 
 | Variable | Required | Default | Description |
