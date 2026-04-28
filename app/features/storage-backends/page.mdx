@@ -1,0 +1,165 @@
+import { Callout } from 'nextra/components'
+
+# Storage Backends
+
+PicPeak stores photos, thumbnails, hero images, watermarks, and archive zips on either the **local filesystem** (default) or any **S3-compatible object store** (AWS S3, MinIO, Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces). The choice is made entirely with environment variables; no code change is required to switch.
+
+## When to use which
+
+| | Local filesystem | S3-compatible |
+|---|---|---|
+| Setup complexity | Lowest | Medium |
+| Bandwidth cost | Free (server traffic only) | Egress charges per GB |
+| Disk pressure on server | High — all originals + zips on disk | Low — only temp files |
+| Backup story | Tar/rsync the storage dir | S3 lifecycle policies |
+| Auto-import via folder watcher | ✅ chokidar | ✅ via S3 prefix walker (opt-in) |
+| Bulk Download All | Streamed through backend | Same, OR per-event presigned URL |
+
+**Default to local** until you hit one of: low disk on the server, multiple PicPeak instances behind a load balancer, or a desire to push storage cost off the application server.
+
+## Switching to S3-compatible storage
+
+### 1. Provision a bucket
+
+The minimum IAM policy for AWS S3:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:ListBucket",
+      "s3:GetBucketLocation"
+    ],
+    "Resource": [
+      "arn:aws:s3:::picpeak",
+      "arn:aws:s3:::picpeak/*"
+    ]
+  }]
+}
+```
+
+For non-AWS providers, create a service account / access key with read+write on the bucket. Examples follow.
+
+### 2. Configure environment variables
+
+```env
+STORAGE_BACKEND=s3
+STORAGE_S3_BUCKET=picpeak
+STORAGE_S3_REGION=us-east-1
+STORAGE_S3_ACCESS_KEY=AKIAxxxxxxxxxxxxxxxx
+STORAGE_S3_SECRET_KEY=xxxxxxxxxxxxxxxxxxxxxxxx
+# STORAGE_S3_ENDPOINT=...     # set for MinIO / R2 / B2 / Spaces
+# STORAGE_S3_PREFIX=picpeak   # share a bucket between multiple deployments
+# STORAGE_S3_FORCE_PATH_STYLE=true   # MinIO needs this; auto-on when endpoint is set
+# STORAGE_S3_SSL=true
+```
+
+### Provider-specific examples
+
+<details>
+<summary>**MinIO** (self-hosted)</summary>
+
+```env
+STORAGE_S3_ENDPOINT=http://minio.internal:9000
+STORAGE_S3_BUCKET=picpeak
+STORAGE_S3_ACCESS_KEY=minioadmin
+STORAGE_S3_SECRET_KEY=minioadmin
+STORAGE_S3_FORCE_PATH_STYLE=true
+STORAGE_S3_SSL=false
+```
+</details>
+
+<details>
+<summary>**Cloudflare R2**</summary>
+
+```env
+STORAGE_S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+STORAGE_S3_BUCKET=picpeak
+STORAGE_S3_REGION=auto
+STORAGE_S3_ACCESS_KEY=<access-key-id>
+STORAGE_S3_SECRET_KEY=<secret-access-key>
+```
+
+R2 has no egress fees, which makes the presigned-URL Download All path especially attractive.
+</details>
+
+<details>
+<summary>**Backblaze B2**</summary>
+
+```env
+STORAGE_S3_ENDPOINT=https://s3.us-west-002.backblazeb2.com
+STORAGE_S3_BUCKET=picpeak
+STORAGE_S3_REGION=us-west-002
+STORAGE_S3_ACCESS_KEY=<keyID>
+STORAGE_S3_SECRET_KEY=<applicationKey>
+```
+</details>
+
+### 3. Migrate existing content
+
+Use the migration script before flipping the env on a deployment with existing photos:
+
+```sh
+node backend/scripts/migrate-storage.js --dry-run
+node backend/scripts/migrate-storage.js
+```
+
+The script is **idempotent** (sha256-based skip on already-uploaded files) and writes a CSV of any failures to `/tmp/migrate-storage-failures.csv`. It does NOT flip `STORAGE_BACKEND` — admins do that explicitly after the migration completes clean.
+
+### 4. Restart
+
+PicPeak's startup ping HEADs a sentinel key on the bucket and refuses to boot on misconfiguration, so you'll see clear error messages if anything is wrong.
+
+## Presigned-URL "Download All" mode
+
+Per-event opt-in for S3-mode deployments. When enabled on an event:
+
+- `GET /gallery/:slug/download-all` returns a **302 redirect** to a 5-minute presigned S3 URL of the cached zip
+- The download bytes never traverse the PicPeak backend — saves bandwidth dollar-for-dollar on huge galleries
+- **Bypasses watermarking** — the toggle is disabled when `Add watermark to downloads` is on, and re-enabling it on an event later won't re-enable presigned downloads
+
+Toggle it under **Edit Event → Download protection → "Allow direct S3 download (no watermark, S3 mode only)"**.
+
+<Callout type="warning">
+The presigned URL is unauthenticated for the 5-minute window — anyone the gallery guest forwards it to can download. Use only when bandwidth savings outweigh the leak risk.
+</Callout>
+
+## S3 auto-import (drop-folder workflow)
+
+In local mode the chokidar watcher imports any photo dropped into `events/active/<slug>/`. S3 has no inotify equivalent, so PicPeak ships an opt-in **prefix walker** that polls every active event's S3 prefix on a slow cadence.
+
+Enable with:
+
+```env
+STORAGE_AUTO_IMPORT=true
+STORAGE_AUTO_IMPORT_INTERVAL_MS=300000   # 5 minutes (default)
+```
+
+How it behaves:
+
+- Every poll, lists each active event's prefix
+- An object is imported only after it's been **seen for two consecutive polls** (eventual-consistency gate — avoids flapping when S3 returns a freshly-uploaded object that disappears on the next list)
+- Generated artifacts (thumbnails, hero images, dot-files) are skipped
+- Imports fire `photo.uploaded` webhooks the same way the local file watcher does
+
+Off by default because it adds API call cost; admins who only use the upload UI/API don't pay it.
+
+## Capability matrix
+
+| Capability | Local | S3 |
+|---|---|---|
+| Photo / thumbnail / hero serving | ✅ stream | ✅ stream |
+| Bulk Download All (cached zip) | ✅ stream | ✅ stream OR presigned redirect (per-event opt-in) |
+| Backups | ✅ | ✅ |
+| File-watcher auto-import | ✅ chokidar | ✅ S3 prefix walker (opt-in) |
+| External media reference mode (`EXTERNAL_MEDIA_ROOT`) | ✅ (always local) | ✅ (still local — not migrated) |
+| Watermarks, fingerprinting, fragmentation | ✅ | ✅ |
+
+## Reverting from S3 to local
+
+Not supported in v1. The migration script is one-way. If you need to revert, you'd download every key with `aws s3 sync` and update `photos.path` rows by hand.

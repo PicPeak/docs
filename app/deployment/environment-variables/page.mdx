@@ -150,3 +150,33 @@ COOKIE_SECURE=auto
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `PUBLIC_SITE_CACHE_TTL_MS` | No | `60000` | Cache TTL for the landing page in milliseconds |
+
+## Storage backend
+
+See **[Storage Backends](../../features/storage-backends)** for the migration playbook and provider-specific examples.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `STORAGE_BACKEND` | No | `local` | `local` or `s3` |
+| `STORAGE_S3_BUCKET` | When `s3` | --- | Bucket name |
+| `STORAGE_S3_REGION` | No | `us-east-1` | AWS region; use `auto` for R2 |
+| `STORAGE_S3_ACCESS_KEY` | When `s3` | --- | Access key ID |
+| `STORAGE_S3_SECRET_KEY` | When `s3` | --- | Secret access key |
+| `STORAGE_S3_ENDPOINT` | No | --- | Custom endpoint (MinIO, R2, B2, Spaces…) |
+| `STORAGE_S3_PREFIX` | No | --- | Namespace inside the bucket |
+| `STORAGE_S3_FORCE_PATH_STYLE` | No | auto when endpoint set | `true` for MinIO and IP-based endpoints |
+| `STORAGE_S3_SSL` | No | `true` | `false` for plain-HTTP endpoints (dev MinIO) |
+| `STORAGE_AUTO_IMPORT` | No | `false` | Enable the S3 prefix walker (replaces chokidar in S3 mode) |
+| `STORAGE_AUTO_IMPORT_INTERVAL_MS` | No | `300000` | Walker poll interval (5 minutes) |
+
+## Webhooks
+
+See **[Webhooks](../../features/webhooks)** for event catalog, payload shapes, and verification examples.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `WEBHOOK_ALLOW_PRIVATE_URLS` | No | `false` | When `true`, allows webhooks to POST to private/loopback addresses. **Production must leave this off.** Dev only. |
+| `WEBHOOK_DELIVERY_INTERVAL_MS` | No | `5000` | How often the worker polls for pending deliveries |
+| `WEBHOOK_DELIVERY_CONCURRENCY` | No | `5` | Max in-flight deliveries per tick. Bump if your receivers are slow. |
+| `WEBHOOK_HTTP_TIMEOUT_MS` | No | `10000` | Per-request timeout |
+| `WEBHOOK_MAX_ATTEMPTS` | No | `5` | Total attempts before a delivery is marked `failed` |

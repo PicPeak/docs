@@ -7,3 +7,20 @@ Once you've completed the [Getting Started](/getting-started) guide, this sectio
 - **[Reverse Proxy](/deployment/reverse-proxy)** — Nginx, Traefik, and Caddy configurations.
 - **[SSL Certificates](/deployment/ssl)** — Let's Encrypt with Certbot.
 - **[Release Channels](/deployment/release-channels)** — stable vs beta, switching channels, update notifications.
+
+## Background services
+
+The `picpeak-backend` container runs a single Node process that hosts the HTTP API plus several long-lived workers. Knowing what each one does helps when reading logs or debugging.
+
+| Worker | Trigger | What it does |
+|---|---|---|
+| **Storage backend** (`initStorage`) | Startup | Validates `STORAGE_BACKEND` config; HEADs the bucket / `stat`s the directory. Refuses to boot on misconfig. |
+| **File watcher** (chokidar) | Startup; local mode only | Auto-imports any photo dropped into `events/active/<slug>/`. Disabled when `STORAGE_BACKEND=s3`. |
+| **S3 auto-importer** | Startup; opt-in via `STORAGE_AUTO_IMPORT=true` | Polls every active event's S3 prefix on a slow cadence (default 5 min). Imports objects seen for two consecutive polls. See [Storage Backends](./features/storage-backends). |
+| **Email queue processor** | Every 60s | Sends queued notifications (event creation, expiration warnings, archive complete). |
+| **Expiration checker** | Every hour (cron) | Marks galleries inactive past their `expires_at`, then archives them. Fires `event.expired` then `event.archived` webhooks. |
+| **Webhook delivery worker** | Every 5s | Picks up pending `webhook_deliveries`, signs the body with HMAC-SHA256, POSTs with retries. See [Webhooks](./features/webhooks). |
+| **Backup service** | Cron (admin-configurable) | Local + S3 backups of photos, thumbnails, database. |
+| **Temp upload cleanup** | Every hour | Removes orphaned multer temp files older than 1 hour. |
+
+All workers share the same database connection pool. They're independent of each other — a stuck email queue won't block webhook deliveries, etc.

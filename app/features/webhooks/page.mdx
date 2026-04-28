@@ -1,0 +1,154 @@
+import { Callout } from 'nextra/components'
+
+# Webhooks
+
+PicPeak POSTs event/photo lifecycle notifications to URLs you configure under **Settings → Webhooks**. Each delivery is signed `HMAC-SHA256` with a per-webhook secret in the `X-PicPeak-Signature` header so receivers can verify the request really came from your PicPeak instance.
+
+Common use cases:
+
+- Send the gallery share link to the customer over WhatsApp / SMS the moment the gallery is published (n8n + Twilio)
+- Push thumbnails to a separate S3 bucket as a hot backup
+- Notify a Slack channel when galleries expire
+- Update a CRM with photo-upload counts during a shoot
+
+## Event catalog
+
+| Event | Fires when |
+|---|---|
+| `event.created` | Gallery created (admin or API), regardless of draft status |
+| `event.published` | Draft → live transition. Also fires when an event is created with `is_draft=false` |
+| `event.archived` | Bulk-archive, manual archive, or auto-archive on expiry |
+| `event.expired` | Expiration checker marks the gallery inactive (fires **before** `event.archived` in the cascade so receivers can react in order) |
+| `photo.uploaded` | Admin upload, API upload, guest upload, auto-import, or S3 prefix walker import |
+| `photo.deleted` | Single or bulk delete (NOT fired per-photo when an event is archived — receivers infer from `event.archived`) |
+
+## Default payload shape
+
+```json
+{
+  "id": "delivery-uuid",
+  "type": "event.published",
+  "created_at": "2026-04-28T05:25:00.000Z",
+  "data": {
+    "event": { "id": 123, "slug": "wedding-smith", "share_url": "https://..." }
+  }
+}
+```
+
+Always sent as headers:
+
+| Header | Value |
+|---|---|
+| `X-PicPeak-Signature` | `HMAC-SHA256(secret, raw_body)` as hex |
+| `X-PicPeak-Event` | The event type (lets receivers route without parsing the body) |
+| `X-PicPeak-Delivery` | UUID for idempotency on the receiver side |
+| `User-Agent` | `PicPeak-Webhooks/1.0` |
+
+## Verifying signatures
+
+The signature is computed over the **exact body bytes** sent. Verify with constant-time comparison.
+
+### Node.js
+
+```js
+const crypto = require('crypto');
+
+function verify(secret, rawBody, signature) {
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  const a = Buffer.from(expected, 'hex');
+  const b = Buffer.from(signature, 'hex');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+```
+
+### Python
+
+```python
+import hmac, hashlib
+
+def verify(secret: str, raw_body: bytes, signature: str) -> bool:
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+```
+
+### bash + openssl
+
+```sh
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')
+[ "$SIG" = "$RECEIVED_SIG" ] && echo OK || echo MISMATCH
+```
+
+<Callout type="warning">
+Always read the raw request body from the framework BEFORE any JSON parsing. Re-stringifying parsed JSON will not produce the original byte stream and the signature will not match.
+</Callout>
+
+## Filters
+
+Skip deliveries you don't want by attaching a JSON predicate to the webhook. The filter is a flat object of dot-paths → expected values, all matched with logical AND:
+
+```json
+{ "data.event.event_type": "wedding" }
+```
+
+Use an array on the value for "any of":
+
+```json
+{ "type": ["event.published", "event.archived"] }
+```
+
+Empty filter `{}` matches every payload (default behavior).
+
+## Templates
+
+By default the request body is the standard JSON envelope above. To send a different shape — say, a flat string for a Slack incoming webhook — set a **template** on the webhook. Template syntax is `${dot.path}` substitution from the payload object only; **no logic, no expressions, no eval**:
+
+```
+New gallery: ${data.event.event_name} → ${data.event.share_url}
+```
+
+Receivers see `text/plain` if the rendered output isn't valid JSON, otherwise `application/json`. Templates are validated at create time (8KB max source, 64KB max output, max 64 substitutions) — invalid templates can't be saved.
+
+## Operational view
+
+Each webhook has a dedicated **Deliveries** page (linked from the Settings table) showing every attempt:
+
+- Timestamp, event type, status, attempt count, HTTP status, latency
+- Filter chips (all / pending / success / failed)
+- Click a row → slide-over with the exact payload sent, signature, response status, and (truncated to 1KB) response body
+- **Replay** button on failed rows — re-enqueues the same payload as a fresh delivery
+- **Send test event** button — fires a synthetic delivery of any event type with a stub payload
+
+The page auto-refreshes every 10s.
+
+## Retries
+
+| Attempt | Wait before retry |
+|---|---|
+| 1 fails | 1 minute |
+| 2 fails | 5 minutes |
+| 3 fails | 30 minutes |
+| 4 fails | 2 hours |
+| 5 fails | **status = failed** (max attempts) |
+
+Anything outside `2xx` (or a network error within the 10s timeout) counts as a failure. After max attempts the delivery surfaces in the UI with a Replay button.
+
+Up to 5 deliveries run in parallel per worker tick (configurable via `WEBHOOK_DELIVERY_CONCURRENCY`); one slow consumer can't block others.
+
+## n8n recipe
+
+A minimal n8n flow for "send WhatsApp on gallery publish":
+
+1. **Webhook** node — copy the URL into PicPeak as a webhook subscribed to `event.published`. Save the signing secret.
+2. **Crypto** node — verify `X-PicPeak-Signature` matches `HMAC-SHA256(secret, $binary.body)`. Drop on mismatch.
+3. **Twilio** node — send `New gallery: {{ $json.data.event.event_name }} → {{ $json.data.event.share_url }}` to the customer's phone.
+
+You can also add a PicPeak filter `{ "data.event.event_type": "wedding" }` to skip non-wedding events at the source.
+
+## Security
+
+- **SSRF protection** — webhook URLs are validated against the same private-IP blocklist used elsewhere (loopback, RFC1918, link-local, `.local` / `.internal`, cloud metadata endpoints). Validation runs at create time and per-delivery (DNS rebinding mitigation).
+- **Local development** — set `WEBHOOK_ALLOW_PRIVATE_URLS=true` to opt out of the SSRF block when your receiver is on the same machine or docker network. Production deployments must leave this off.
+- **Secret storage** — secrets are stored in plaintext (we need them to compute the HMAC for every outbound POST). Treat the database with the same care as `JWT_SECRET`.
+- **Body size cap** — the request body is capped at 64KB. Templates can't exceed it.
+- **Response body cap** — receiver responses are truncated to 1KB before storage so a chatty receiver can't bloat the audit log.

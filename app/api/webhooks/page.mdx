@@ -1,0 +1,130 @@
+# Webhooks API
+
+Admin endpoints for managing outbound webhooks. All routes are gated by the `settings.view` (read) and `settings.edit` (mutate) permissions and use the same admin authentication as the rest of the admin panel (cookie or `Authorization: Bearer <jwt>`).
+
+For payload shape, signature verification, retry semantics, and the deliveries operational view, see the **[Webhooks feature page](../../features/webhooks)**.
+
+## List webhooks
+
+```bash
+API_URL="http://localhost:3001/api"
+TOKEN="your-jwt-token"
+
+curl --fail --silent --show-error \
+  -X GET "$API_URL/admin/webhooks" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+Returns an array of webhook rows. The signing secret is **never** returned after creation — only `secret_preview` (first 8 chars) is exposed.
+
+## Create a webhook
+
+```bash
+curl --fail --silent --show-error \
+  -X POST "$API_URL/admin/webhooks" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "n8n WhatsApp",
+    "url": "https://n8n.example.com/webhook/picpeak",
+    "events": ["event.published"],
+    "active": true
+  }' | jq
+```
+
+The response includes the **plaintext signing secret** in a `secret` field. Save it now — it is never recoverable after this call. Configure your receiver to compute `HMAC-SHA256(secret, raw_body)` and compare against the `X-PicPeak-Signature` header.
+
+### Required fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string (1–100) | Display name for the admin UI |
+| `url` | string (≤2048) | Receiver URL. Validated against the SSRF blocklist unless `WEBHOOK_ALLOW_PRIVATE_URLS=true` |
+| `events` | array | Subscribed event types (subset of the catalog) |
+
+### Optional fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `active` | boolean | `true` | Inactive webhooks are skipped at fire time |
+| `filter` | object | `{}` | Dot-path predicate; AND of all keys; arrays = "any of" |
+| `template` | string | `null` | `${dot.path}` substitution applied to the request body. Validated at create time. `null` = use the default JSON envelope |
+
+### Subscribed event types
+
+`event.created`, `event.published`, `event.archived`, `event.expired`, `photo.uploaded`, `photo.deleted`.
+
+## Update a webhook
+
+```bash
+curl --fail --silent --show-error \
+  -X PUT "$API_URL/admin/webhooks/$WEBHOOK_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "active": false }' | jq
+```
+
+Same field set as create. Send only the keys you want to change. The signing secret cannot be rotated via this endpoint — delete and recreate.
+
+## Delete a webhook
+
+```bash
+curl -X DELETE "$API_URL/admin/webhooks/$WEBHOOK_ID" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Cascades to `webhook_deliveries` — all queued and historical deliveries are removed.
+
+## Send a test event
+
+Fires a synthetic delivery against the webhook with a stub payload. Useful for verifying the receiver is reachable and the signature checks pass. Bypasses subscription matching but **respects the active flag**.
+
+```bash
+curl --fail --silent --show-error \
+  -X POST "$API_URL/admin/webhooks/$WEBHOOK_ID/test" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "event_type": "event.published" }' | jq
+```
+
+`event_type` defaults to the first subscribed event if omitted. Returns `202 Accepted`.
+
+## List deliveries
+
+```bash
+curl --fail --silent --show-error \
+  -X GET "$API_URL/admin/webhooks/$WEBHOOK_ID/deliveries?status=failed&page=1&limit=25" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+| Query param | Description |
+|---|---|
+| `status` | Filter by `pending`, `success`, or `failed`. Omit for all. |
+| `page` | 1-based, default 1 |
+| `limit` | Default 25, max 100 |
+
+Response: `{ deliveries: [...], pagination: { page, limit, total } }`. Each row has `id`, `event_type`, `status`, `attempt_count`, `response_status`, `latency_ms`, `next_retry_at`, `last_error`, `created_at`, `completed_at` (no payload — see next endpoint).
+
+## Get delivery detail
+
+```bash
+curl --fail --silent --show-error \
+  -X GET "$API_URL/admin/webhooks/$WEBHOOK_ID/deliveries/$DELIVERY_ID" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+Returns the full row including the **payload** that was POSTed (signed body) and the **response_body** (truncated to 1KB).
+
+## Replay a delivery
+
+Re-enqueues a delivery as a fresh attempt. The original row stays as audit log; the new row carries `payload.replayed_from = <original_id>`.
+
+```bash
+curl --fail --silent --show-error \
+  -X POST "$API_URL/admin/webhooks/$WEBHOOK_ID/deliveries/$DELIVERY_ID/replay" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+Works for any delivery (success, failed, or pending) — useful for re-running a previously-failing delivery against a now-fixed receiver.
+
+Returns `202 Accepted` with `{ enqueued: true, original_id, replay_id }`.

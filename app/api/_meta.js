@@ -3,4 +3,5 @@ export default {
   authentication: 'Authentication',
   events: 'Events',
   photos: 'Photos',
+  webhooks: 'Webhooks',
 }

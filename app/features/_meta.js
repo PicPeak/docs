@@ -10,4 +10,6 @@ export default {
   'video-support': 'Video Support',
   feedback: 'Feedback',
   'multi-admin': 'Multi-Admin',
+  'storage-backends': 'Storage Backends (S3)',
+  webhooks: 'Webhooks',
 }
