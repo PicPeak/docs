@@ -1,0 +1,56 @@
+# Event Types
+
+PicPeak ships with five built-in event types (Wedding, Birthday, Corporate, Family, Other) but you can add your own from **Admin → Event Types**. Each type can have its own slug prefix, recommended layout, default theme, and a default header style — admins picking that type when creating a new event get those defaults pre-filled.
+
+## What an event type controls
+
+| Field | Effect |
+|---|---|
+| **Name** | Label shown in the admin's "Event Type" dropdown |
+| **Slug prefix** | Prepended to event slugs (e.g. `wedding-`, `birthday-`). Keeps URLs scannable. |
+| **Recommended layout** | Pre-selected in the layout picker on Create Event |
+| **Default theme preset** | Pre-selected in the Theme Customizer on Create Event |
+| **Default header style** | Pre-selected (`hero` / `standard` / `minimal` / `none`) |
+| **Default hero divider** | Pre-selected (`wave` / `straight` / `angle` / `curve` / `none`) |
+| **Color tint** | Optional accent color shown next to the type badge in the admin UI |
+
+The defaults only apply to *new* events — changing an event type's defaults later does not retroactively re-theme existing events.
+
+## Why use custom event types
+
+A few practical reasons to add your own:
+
+- **Studio-specific naming** — replace "Other" with your service offerings (e.g. "Corporate Headshots", "Brand Shoot")
+- **Slug consistency** — `corporate-headshots-acme-2026-05-12` is more useful than `other-acme-2026-05-12`
+- **One-click theming** — different shoots have different aesthetics; binding a theme to the type means new events arrive pre-styled
+- **Filtering & analytics** — the type field is included in webhook payloads (`data.event.event_type`), so n8n / Zapier filters can route by type
+
+## Creating a custom type
+
+1. Go to **Admin → Event Types**.
+2. Click **+ Add Event Type**.
+3. Fill in name, slug prefix, recommended layout, default theme preset.
+4. Save.
+
+The type appears in the Create Event dropdown immediately.
+
+## Slug behavior
+
+When the admin picks an event type, the slug is generated as:
+
+```
+{slug_prefix}-{slugified_event_name}-{event_date_or_random_hex}
+```
+
+Example: type `wedding`, name "Smith & Jones", date `2026-05-12` → slug `wedding-smith-jones-2026-05-12`.
+
+If `event_require_event_date` is off in [Event Defaults](/guides/admin-settings/event-defaults), a random 8-char hex suffix is used instead of the date.
+
+## Editing or deleting a type
+
+- **Edit** — changes apply to new events only. Existing events keep the values they were created with.
+- **Delete** — only allowed if no active events use the type. PicPeak surfaces a count and blocks deletion if any reference exists. Archive the events first if you want to retire a type.
+
+## Built-in types
+
+The five built-in types (`wedding`, `birthday`, `corporate`, `family`, `other`) cannot be deleted, but their default theme / layout / divider can be edited just like custom types. Restore-to-default is not exposed in the UI yet — make a note of the original config before changing it if you might want to revert.

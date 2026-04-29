@@ -1,0 +1,56 @@
+import { Callout } from 'nextra/components'
+
+# System Status
+
+The **System Status** tab shows your instance's storage usage and lets you set a soft warning limit. It also exposes one-shot maintenance jobs (currently the photo dimension repair).
+
+## What you see
+
+| Metric | Source |
+|---|---|
+| **Total storage used** | Sum of `events/active/`, `events/archived/`, `thumbnails/`, `uploads/` |
+| **Archive storage** | `events/archived/` only (your backups proper, separate from gallery photos) |
+| **Disk total / free / available** | `fs.statfs()` on the storage path (or container mount) |
+| **Recommended soft limit** | 80 % of `disk_available` if disk metrics look reliable |
+
+If your container runs on virtualised storage (some Docker volume drivers, network mounts) the disk metrics may be inaccurate or missing. In that case use the override settings below to give PicPeak a sensible value.
+
+## Soft limit
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Storage soft limit (GB)** | (none) | Advisory only. Galleries are **not deleted** when the limit is exceeded — admins are warned in the dashboard banner and on event creation. |
+
+The limit is intended to prompt you to archive old galleries before you run out of disk, not as a hard quota.
+
+## Capacity overrides
+
+When the auto-detected disk metrics are wrong (containerised setups, network filesystems), set explicit values here:
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Total capacity override (GB)** | (auto from `fs.statfs`) | Forces the "disk total" metric to this value. |
+| **Available override (GB)** | (auto from `fs.statfs`) | Forces the "disk available" metric to this value. |
+
+Environment-variable equivalents take precedence over the database values. From `.env`:
+
+```env
+STORAGE_CAPACITY_OVERRIDE_GB=500
+STORAGE_AVAILABLE_OVERRIDE_GB=120
+```
+
+(Or `*_BYTES` for exact byte counts.)
+
+## Photo dimension repair
+
+PicPeak stores `width` and `height` for every photo so masonry and justified layouts can compute aspect ratios. Photos uploaded before this column existed (very early installs), or photos imported via S3 prefix walker before metadata extraction was added, may have null dimensions.
+
+Click **Repair photo dimensions** to scan every `photos` row with null `width`/`height` and re-extract from the file. Read-only progress: the button shows current count + total. Safe to run anytime; it only writes when a value actually needs filling in.
+
+## Update notifications
+
+The dashboard shows the latest available beta or stable version (fetched from GitHub releases) and a **Update Now** button that downloads the latest Docker image and recreates the container. The check runs every 6 hours on the backend. There is nothing to configure on this tab — the version-check service is enabled in code.
+
+<Callout type="info">
+The "Update Now" button only works when PicPeak is running under a supported container manager. For native installs and orchestrators (Kubernetes, Nomad), follow your normal deploy flow — the button will fail with a "no compatible runtime detected" message.
+</Callout>

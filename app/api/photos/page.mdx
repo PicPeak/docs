@@ -1,43 +1,163 @@
 # Photos API
 
-## Upload photos
+The photos API covers everything you'd want to do with the photo collection of an event: upload, batch upload, download, list, hide, delete, reorder, and trigger metadata repairs.
+
+For the OpenAPI spec see `/api/openapi.json` on your instance.
+
+## Authentication
+
+```
+Authorization: Bearer <token>
+```
+
+Token must have `photos.read` (for list/get) or `photos.write` (for upload/delete) scope. See [Authentication](/api/authentication) for scope details.
+
+## Endpoints
+
+### Upload (single batch, < 100 MB total)
 
 ```bash
-API_URL="http://localhost:3001/api"
-TOKEN="your-jwt-token"
-EVENT_ID=512
-
-curl --fail --silent --show-error \
-  -X POST "$API_URL/admin/events/$EVENT_ID/upload" \
+curl -X POST "$API_URL/v1/events/$EVENT_ID/photos" \
   -H "Authorization: Bearer $TOKEN" \
   -F "photos=@/path/to/DSC_2031.jpg" \
   -F "photos=@/path/to/DSC_2032.jpg" \
-  -F "category_id=individual" | jq
+  -F "category_id=ceremony"
 ```
 
-### Constraints
+**Constraints:**
 
-- Files must be JPEG, PNG, or WebP.
-- Maximum size: 50 MB per file.
-- Maximum files per request: respects the `general_max_files_per_upload` admin setting (default: 500).
-- Uploading more files than allowed returns HTTP 400 with an error message.
+- File types: per `general_allowed_file_types` setting (default `jpg,jpeg,png,gif,webp`).
+- Max size per file: per `general_max_file_size_mb` (default 50).
+- Max files per batch: per `general_max_files_per_upload` (default 500, hard cap 2000).
+- Per-event `photo_cap` is enforced — uploads that would exceed the cap return 400.
 
-### Parameters
+**Response:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `photos` | file(s) | One or more image files (multipart form data) |
-| `category_id` | string | Optional category to assign photos to |
+```json
+{
+  "uploaded": [
+    { "id": 1234, "filename": "DSC_2031.jpg", "thumbnail_url": "/thumbnails/wedding-...", "size": 4523894, "captured_at": "2026-05-12T15:23:11Z" },
+    { "id": 1235, "filename": "DSC_2032.jpg", "thumbnail_url": "/thumbnails/wedding-...", "size": 4123456, "captured_at": "2026-05-12T15:23:14Z" }
+  ],
+  "skipped": []
+}
+```
 
-## Photo access
+### Chunked upload (large files / batches)
 
-Gallery photos and thumbnails are served through authenticated endpoints:
+For individual files over 100 MB (typical for video) or large batches, use the chunked upload flow:
 
-- `/photos/{eventSlug}/{filename}` --- full-size photos (requires gallery or admin token)
-- `/thumbnails/{eventSlug}/{filename}` --- thumbnails (requires gallery or admin token)
+```bash
+# 1. Initialise
+curl -X POST "$API_URL/v1/events/$EVENT_ID/uploads" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{ "filename": "video.mp4", "size": 1234567890, "mime_type": "video/mp4" }'
+# → returns { upload_id, chunk_size }
 
-These paths should be routed to the backend (port 3001) in your reverse proxy configuration.
+# 2. Upload chunks (parallel-safe)
+for i in $(seq 0 N); do
+  curl -X PUT "$API_URL/v1/uploads/$UPLOAD_ID/chunks/$i" \
+    -H "Authorization: Bearer $TOKEN" \
+    --data-binary @chunk-$i.bin
+done
 
-## Video uploads
+# 3. Complete
+curl -X POST "$API_URL/v1/uploads/$UPLOAD_ID/complete" \
+  -H "Authorization: Bearer $TOKEN"
+```
 
-Videos follow the same upload endpoint but support MP4, WebM, MOV, and AVI formats up to 10 GB. Files over 100 MB use chunked (resumable) uploads.
+Resumable: re-uploading a chunk that already arrived is idempotent. Failed chunks can be retried individually.
+
+### List photos for an event
+
+```bash
+curl "$API_URL/v1/events/$EVENT_ID/photos?limit=50&offset=0" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Query parameters:
+
+| Param | Default | Notes |
+|---|---|---|
+| `limit` | `50` | Max 200. |
+| `offset` | `0` | For pagination. |
+| `category_id` | (omit for all) | Filter to a single category. |
+| `is_hidden` | (omit for all) | `true` / `false` |
+| `sort` | `upload_date_desc` | One of `upload_date_*`, `capture_date_*`, `filename_*`, `size_*`, `rating_*` (with `_asc` or `_desc`). |
+
+### Get single photo metadata
+
+```bash
+curl "$API_URL/v1/photos/$PHOTO_ID" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Returns full metadata including width/height, EXIF capture date, feedback aggregates (likes, average rating, comment count), and download counts.
+
+### Hide / unhide a photo
+
+```bash
+curl -X PATCH "$API_URL/v1/photos/$PHOTO_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{ "is_hidden": true }'
+```
+
+Hidden photos are not shown to guests but remain in the database and admin grid. Useful for client-access review.
+
+### Delete
+
+```bash
+curl -X DELETE "$API_URL/v1/photos/$PHOTO_ID" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Hard delete: removes the photo file, thumbnail, hero variant (if any), and the database row. Fires `photo.deleted` webhook.
+
+### Bulk delete
+
+```bash
+curl -X POST "$API_URL/v1/photos/bulk-delete" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{ "photo_ids": [1234, 1235, 1236] }'
+```
+
+Returns `{ deleted: 3, failed: 0 }`. Fires one `photo.deleted` webhook per photo.
+
+### Repair dimensions
+
+```bash
+curl -X POST "$API_URL/v1/photos/repair-dimensions" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Scans every `photos` row with null `width`/`height` and re-extracts from the file. Returns `{ scanned, repaired, failed }`. See [System Status](/guides/admin-settings/status) for when to run this.
+
+## Photo + thumbnail serving
+
+Original photos and thumbnails are served via separate authenticated endpoints (not part of the v1 API itself):
+
+| Path | Auth | Notes |
+|---|---|---|
+| `/photos/{slug}/{filename}` | gallery or admin token | Full-size photo. Cached 1 day at the proxy layer. |
+| `/thumbnails/{slug}/{filename}` | gallery or admin token | Cached 7 days at the proxy layer. |
+| `/api/gallery/{slug}/photo/{id}` | gallery or admin token | Streams the protected variant when protection level is `enhanced`+. |
+
+These should be routed through your reverse proxy with appropriate cache headers — see [Reverse Proxy](/deployment/reverse-proxy).
+
+## Video specifics
+
+Videos use the same upload + delete endpoints. Additional considerations:
+
+- Formats: MP4, WebM, MOV, AVI.
+- Max size: 10 GB by default (cap at the proxy level too — see [Video Support](/features/video-support)).
+- Files over 100 MB **must** use chunked upload.
+- A thumbnail is auto-extracted from the 1-second mark via FFmpeg.
+
+## Webhook events
+
+The Photos API fires:
+
+- `photo.uploaded` — once per successfully uploaded file (admin upload, API upload, guest upload, S3 prefix walker import, filewatcher auto-import)
+- `photo.deleted` — once per delete (single or bulk). Not fired per-photo when an event is archived — receivers infer from `event.archived`.
+
+See [Webhooks](/features/webhooks) for the payload shape.

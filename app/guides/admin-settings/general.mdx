@@ -1,0 +1,49 @@
+import { Callout } from 'nextra/components'
+
+# General Settings
+
+The **General** tab covers your instance's identity, upload limits, language, and a few site-wide toggles.
+
+## Site Configuration
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Site URL** | (empty) | Used for absolute URLs in emails, OG previews, and webhook payloads. Set this to your public-facing origin (`https://galleries.example.com`). |
+| **Default Expiration (days)** | `30` | Pre-fills the expiration field on the Create Event form. Range: 1–365. |
+| **Max File Size (MB)** | `50` | Per-photo upload cap. Range: 1–500. Larger files are rejected before disk write. |
+| **Max Files per Upload** | `500` | Per-batch cap. Range: 1–2000. Hard-capped at the `MAX_ALLOWED_FILES_PER_UPLOAD` build constant — UI value can be lower but never higher. |
+| **Allowed File Types** | `jpg,jpeg,png,gif,webp` | Comma-separated extensions. Server validates against MIME plus extension. Add `mp4,mov` here when video uploads are enabled. |
+
+## Feature Toggles
+
+| Toggle | Default | What it does |
+|---|---|---|
+| **Enable analytics tracking** | on | Records gallery views, photo opens, downloads, unique visitors. Off = none of those metrics populate. |
+| **Allow self-registration for admins** | off | Exposes a public `/admin/register` form. Leave off in production. |
+| **Enable maintenance mode** | off | Blocks every non-admin request with a 503 + branded splash. Admin login still works so you can flip it back. |
+| **Use short gallery URLs** | off | New share links use a random short ID instead of the event slug. Existing links keep working. |
+
+<Callout type="warning">
+Maintenance mode is enforced by middleware (`backend/src/middleware/maintenance.js`) — if your reverse proxy caches the 503 response aggressively you may need to flush its cache after disabling.
+</Callout>
+
+## Language
+
+Sets the **default** language served to guests before they click the language toggle, and the language used for system emails when the event has no specific recipient locale.
+
+Supported: `en`, `de`, `nl`, `pt`, `ru` (Brazilian Portuguese, Russian).
+
+## Date & Time Format
+
+Pick the format used everywhere a date is rendered (admin tables, emails, gallery footer):
+
+- `DD/MM/YYYY (European)` — default
+- `MM/DD/YYYY (US)`
+- `YYYY-MM-DD (ISO)`
+- `DD.MM.YYYY (German)`
+
+The locale code derived from this setting is also passed to `date-fns` for relative time strings ("3 days ago").
+
+## Saving
+
+Each subsection has its own **Save** button — partial saves are fine. Cached settings are invalidated automatically; no restart needed.

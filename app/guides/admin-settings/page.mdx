@@ -1,0 +1,36 @@
+# Admin Settings
+
+The **Settings** page (left rail in the admin panel) groups every system-wide knob in PicPeak. Settings live in the `app_settings` table as key/value pairs and most apply immediately on save — no restart needed.
+
+The settings are grouped into five categories:
+
+| Group | What it controls |
+|---|---|
+| **General** | Site URL, file-size limits, language, date format, maintenance mode |
+| **Display** | Photo categories, thumbnail rendering, custom CSS |
+| **Privacy & Security** | Password rules, 2FA, session timeout, image protection, SEO/robots, comment moderation |
+| **Integrations** | API tokens, webhooks |
+| **System** | Storage limits, capacity overrides, analytics, repair jobs |
+
+## Per-tab guides
+
+- [General](/guides/admin-settings/general) — site URL, upload limits, language, date format, maintenance mode, short URLs
+- [Event Defaults](/guides/admin-settings/event-defaults) — required fields toggles + the global phone-field gate
+- [Security](/guides/admin-settings/security) — password complexity, lockout, session timeout, 2FA, reCAPTCHA
+- [Image Security](/guides/admin-settings/image-security) — protection levels, rate limits, suspicious-activity blocking, fragmentation
+- [Thumbnails](/guides/admin-settings/thumbnails) — dimensions, quality, fit mode, format
+- [System Status](/guides/admin-settings/status) — storage soft limit, capacity overrides, dimension repair
+- [Moderation](/guides/admin-settings/moderation) — banned-word filter for guest comments
+- [Analytics](/guides/admin-settings/analytics) — Umami integration
+
+Other settings have their own dedicated pages outside this section: [SEO & Robots](/features/seo), [Themes & Branding](/features/themes-branding), [Custom CSS](/guides/custom-css), [Webhooks](/features/webhooks), [API Tokens](/api/authentication).
+
+## Where settings are stored
+
+Every setting in this section persists to the `app_settings` table:
+
+```sql
+SELECT setting_key, setting_value FROM app_settings WHERE setting_key = 'general_default_expiration_days';
+```
+
+Most settings are cached in-process for performance; the relevant cache is invalidated automatically when you save in the UI. Editing the row directly in the database is supported but requires a backend restart to pick up.

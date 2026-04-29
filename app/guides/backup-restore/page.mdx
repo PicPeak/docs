@@ -2,9 +2,11 @@ import { Callout } from 'nextra/components'
 
 # Backup and Restore
 
-PicPeak includes a built-in backup service that supports full and incremental backups with optional S3/MinIO storage.
+PicPeak's built-in backup service runs full or incremental backups on a cron schedule, writes to local disk / rsync / S3-compatible storage, and tracks file checksums so that subsequent runs only upload what changed.
 
-## Manual backup
+## Manual backup (DB + files)
+
+If you don't want the built-in service, you can backup manually with one-shot commands:
 
 ### Database
 
@@ -15,54 +17,148 @@ docker exec picpeak-postgres pg_dump -U picpeak picpeak_prod > backup/db_$(date 
 ### Files
 
 ```bash
-tar -czf backup/photos_$(date +%Y%m%d_%H%M%S).tar.gz events/
+tar -czf backup/photos_$(date +%Y%m%d_%H%M%S).tar.gz events/ thumbnails/
+```
+
+For SQLite:
+
+```bash
+cp data/picpeak.db backup/picpeak_$(date +%Y%m%d_%H%M%S).db
 ```
 
 ## Built-in backup service
 
-The admin panel includes a backup configuration section:
+Configure under **Admin → Backup & Restore**.
 
-1. Go to **Admin > Settings > Backup**.
-2. Configure the backup destination (local or S3/MinIO).
-3. Set the schedule (daily, weekly, or custom).
-4. Enable the backup service.
+### Settings reference
 
-### Backup types
+| Key | Default | What it does |
+|---|---|---|
+| `backup_enabled` | `false` | Master toggle. |
+| `backup_schedule` | (empty) | Cron expression. Either standard (`0 2 * * *` = 2 AM daily) or one of the named presets (see below). |
+| `backup_destination_type` | (required) | `local` / `rsync` / `s3` |
+| `backup_destination_path` | `storage/backups` | Where backups land for `local` destinations. |
+| `backup_manifest_format` | `json` | `json` or `yaml`. Manifest is the file index for the backup. |
+| `backup_retention_days` | `30` | Backups older than N days are deleted on the next successful run. |
+| `backup_incremental` | `true` | When on, files that haven't changed since the last backup are skipped. Saves bandwidth + storage. |
+| `backup_include_archived` | `true` | Include `events/archived/` in the file scan. |
+| `backup_include_database` | `true` | Include a `pg_dump` (or SQLite copy) in the backup. |
+| `backup_max_file_size_mb` | `5000` | Files above this size are skipped (with a warning) — prevents one corrupt huge file from blocking a backup. |
+| `backup_email_on_success` | `false` | Email admin after every successful backup. |
+| `backup_email_on_failure` | `true` | Email admin after a failed backup. |
 
-- **Full backup** --- complete snapshot of the database and all event files.
-- **Incremental backup** --- only files changed since the last backup.
+### S3 destination settings
 
-### S3/MinIO support
+| Key | Default | What it does |
+|---|---|---|
+| `backup_s3_bucket` | (required) | Bucket name. |
+| `backup_s3_region` | `us-east-1` | AWS region. For MinIO use any string. |
+| `backup_s3_endpoint` | (empty) | Custom endpoint URL for MinIO, R2, B2, etc. |
+| `backup_s3_access_key` | (required) | IAM access key. |
+| `backup_s3_secret_key` | (required) | IAM secret. |
+| `backup_s3_prefix` | `backups` | Key prefix. Backups stored under `{prefix}/YYYY/MM/DD/backup-{id}/`. |
+| `backup_s3_force_path_style` | `false` | On for MinIO. Off for AWS S3. |
+| `backup_s3_ssl_enabled` | `true` | HTTPS to the S3 endpoint. |
 
-Configure an S3-compatible storage backend for off-site backups:
+### Rsync destination settings
 
-- Bucket name
-- Region
-- Access key and secret key
-- Endpoint URL (for MinIO or other S3-compatible services)
+| Key | Default | What it does |
+|---|---|---|
+| `backup_rsync_host` | (required) | Hostname or IP of the rsync target. |
+| `backup_rsync_user` | (empty) | SSH username. |
+| `backup_rsync_path` | (required) | Remote path. |
+| `backup_rsync_ssh_key` | (empty) | Local path to a private SSH key. `StrictHostKeyChecking=no` is set on the SSH command. |
+
+## Full vs incremental
+
+| | Full | Incremental |
+|---|---|---|
+| What's uploaded | Every file matching the scan filter | Only files whose checksum changed since the last backup |
+| Manifest | Complete file list with checksums | Same shape, plus `parent_backup_id` linking to the previous run |
+| When to use | First run, periodic ground-truth runs (weekly?) | Routine daily runs |
+
+The first ever backup is always a full backup. After that, when `backup_incremental=true`, the service compares each file's current checksum to the value stored in the `backup_file_states` table. Unchanged files are skipped.
+
+## Manifest format
+
+Every backup writes a manifest alongside the photos. The manifest is the index — it tells the restore process what to expect.
+
+```yaml
+version: '2.0'
+backup:
+  id: backup-20260428-022150-a1b2c3d4
+  type: incremental
+  parent_backup_id: backup-20260427-022150-...
+  timestamp: 2026-04-28T02:21:50.000Z
+files:
+  count: 1245
+  manifest:
+    - path: events/active/wedding-smith/DSC_0001.jpg
+      size: 4523894
+      checksum: sha256:...
+    - ...
+database:
+  type: postgresql
+  schema_version: 097_add_customer_phone
+verification:
+  total_checksum: sha256:...   # SHA-256 of the manifest itself
+```
+
+Format is `json` or `yaml` per `backup_manifest_format`. JSON is more compact; YAML is human-readable.
+
+## S3 prefix walker (auto-import)
+
+When PicPeak is reading backups *from* S3 (e.g. you migrated to a new server and want to restore from your existing S3 backup bucket), the **S3 Prefix Walker** scans the bucket under your configured `backup_s3_prefix` and surfaces every backup it finds.
+
+How it works:
+
+1. Lists all objects under `{prefix}/`.
+2. Filters for objects matching the dated structure (`YYYY/MM/DD/backup-{id}/manifest.{json|yaml}`).
+3. Polls again 30 seconds later — this is the **2-poll eventual-consistency gate**: S3 may not list very-recently-uploaded objects, so we wait once and re-check before declaring "no more backups".
+4. Returns the list to the admin UI for selection.
+
+Triggered manually from the **Backup & Restore** page → **Browse S3** action. There is no cron variant — it's always admin-initiated.
+
+## Retention & rotation
+
+After every successful backup the service enumerates existing backups (local or S3) and deletes any whose `backup.timestamp` is older than `backup_retention_days`. For S3 destinations this means deleting the entire `{prefix}/YYYY/MM/DD/backup-{id}/` prefix plus the manifest sibling.
+
+If you want to keep a permanent ground-truth backup, copy it to a separate prefix or bucket — anything inside the rotated path is fair game.
 
 ## Restore
 
 <Callout type="warning">
-Test your restore process before you need it. Verify backups periodically.
+Test your restore process before you need it. The UI restore button is straightforward but the manual paths below are unforgiving — practice on a dev instance first.
 </Callout>
 
-### Database restore
+### From the admin UI
+
+The Backup & Restore page lists every available backup with a **Restore** button. Behavior:
+
+1. Downloads the backup files from the destination.
+2. Restores the database (overwrites the existing DB).
+3. Restores files to `events/active/`, `events/archived/`, `thumbnails/` etc.
+4. Verifies checksums against the manifest.
+5. Reports any files that failed verification.
+
+The UI restore is a one-shot, full-rollback operation — run it on a fresh instance, not over a live one with newer data, unless you've thought through the consequences.
+
+### Manual restore — DB
 
 ```bash
-cat backup/db_20240101_120000.sql | docker exec -i picpeak-postgres psql -U picpeak picpeak_prod
+cat backup/db_20260428_022150.sql | docker exec -i picpeak-postgres psql -U picpeak picpeak_prod
 ```
 
-### File restore
+### Manual restore — files
 
 ```bash
-tar -xzf backup/photos_20240101_120000.tar.gz -C /
+tar -xzf backup/photos_20260428_022150.tar.gz -C /path/to/storage/
 ```
 
 ## Recommendations
 
-- Set up automated backups and verify they complete successfully.
-- Keep multiple backup generations.
-- Store backups off-site (S3, remote server, or external drive).
-- Test restoration regularly.
-- Monitor backup size and disk usage.
+- Run a weekly full backup + daily incrementals (cron: `0 2 * * 0` for Sunday full, `0 3 * * 1-6` for Mon–Sat incremental — manage as two separate webhooks if needed).
+- Keep at least 30 days of retention.
+- Store backups off-site — S3 in a different region than your primary, or rsync to a remote server.
+- Test the restore at least quarterly. A backup you've never restored isn't a backup.
+- Monitor `backup_email_on_failure` notifications — the only way you'll find out a backup is failing silently.

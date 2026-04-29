@@ -1,0 +1,34 @@
+# Moderation
+
+The **Moderation** tab manages a server-side word filter applied to guest comments before they reach the database. Useful for blocking obvious slurs, spam terms, or competitor names without forcing every comment into a manual review queue.
+
+## How it works
+
+When a guest submits a comment, the backend runs the comment text through the word-filter service. If any banned word is matched (case-insensitive, whole-word match), the comment is either:
+
+- **Held for moderation** — visible to the admin in the Feedback Moderation panel, hidden from guests, until the admin approves or deletes it. This is the default when `moderate_comments` is on for the event.
+- **Rejected outright** — when `moderate_comments` is off but the global filter still matches, the comment is rejected with a generic "your comment couldn't be saved" message.
+
+## Managing the filter
+
+The tab embeds the **Word Filter Manager** component:
+
+- Add a word — input field + **Add** button. Words are case-insensitive.
+- Remove a word — trash icon next to each entry.
+- Bulk import — paste a newline- or comma-separated list into the import box.
+
+Words are stored in the `app_settings` table under a single key (a JSON array) and are loaded once per process and cached for performance. Saving updates the cache automatically.
+
+## Per-event override
+
+Per-event settings (in the Edit Event → Feedback panel) can layer on additional rules:
+
+- `moderate_comments: true` — every comment goes to the moderation queue regardless of the filter
+- `require_name_email: true` — comments need a name (or name + email) before they can be posted
+- `allow_comments: false` — comments disabled entirely for this event
+
+## What's not in this tab
+
+This tab is comments-only. To moderate **photos** (hide individual photos from guests before public access), use the Client Access mode — see [Creating Events → Client Access](/guides/creating-events).
+
+To configure email notifications when a comment lands in the moderation queue, see the per-event Feedback panel.

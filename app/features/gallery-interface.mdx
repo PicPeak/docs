@@ -1,0 +1,133 @@
+import { Callout } from 'nextra/components'
+
+# Gallery Interface (Guest View)
+
+This page documents what guests actually see and can do when they open a gallery — the layouts, the lightbox, the feedback controls, the search/filter UI, the download flow.
+
+For the admin-side configuration of these features see [Themes & Branding](/features/themes-branding) and [Creating Events](/guides/creating-events).
+
+## Layout variants
+
+PicPeak ships seven gallery layouts. Each has its own configuration tokens (gutter size, columns, row height, etc.) that the admin sets via the Theme Customizer.
+
+| Layout | Best for | Distinguishing feature |
+|---|---|---|
+| **Classic Grid** | Mixed content, mobile-first | Equal-size tiles in 2–4 responsive columns |
+| **Modern Masonry** | Variable aspect ratios | Pinterest-style columns, no cropping |
+| **Justified** | Editorial galleries | Photos stretched to fill rows of equal height (Flickr-style) |
+| **Carousel** | Single-photo focus | Auto-advancing slideshow with optional thumbnail strip |
+| **Timeline** | Multi-day events | Photos grouped by day / week / month with date headers |
+| **Moments Mosaic** | Lifestyle, magazine layouts | Mixed-size tiles in a structured pattern |
+| **Story Mode** | Reveal-style storytelling | Vertical full-screen scroll, one photo per viewport |
+| **Gallery Premium** | High-end product showcase | Carousel + lightbox hybrid with custom transitions |
+
+The active layout is set per-event via the theme preset or by overriding the layout key explicitly.
+
+## Lightbox
+
+Opening any photo opens the lightbox — full-screen viewer with navigation, zoom, and feedback controls.
+
+**Navigation:**
+- Click left/right arrows — desktop
+- Single-finger swipe left/right — mobile (50 px threshold, dominant over vertical, < 600 ms)
+- Keyboard: ←, →, Esc
+
+**Zoom:**
+- Pinch-to-zoom on touch devices (2-finger gesture)
+- Click or use the +/- buttons on desktop
+- Zoom range: 1× to 3×
+
+**Toolbar (bottom):**
+- Photo counter (`3 / 12`)
+- Zoom out / Zoom in
+- Download (if downloads enabled for this event)
+- Like (if feedback enabled)
+- 5-star rating (if ratings enabled)
+- Comment / Open feedback panel (if comments enabled)
+
+**iOS:**
+- Toolbar respects `env(safe-area-inset-bottom)` so buttons sit above the home indicator.
+- Close button respects `env(safe-area-inset-top)` so it stays clear of the notch / dynamic island.
+
+## Feedback
+
+If the event has feedback enabled (per-event setting in the Edit Event → Feedback panel):
+
+| Control | Persistence | Visible to other guests? |
+|---|---|---|
+| **Like** | Per-device (or per-guest if `identity_mode=guest`) | Like count yes; identity no |
+| **5-star rating** | Per-device or per-guest | Average rating yes; individual votes no |
+| **Comment** | Per-guest (always requires name) | Yes (after admin moderation if `moderate_comments=true`) |
+| **Favorite** | Per-device | No — always private to the guest |
+
+**Identity modes:**
+- `simple` — device-based via `localStorage`. All visitors on the same device share state. No name prompt.
+- `guest` — visitor-based. First feedback action shows a modal asking for name (and optionally email). Future actions on the same device skip the modal.
+
+The setting lives on the event, not globally — different events can use different identity modes.
+
+## Search & filter
+
+The filter bar (toggleable globally; default on) gives guests:
+
+- **Search** — full-text on filename
+- **Sort** — by upload date, capture date (EXIF DateTimeOriginal), filename, size, rating
+- **Sort direction** — toggle ascending/descending (defaults match the per-event `default_photo_sort` setting)
+- **Date Taken** picker — filter to a specific day or range based on EXIF capture date
+
+When feedback is enabled, additional filter chips appear:
+
+- **All** — no filter
+- **Likes** — only photos the current guest has liked
+- **Favorited** — only photos the current guest has favorited
+- **Rated** — only photos with at least one rating
+- **Commented** — only photos with at least one approved comment
+
+## Bulk download
+
+The **Download All** button at the top of the gallery zips every visible photo into a single `.zip`. Behavior:
+
+- Streamed — the server doesn't buffer the entire archive in memory; it pipes file-by-file into the response.
+- A size estimate is shown before the download starts ("Download will be ~340 MB").
+- For very large galleries (hundreds of photos / multiple GB), expect the download to take several minutes — the browser is downloading the original files at full quality.
+- For events with **Pre-zip enabled**, the zip is generated once at upload time and cached, making the download instant. See [Creating Events → Downloads](/guides/creating-events).
+
+If the per-event "Allow downloads" setting is off, the bulk-download button is hidden and individual photos can't be downloaded either.
+
+## Language
+
+The language toggle in the gallery header offers any of: English, German (Deutsch), Dutch (Nederlands), Brazilian Portuguese (Português), Russian (Русский).
+
+The choice persists in `localStorage` per origin. If the guest hasn't picked one, the gallery falls back to the global default set in [General Settings](/guides/admin-settings/general).
+
+## EXIF metadata display
+
+For each photo in the lightbox, the metadata panel (toggleable) shows:
+
+- Capture date + time
+- Camera make + model (if EXIF present)
+- Lens model (if EXIF present)
+- Aperture, shutter speed, ISO (if EXIF present)
+- GPS — **stripped** at upload time for privacy. Never displayed.
+
+## Client access mode
+
+Per-event option that issues a **separate** share link with a different password. Use case: send the photographer or client a "preview" link before the gallery goes public, so they can hide individual photos.
+
+When a guest opens the gallery via the client-access URL:
+
+- The full gallery is visible immediately, regardless of the public publish state.
+- A "Hide from gallery" toggle appears on each photo (admin only).
+- The toggle is persistent — hidden photos stay hidden when the public link is opened.
+
+When the photographer publishes the gallery for guests, they have already curated it.
+
+## What guests **don't** see
+
+For completeness, here is what is hidden from the guest view (and only visible to admins / via API):
+
+- Per-photo upload metadata (uploader, exact upload time)
+- Photo `id` (slugged in URLs instead)
+- Hidden photos (when not in client-access mode)
+- The internal feedback moderation queue
+- Other guests' identities (only their feedback aggregates)

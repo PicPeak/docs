@@ -1,0 +1,63 @@
+import { Callout } from 'nextra/components'
+
+# CMS Pages
+
+The **Admin → CMS Pages** section lets you edit the public-facing static pages of your PicPeak instance — the legal pages every German-hosted instance needs (`/datenschutz`, `/impressum`), the "Gallery Not Found" copy guests see when an archived gallery's URL is hit, and any custom pages you want to add.
+
+## Built-in CMS pages
+
+These pages exist by default and are editable:
+
+| Slug | URL | When shown |
+|---|---|---|
+| `impressum` | `/impressum` | Linked in the gallery footer (German legal requirement) |
+| `datenschutz` | `/datenschutz` | Linked in the gallery footer (privacy policy) |
+| `gallery-not-found` | rendered when a gallery URL doesn't resolve | Archived event, deleted event, typo'd slug |
+| `page-not-found` | rendered for any other 404 | Catches non-gallery 404s |
+| `gallery-expired` | shown for events past `expires_at` but not yet archived | Brief window between expiry and archive |
+
+The "Gallery Not Found" and "Page Not Found" pages are intentionally distinguished — they let you write different copy for "I expected a gallery but it's gone" vs "I followed a broken link to your site."
+
+## Editing
+
+The editor is rich-text (TipTap-based), with HTML output. Supported elements include headings, paragraphs, lists, links, images, blockquotes. Inline HTML pasted from another tool is sanitised on save (`<script>`, `<iframe>` removed; URL attributes validated).
+
+Each page has:
+
+- **Title** — used as the `<title>` tag
+- **Body** — the rich-text content
+- **Meta description** — used in `<meta name="description">` (search-result snippet)
+- **Visible toggle** — pages can be hidden without being deleted
+
+## Adding a custom page
+
+Click **+ Add Page**:
+
+- **Slug** — URL fragment (`/{slug}`). Letters, digits, and hyphens only.
+- **Title**, **Body**, **Meta description** — same as built-ins.
+
+Custom pages are served at `/{slug}` and use the same gallery footer/header chrome as the built-in pages. Useful for things like an "About Us", "FAQ", "Pricing", or photographer biography page.
+
+## Templating
+
+The CMS body supports the same brand-token substitutions as the public landing page (set in [Branding](/features/branding)):
+
+```
+{{ company_name }}
+{{ company_tagline }}
+{{ support_email }}
+{{ brand_logo_url }}
+{{ brand_primary_hex }}
+```
+
+These substitute at render time, not edit time — so changing your company name in Branding propagates to every CMS page automatically.
+
+## Per-language content
+
+If your instance serves multiple languages, the rich-text editor doesn't (yet) split content per locale. The recommended pattern is to use bilingual copy in the body and rely on the visitor to scroll to their language, or maintain duplicate pages with a slug suffix (e.g. `impressum`, `impressum-en`).
+
+A proper i18n flow for CMS pages is on the roadmap.
+
+## Where it's served
+
+CMS routes are mounted under the public router and bypass admin authentication. Pages are cached in process memory for 60 seconds; saving in the admin invalidates the cache immediately so changes are visible on next request.

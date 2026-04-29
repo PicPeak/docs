@@ -1,0 +1,105 @@
+import { Callout } from 'nextra/components'
+
+# Image Processing
+
+Every photo and video uploaded to PicPeak runs through a small pipeline before it's stored: format normalisation, EXIF extraction, dimension capture, thumbnail generation, optional watermarking. This page documents what happens and where to configure it.
+
+## Library stack
+
+| Job | Library | Notes |
+|---|---|---|
+| Image transforms | [Sharp](https://sharp.pixelplumbing.com) | libvips under the hood — fastest mainstream image lib for Node |
+| EXIF extraction | [exifr](https://github.com/MikeKovarik/exifr) | Tag-by-tag, no temp files |
+| Video processing | FFmpeg (bundled via `ffmpeg-static`) | Used for thumbnail extraction and optional transcode |
+
+## Upload pipeline
+
+When a photo lands on the backend (admin upload, guest upload, S3 prefix walker import, or auto-import from filewatcher), the following runs synchronously:
+
+1. **MIME + extension validation** against the `Allowed File Types` setting in [General](/guides/admin-settings/general).
+2. **Size check** against the per-photo and per-batch upload caps.
+3. **Storage write** — original photo is written to `events/active/{slug}/{filename}` (local) or the equivalent S3 key.
+4. **Sharp metadata read** — width, height, format. Persisted to the `photos.width` / `photos.height` columns. These are used by the masonry and justified gallery layouts to compute aspect ratios on the client.
+5. **EXIF capture date extraction** — see below. Persisted to `photos.captured_at`.
+6. **Thumbnail generation** — see [Thumbnails](/guides/admin-settings/thumbnails) for the configuration. The output goes to `thumbnails/thumb_{filename}`.
+
+Steps 1–6 happen before the upload response returns, so the photo is fully usable as soon as the upload completes.
+
+## Capture date extraction
+
+The fallback chain (first non-empty wins):
+
+1. EXIF `DateTimeOriginal`
+2. EXIF `CreateDate`
+3. EXIF `ModifyDate`
+4. File system `mtime`
+
+If all four are missing the photo's `captured_at` stays `NULL` and it sorts to the end of "by capture date" sorts.
+
+## Thumbnail generation
+
+| Aspect | Behavior |
+|---|---|
+| When | Synchronously on upload |
+| Format | `jpeg` / `png` / `webp` (configurable) |
+| Quality | 85 default (configurable) |
+| Fit mode | `cover` default — crops to exact target dimensions |
+| EXIF | Stripped from thumbnails (privacy: no GPS leak via thumbnail download) |
+| Path | `thumbnails/thumb_{originalFilename}` |
+| Lazy regen | If a thumbnail is missing or unreadable when requested, the backend generates it on demand and caches it back |
+
+See [Thumbnails settings](/guides/admin-settings/thumbnails) for tuning.
+
+## Hero photos
+
+Larger pre-rendered version used as the gallery hero image (the big photo at the top of the gallery page).
+
+| Aspect | Value |
+|---|---|
+| Dimensions | 1920 × 1080, fit `cover` |
+| Quality | 85 (JPEG) |
+| EXIF | **Not** stripped (used for capture-date display in some themes) |
+| Path | `hero/{photo_id}_hero.{ext}` |
+| Focal point | Per-event setting (e.g. `top`, `center`, `bottom`, or `35% 60%`). Defaults to `center`. Used by Sharp's `extract` to pick which part of a tall photo to use as the landscape hero. |
+
+## Watermarking
+
+When **Watermark downloads** is enabled on an event:
+
+1. The original is fetched from storage.
+2. The brand watermark logo is composited over it at the configured position, opacity, and size.
+3. The composite is sent to the browser as the download.
+
+Watermarking happens **on demand**, every time the user clicks Download. The watermarked file is **not** persisted — only the original lives on disk. This avoids storage bloat and lets you re-brand watermarks without regenerating every photo, but does add a few hundred milliseconds of CPU time to each download.
+
+Thumbnails are **not** watermarked by default — the brand logo is too large relative to a 300 px thumbnail to read clearly. Enable per-event "Watermark thumbnails" if you specifically want that.
+
+## Protected-image rendering
+
+When the per-event protection level is `enhanced` or `maximum`, the served image goes through `secureImageService.processProtectedImage`:
+
+- **Fingerprint overlay** — invisible per-session pattern that lets you correlate a leaked image back to a specific viewer (only at `maximum`).
+- **Canvas rendering** — image is delivered as a `<canvas>` payload, not an `<img>` tag.
+- **Fragmentation** (`maximum` only) — image split into N×N tiles and reassembled client-side.
+
+See [Image Security](/guides/admin-settings/image-security) for the per-level breakdown.
+
+## Video processing
+
+Video uploads (`.mp4`, `.mov`, `.webm`) are handled separately:
+
+| Aspect | Behavior |
+|---|---|
+| Transcode | Only if the source is not already H.264/H.265 in a browser-friendly container. Otherwise passthrough. |
+| Thumbnail | Single frame extracted at the 1-second mark via FFmpeg. Same dimensions as photo thumbnails. |
+| Storage | Original under `videos/`, thumbnail under `thumbnails/` |
+| Streaming | Range-request supported by the backend so seeks work without full download |
+
+See [Video Support](/features/video-support) for upload limits and reverse-proxy notes.
+
+## Where the code lives
+
+- `backend/src/services/imageProcessor.js` — Sharp pipeline + EXIF
+- `backend/src/services/videoProcessor.js` — FFmpeg pipeline
+- `backend/src/services/watermarkService.js` — composite logic
+- `backend/src/services/secureImageService.js` — fingerprint, canvas, fragmentation

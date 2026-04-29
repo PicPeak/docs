@@ -1,0 +1,113 @@
+import { Callout } from 'nextra/components'
+
+# Archiving Events
+
+When a gallery has done its job, archiving it produces a single `.zip` of every photo + the feedback data, deletes the originals from the active storage area, and renders the public gallery URL inactive. Archives stay on disk (or in S3) until you explicitly delete them.
+
+## When archives happen
+
+Three triggers, all run the same archive routine:
+
+1. **Manual** — admin clicks **Archive Event** on the Event Details page.
+2. **Bulk manual** — admin selects multiple events on the Events table and clicks **Archive Selected**.
+3. **Auto on expiry** — the expiration checker (a cron job inside the backend) sees that `expires_at` has passed and archives the event automatically.
+
+The auto path also fires:
+- A **7-day-out warning email** to the customer (one-time, deduplicated via `email_queue.email_type='expiration_warning'`).
+- An **expired email** to the customer + admin on the day of expiry.
+- A `event.expired` webhook **before** the archive runs, then a `event.archived` webhook after — both contain the canonical event subject.
+
+## What the archive contains
+
+Inside `events/archived/{slug}.zip`:
+
+```
+{slug}/
+├── photos/
+│   ├── DSC_0001.jpg          ← originals at full resolution
+│   ├── DSC_0002.jpg
+│   └── ...
+└── feedback/
+    ├── feedback_data.json    ← raw rows from the feedback table
+    ├── feedback_data.csv     ← same data, spreadsheet-friendly
+    └── feedback_summary.json ← aggregate counts (likes/ratings/comments per photo)
+```
+
+The feedback files are only included if the event has feedback enabled and at least one feedback row exists. Compression: zlib level 9.
+
+EXIF data on the photos is preserved in the archive (originals unchanged). GPS is intact in the archive too — only the *displayed* thumbnails strip GPS.
+
+## What's deleted from the active area
+
+After the archive zip is written and verified:
+
+- Originals from `events/active/{slug}/` — deleted
+- Thumbnails matching `photos.thumbnail_path` — deleted
+- Hero photo files for the event — deleted
+- Watermark variant files (if any were cached) — deleted
+
+The `photos` rows stay in the database with `is_archived=true` set on the parent event. This is intentional: the photo IDs are referenced by feedback rows, activity logs, etc., and the row metadata (filename, size, captured_at) is useful for archive browsing.
+
+## What's left at the URL
+
+Visitors who hit `/gallery/{slug}` (or the share-link URL) after archive get the **Gallery Not Found** page — a CMS-customizable block in the admin's CMS Pages section. Default copy: "This gallery is no longer available."
+
+If the event was simply expired (not archived yet — the few minutes between `event.expired` and `event.archived` firing), they get the **Gallery Expired** interstitial with a clock icon and the expiry date.
+
+Client-access URLs to archived events also show the expired state — the special-access flow is gone too.
+
+## The Archives admin page
+
+`/admin/archives` lists every archived event with:
+
+- Event name, original event date, archive date
+- Photo count, archive size on disk
+- Download button (re-download the zip)
+- Restore button (see below)
+- Delete button (permanently removes the zip + the database row)
+
+## Restoring
+
+The Restore button on the Archives page reverses the archive:
+
+1. Downloads the zip from storage.
+2. Extracts the photos back to `events/active/{slug}/`.
+3. Sets `is_archived=false` and `is_active=true` on the event.
+4. Regenerates thumbnails for every photo.
+
+This is an O(n) operation in number of photos and runs in the foreground — for galleries with hundreds of photos, expect 1–5 minutes. The admin UI shows a spinner.
+
+After restore the share link works again. Feedback rows are still there from before the archive, so likes/ratings/comments are preserved end-to-end.
+
+<Callout type="warning">
+Restore re-extracts to local disk. If your storage backend is S3, the photos are restored to local fs (your storage path) — not back into S3. You can re-archive after to push back to wherever your backups live.
+</Callout>
+
+## Webhook payload
+
+The `event.archived` webhook fires once per archive operation. Payload follows the canonical event subject, with one additional field:
+
+```json
+{
+  "type": "event.archived",
+  "data": {
+    "event": {
+      "id": 42,
+      "slug": "wedding-smith",
+      "event_name": "Smith Wedding",
+      "...": "...",
+      "archive_path": "events/archived/wedding-smith.zip"
+    }
+  }
+}
+```
+
+For S3 backends, `archive_path` is the `s3://bucket/key` form.
+
+See [Webhooks](/features/webhooks) for the full payload reference.
+
+## Where the code lives
+
+- Trigger + manifest: `backend/src/services/archiveService.js`
+- Auto-expiry cascade: `backend/src/services/expirationChecker.js`
+- Cleanup of orphaned files: `backend/src/utils/cleanupTempUploads.js`

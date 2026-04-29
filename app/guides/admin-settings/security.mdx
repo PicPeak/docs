@@ -1,0 +1,62 @@
+import { Callout } from 'nextra/components'
+
+# Security Settings
+
+The **Security** tab controls password rules, session lifetime, login lockout, and optional second-factor verification for admin accounts.
+
+<Callout type="info">
+These settings apply to **admin** logins. Gallery passwords (the per-event password guests enter) are separate and have their own minimum-length rule (6 characters, no all-numeric).
+</Callout>
+
+## Password rules
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Minimum length** | `8` | Enforced at admin creation, password change, and password reset. |
+| **Complexity** | `strong` | One of `simple`, `moderate`, `strong`, `very_strong`. Each level adds requirements (uppercase, digit, symbol, no dictionary words). |
+
+Validation runs server-side in `backend/src/utils/passwordValidation.js`. Failed validations return a field-level error with the specific rule that failed.
+
+## Session
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Session timeout (minutes)** | `60` | Admin is logged out after this many minutes of inactivity. Each request from the admin UI resets the timer. |
+
+Token refresh: while the user is active the JWT is silently rotated; the timeout above is the *idle* limit, not the absolute one.
+
+## Lockout
+
+PicPeak counts failed login attempts per `(IP, email)` pair and locks the pair out after the threshold:
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Max login attempts** | `5` | Failures before lockout triggers. |
+| **Attempt window (minutes)** | `15` | Sliding window over which failures are counted. Older failures fall out. |
+| **Lockout duration (minutes)** | `30` | How long a locked-out pair stays blocked. |
+
+Lockouts log to `auth_attempts` and `security_events`. An admin can clear a lockout from the Users page.
+
+## Two-factor authentication
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Enable 2FA** | off | When on, admins must enrol a TOTP authenticator (Google Authenticator, 1Password, etc.) on their next login and supply a code on every subsequent login. |
+
+Recovery codes are issued at enrolment — store them somewhere safe. There is no admin-side bypass for a locked-out 2FA user; you must reset the user's password (which invalidates 2FA) from another admin account.
+
+## reCAPTCHA
+
+Optional. When enabled, Google reCAPTCHA v3 is rendered on the admin login form (and any public registration form, if you have that on).
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Enable reCAPTCHA** | off | Master toggle. |
+| **Site key** | (empty) | Public key from Google reCAPTCHA admin console — embedded into the page. |
+| **Secret key** | (empty, masked in API) | Private key — sent to Google for verification on every login. |
+
+The score threshold is hard-coded at 0.5 in the backend; below that the login is rejected with a generic "could not verify" error.
+
+## Where the cache lives
+
+Login middleware caches the security config in process memory for performance. Saving in this tab calls `resetSecurityConfigCache()` so changes take effect on the next request without a restart.

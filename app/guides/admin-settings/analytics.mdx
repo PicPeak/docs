@@ -1,0 +1,37 @@
+import { Callout } from 'nextra/components'
+
+# Analytics
+
+PicPeak ships with **two** distinct analytics tracks:
+
+1. **Built-in analytics** (always on, no third-party calls) — gallery views, photo opens, downloads, unique visitors, device types. Recorded server-side, displayed on the Analytics admin page.
+2. **Umami integration** (optional) — embeds a [Umami](https://umami.is) tracking script in the public gallery and admin pages so you get a privacy-friendly third-party dashboard alongside the built-in metrics.
+
+This tab only configures #2. The built-in tracking has no admin knobs — you can disable it on the [General Settings](/guides/admin-settings/general) tab via the "Enable analytics tracking" feature toggle.
+
+## Umami settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Enable Umami** | off | Master toggle. When off, no third-party script is injected. |
+| **Umami URL** | (empty) | Base URL of your Umami instance, e.g. `https://analytics.example.com`. No trailing slash. |
+| **Website ID** | (empty) | UUID of the website you registered in Umami's dashboard. |
+| **Share URL** | (empty) | Optional public share link (e.g. `https://analytics.example.com/share/abc123/Picpeak`). When set, the admin Analytics page links to it. |
+
+All three of `URL`, `Website ID`, and the master toggle are required for the script to load. Bad configuration results in a console warning in the browser, not a hard error.
+
+## What gets tracked
+
+The Umami script tracks page views and any `data-umami-event` attributes — PicPeak adds those to the gallery's photo-open and download buttons. Customer email/phone is **never** sent to Umami; only path-based pageviews and event names.
+
+<Callout type="info">
+The built-in analytics still run when Umami is enabled — they are independent. You can use both, just one, or neither.
+</Callout>
+
+## Self-hosted vs hosted
+
+PicPeak does not care where Umami runs. Common options:
+
+- Self-hosted Umami in your own Docker stack (recommended for full data ownership)
+- Umami Cloud (umami.is hosted plans)
+- Any other Plausible/Matomo-compatible script — just paste the equivalent URL/ID into these fields. (Tested with Umami; YMMV with other providers.)

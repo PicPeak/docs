@@ -2,7 +2,9 @@ import { Steps, Callout } from 'nextra/components'
 
 # Creating Events
 
-Events are the core organizational unit in PicPeak. Each event represents a photo gallery.
+Events are the core organizational unit in PicPeak. One event = one shareable gallery. This page walks through every field on the Create Event form, what it controls, and which global settings affect its default value.
+
+## Quick walkthrough
 
 <Steps>
 
@@ -10,51 +12,132 @@ Events are the core organizational unit in PicPeak. Each event represents a phot
 
 Navigate to `https://your-domain.com/admin` and log in.
 
-### Create a new event
+### Click New Event
 
-Click **New Event** from the dashboard or events list.
+From the dashboard or the Events list.
 
-### Fill in event details
+### Fill in the form
 
-| Field | Description |
-|-------|-------------|
-| Event type | Wedding, corporate, birthday, portrait, or custom |
-| Event name | Displayed as the gallery title |
-| Event date | The date of the event |
-| Customer name | Client's name (used in emails) |
-| Customer email | Client's email (receives gallery link) |
-| Admin email | Your email (receives notifications) |
-| Password | Optional. If set, guests must enter it to access the gallery |
-| Expiration days | How many days until the gallery expires (default: 30) |
+The full field reference is below. The form is split into four sections: Identity, Customer, Access, Display.
 
-### Save as draft (optional)
+### Save as draft, or publish immediately
 
-If you are not ready to share the gallery yet, save it as a draft. Drafts are not accessible to guests.
+The **Save as Draft** button keeps the event invisible to guests until you publish it later. **Save & Publish** puts it live (and fires `event.published` webhooks).
 
 ### Upload photos
 
-Drag and drop photos into the upload area, or click to browse. You can organize uploads into categories (e.g., "Ceremony", "Reception").
+Drag-and-drop into the upload zone or click to browse. Thumbnails are generated as the upload completes.
 
-- Supported formats: JPEG, PNG, WebP
-- Max size per file: 50 MB
-- Max files per upload: 500 (configurable)
+### Send the share link
 
-Thumbnails are generated automatically.
-
-### Configure gallery settings
-
-Set the theme, enable/disable feedback, configure photo protection, and add custom CSS if needed.
-
-### Publish
-
-When ready, publish the event. This makes the gallery accessible via its unique link.
-
-### Send the gallery link
-
-Optionally trigger an email to the customer with the gallery link and password. You can also copy the link manually.
+Either copy the link from the Event Details page, or click **Resend Creation Email** to trigger an email to the customer with the link and password.
 
 </Steps>
 
+## Field reference
+
+### Identity
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| **Event type** | dropdown | yes | Wedding, Birthday, Corporate, Family, Other, plus your [custom types](/guides/event-types). Drives default theme + slug prefix. |
+| **Event name** | text | yes | Used as gallery title and in `<title>`. |
+| **Event date** | date picker | gated by `event_require_event_date` | Used to compute the slug suffix. If gated off, a random hex suffix is used. |
+
+The event slug is derived as `{type-prefix}-{slugified-name}-{date}`, e.g. `wedding-smith-jones-2026-05-12`.
+
+### Customer contact
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| **Customer name** | text | gated by `event_require_customer_name` | Used in greeting copy in emails. |
+| **Customer email** | email | gated by `event_require_customer_email` | Receives gallery-created email, expiration warnings, password resets. |
+| **Customer phone** | tel | optional | Hidden by default. Enable in [Event Defaults → Phone field](/guides/admin-settings/event-defaults). Available in `event.*` webhook payloads. |
+| **Admin email** | email | gated by `event_require_admin_email` | Receives expiration warnings + archive notifications. Usually your own. |
+
+The "gated by" toggles are in [Event Defaults](/guides/admin-settings/event-defaults).
+
+### Access control
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| **Require password** | checkbox | from `event_default_require_password` | Pre-checked by default. Off = guests reach the gallery via the share-link token alone. |
+| **Password** | password | (none) | Min 6 chars, no all-numeric. Use the **Generate** button to get a memorable random one. |
+| **Confirm password** | password | (none) | Must match. |
+| **Client access enabled** | checkbox | off | Issues a separate share link with its own PIN. Lets a client review and hide individual photos before guests see them. |
+| **Client password (PIN)** | text | (none) | Required if client access is on. Usually a 4–6 digit PIN. |
+
+Changing the gallery password later **regenerates the share token** — old share links will stop working immediately. The customer needs the new link.
+
+### Limits
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| **Expiration (days)** | number | from `general_default_expiration_days` (30) | Sets `expires_at = now + N days`. On expiry the gallery is auto-archived. |
+| **Photo cap** | number | `0` (unlimited) | Max number of photos for this event. Replacement uploads (same filename) don't count. |
+
+### Display & theming
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| **Theme preset** | dropdown | from event-type's recommended preset | One of nine bundled presets (see [Branding](/features/branding)). |
+| **Layout** | dropdown | from theme preset | Override the layout independently of the preset. See [Gallery Interface](/features/gallery-interface) for the seven layouts. |
+| **Header style** | dropdown | from theme preset | `hero` / `standard` / `minimal` / `none`. |
+| **Hero divider** | dropdown | from theme preset | `wave` / `straight` / `angle` / `curve` / `none`. |
+| **Custom CSS template** | dropdown | (none) | Pick from globally-managed CSS templates (admin's Settings → Custom CSS). |
+| **Welcome message** | rich text | (empty) | Shown above the photo grid. Markdown / basic HTML. |
+| **Default photo sort** | dropdown | upload date desc | What sort guests see first. They can change it via the filter bar. |
+| **Hero photo** | photo selector | (auto: first photo) | Pick which photo is used in the hero section. Selectable from any uploaded photo. |
+
+### Workflow
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| **Save as draft** | checkbox | on for first-time create | When on, event is created with `is_draft=true`. Guests get a 404. |
+| **Allow user uploads** | checkbox | off | Lets guests upload photos to the gallery via a special token URL. |
+| **Upload category** | dropdown | (none) | Required if user uploads on. New photos are auto-assigned to this category. |
+
+### Per-event protection overrides
+
+The Edit Event page (after creation) exposes additional knobs that override the global defaults from [Image Security](/guides/admin-settings/image-security):
+
+| Field | Default | What it does |
+|---|---|---|
+| **Download protection level** | from global default | `basic` / `standard` / `enhanced` / `maximum` for this gallery only |
+| **Allow downloads** | on | Master toggle. Off = no download buttons, no bulk-zip. |
+| **Watermark downloads** | from global watermark default | When on, downloads get the brand watermark composited over them. |
+| **Watermark thumbnails** | off | When on, thumbnails are also watermarked (legibility caveat — small thumbs may be unreadable with watermarks). |
+
+## What happens when you publish
+
+For new events created with **Save & Publish**:
+
+1. Database row is inserted with `is_draft=false`, `is_active=true`.
+2. Share link + token generated.
+3. `event.created` webhook fires.
+4. `event.published` webhook fires.
+5. If a customer email is set: gallery-created email is queued.
+
+For drafts that you publish later (via the Edit Event page → **Publish**):
+
+1. `is_draft` flips to `false`.
+2. `event.published` webhook fires.
+3. Gallery becomes accessible at the share link.
+4. Customer email (if any) is **not** auto-sent — use **Resend Creation Email** to trigger it manually.
+
 <Callout>
-Published events can be returned to draft state if you need to make changes before the client sees them.
+Re-saving a published event does not re-fire `event.published`. The webhook is one-shot per draft → live transition. Use **Send Test Event** in [Webhooks](/features/webhooks) if you want to retest a receiver without publishing a new event.
 </Callout>
+
+## After creation
+
+The Event Details page gives you:
+
+- A copy-to-clipboard share link
+- The current password (with a regenerate / change action)
+- Photo grid + uploader
+- Per-event settings panels (downloads, protection, theme, feedback)
+- Activity log
+- **Resend Creation Email**, **Archive Event**, **Regenerate Share Token** action buttons
+
+See [Archiving Events](/guides/archiving) for what happens when you archive.

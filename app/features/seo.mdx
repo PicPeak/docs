@@ -1,0 +1,71 @@
+import { Callout } from 'nextra/components'
+
+# SEO & Robots
+
+PicPeak hosts a private gallery — usually you do **not** want it indexed by Google, scraped by AI training crawlers, or pulled into social-media link previews without your control. The **Settings → SEO & Robots** tab gives you fine-grained control over `robots.txt` and the per-page `<meta name="robots">` tags.
+
+## Indexing
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Allow indexing** | on | When off, `robots.txt` returns `User-agent: *` + `Disallow: /` for every crawler. Most respectful crawlers will skip your site entirely. |
+| **Sitemap URL** | (empty) | If set, gets appended as `Sitemap: <url>` at the end of `robots.txt`. Only meaningful if you have a sitemap to point to. |
+
+<Callout type="warning">
+`robots.txt` is advisory. It blocks well-behaved crawlers (Google, Bing, modern archive bots) but does not stop a scraper that ignores it. If you have content that *must* not leave your control, also use the [Image Security](/guides/admin-settings/image-security) tab to set protection level `enhanced` or `maximum` on the gallery.
+</Callout>
+
+## AI crawler blocking
+
+The "AI crawlers" toggle blocks the user-agents commonly used for LLM training data ingestion (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc.).
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Block AI crawlers** | off | Adds `Disallow: /` rules for ~15 known AI training bots in `robots.txt`. |
+| **Custom AI agents** | (empty) | Newline-separated list of additional UAs to block. Useful when a new training crawler appears between PicPeak releases. |
+
+## Social bot blocking
+
+Blocks the bots that fetch URLs to generate link-preview cards (the OG/Twitter-card image you see in WhatsApp, Slack, etc.).
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Block social bots** | off | Adds `Disallow: /` for `Twitterbot`, `facebookexternalhit`, `LinkedInBot`, `Slackbot`, `WhatsApp`, `TelegramBot`, `Discordbot`. |
+
+<Callout type="info">
+Blocking social bots also disables PicPeak's gallery share-link previews — the `/og/gallery/:slug` handler relies on those user-agents to know it should serve the OG metadata page. Leave this off unless you specifically don't want share previews.
+</Callout>
+
+## Custom rules
+
+For everything not covered by the toggles above, write your own:
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Custom rules** | `[]` | List of `{userAgent, disallow: [...]}` objects. Each becomes a `User-agent: <ua>\nDisallow: <path>` block in `robots.txt`. |
+
+Example: block a specific scraper from a path
+
+```
+User-agent: BadBot
+Disallow: /gallery/
+```
+
+## Per-page meta tags
+
+In addition to `robots.txt`, PicPeak can inject `<meta name="robots">` into every page so even crawlers that ignore `robots.txt` see the directive in the HTML they fetched.
+
+| Setting | Default | What it does |
+|---|---|---|
+| **noindex** | off | Adds `<meta name="robots" content="noindex">`. Tells crawlers not to add the page to their index. |
+| **nofollow** | off | Adds `<meta name="robots" content="nofollow">`. Tells crawlers not to follow links from the page. |
+| **noai / noimageai** | off | Adds `<meta name="robots" content="noai, noimageai">`. Newer convention; honored by some AI training pipelines. |
+
+## Live preview
+
+The tab includes a **Preview** panel that shows you the rendered `robots.txt` exactly as a crawler will receive it. Verify your config there before saving.
+
+## Where it's served
+
+- `robots.txt` is served by the backend at `/robots.txt` (proxied through nginx). Cached for 1 hour; saving in the admin invalidates the cache immediately.
+- The meta tags are injected into the `<head>` of the public landing page and the gallery pages.

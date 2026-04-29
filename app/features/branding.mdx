@@ -1,0 +1,103 @@
+import { Callout } from 'nextra/components'
+
+# Branding
+
+The **Branding** page (left rail in the admin panel) controls how your PicPeak instance looks: company name, logo, colors, fonts, footer, and the public-facing landing page. Anything brand-related that isn't tied to a specific event lives here.
+
+For per-event theming (specific layout, presets, custom CSS), see [Themes & Branding](/features/themes-branding).
+
+## Identity
+
+| Setting | What it does |
+|---|---|
+| **Company name** | Shown in the page title (`<title>` tag), the email header, the gallery footer, and as the OG `og:site_name`. |
+| **Tagline** | Optional one-liner under the company name on the public landing page. |
+| **Support email** | Linked in the gallery footer ("Support" link) and the password-reset email body. |
+| **Footer text** | Custom HTML/text rendered in the gallery footer. Sanitised — no scripts. |
+
+## Logo & favicon
+
+| Setting | What it does |
+|---|---|
+| **Logo upload** | PNG, JPG, or SVG. Recommended: transparent PNG, ~400×120 px. Used in the admin header, gallery header, and as the default OG image for share previews. |
+| **Logo size** | `small` / `medium` / `large` — affects max-height in the gallery header. |
+| **Logo position** | `top-left` / `top-center` / `top-right` — placement in the gallery hero. |
+| **Favicon** | Square PNG, 32×32 minimum. Falls back to `picpeak-logo-transparent.png` if not set. |
+
+Uploaded files are served from `/uploads/logos/` and `/uploads/favicons/` and cached for 7 days at the nginx layer.
+
+## Colors
+
+The color picker exposes four tokens that propagate through the entire UI as CSS variables:
+
+| Token | What it controls |
+|---|---|
+| **Primary** | Buttons, active nav state, links, focus rings |
+| **Accent** | Hover states, secondary buttons, badges |
+| **Background** | Page background |
+| **Text** | Body text |
+
+You can pick a hex value or click a preset swatch. Each preset is a coordinated palette designed by the PicPeak team — useful as a starting point.
+
+## Theme presets
+
+Theme presets bundle layout + color + typography choices into one click. The full list:
+
+| Preset | Layout | Vibe |
+|---|---|---|
+| `default` | Grid | Neutral, photographer-default |
+| `elegantWedding` | Masonry | Soft pastels, serif headings |
+| `modernMasonry` | Masonry (Flickr-style) | High-contrast, bold |
+| `birthdayFun` | Mosaic | Bright, playful |
+| `corporateTimeline` | Timeline | Restrained, structured |
+| `classicJustified` | Justified | Magazine-grade rows |
+| `momentsMosaic` | Mosaic | Mixed-size blocks |
+| `storyMode` | Vertical scroll | Instagram Stories-style |
+| `galleryPremium` | Carousel + lightbox | High-end product showcase |
+
+Per-event theme override always wins over the global default — admins can change the look for an individual gallery without affecting the default for new events.
+
+## Hero divider
+
+The slope between the gallery hero and the photo grid:
+
+`wave` (default), `straight`, `angle`, `curve`, `none`.
+
+Style is controlled by the active theme preset but can be overridden per-event.
+
+## Watermark
+
+The brand watermark applied to downloaded images (and optionally to thumbnails) when the per-event "Watermark downloads" toggle is on.
+
+| Setting | What it does |
+|---|---|
+| **Watermark logo** | PNG with transparency. Different file from the brand logo. |
+| **Position** | `top-left` / `top-right` / `bottom-left` / `bottom-right` / `center` |
+| **Opacity** | 0–100 % |
+| **Size** | Relative to image width (e.g. 15 %) |
+
+Watermarks are baked into the downloaded copy on demand — never into the original on disk.
+
+## Public landing page
+
+The page served at `/` when nobody is logged in. By default this redirects to `/admin/login`. Enable the public-site toggle on this page to serve a custom HTML/CSS welcome page instead.
+
+| Setting | What it does |
+|---|---|
+| **Enable public site** | Master toggle. Off = redirect to admin login. |
+| **HTML** | Full HTML body. Sanitised — `<script>` tags stripped. |
+| **Custom CSS** | Scoped to the public landing page. |
+
+The HTML editor supports a small set of placeholders that are substituted at render time:
+
+```
+{{ company_name }}     — your branded company name
+{{ company_tagline }}  — your tagline
+{{ support_email }}    — clickable mailto link
+{{ brand_logo_url }}   — URL of the uploaded logo
+{{ brand_primary_hex }}, {{ brand_accent_hex }}, etc.  — color tokens
+```
+
+## White-label admin
+
+The admin panel itself shows your logo and company name in place of the PicPeak branding when these fields are set. The "Powered by PicPeak" footer link can be hidden from the public site only — the admin panel always credits the project (this is a community norm, not a license requirement).

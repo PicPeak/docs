@@ -1,0 +1,30 @@
+# Thumbnails
+
+The **Thumbnails** tab controls the dimensions, quality, and format of the smaller previews displayed in galleries and the admin grid. Originals are never altered by these settings — they only affect the generated thumbnail file.
+
+## Settings
+
+| Setting | Default | Range | What it does |
+|---|---|---|---|
+| **Width (px)** | `300` | 50–1000 | Output width in pixels. |
+| **Height (px)** | `300` | 50–1000 | Output height in pixels. |
+| **Quality** | `85` | 1–100 | JPEG/WebP encoder quality. Lower = smaller files, more compression artefacts. |
+| **Fit mode** | `cover` | `cover`, `contain`, `fill`, `inside`, `outside` | How the source image fits the target box. `cover` crops to fill; `contain` letterboxes; `fill` stretches. See [Sharp resize docs](https://sharp.pixelplumbing.com/api-resize) for the visual difference. |
+| **Format** | `jpeg` | `jpeg`, `png`, `webp` | Output container. WebP is ~30% smaller for the same visual quality but takes a bit more CPU to encode. |
+
+## When does regeneration happen?
+
+- **New uploads** — the configured settings are applied when the thumbnail is generated, immediately after the photo upload finishes.
+- **Existing photos** — clicking the **Regenerate Thumbnails** button on this tab queues every existing photo for re-thumbnail in the background. It runs at low priority and uses `setImmediate` to avoid blocking other requests; expect roughly 50–200 photos/minute on commodity hardware depending on image size and Sharp's libvips throughput.
+
+## Storage footprint
+
+Going from `quality=85, jpeg` to `quality=80, webp` typically saves 30–40% of total thumbnail storage at no perceptible quality loss for a 300×300 thumbnail.
+
+If you migrate format (e.g. JPEG → WebP), regenerate explicitly — old JPEG thumbnails are not deleted automatically, so you will temporarily store both until you regenerate.
+
+## Where it's enforced
+
+- Settings persisted by: `backend/src/routes/adminThumbnails.js`
+- Applied in: `backend/src/services/imageProcessor.js` → `generateThumbnail()`
+- File names: `thumbnails/thumb_{originalFilename}` in your storage backend

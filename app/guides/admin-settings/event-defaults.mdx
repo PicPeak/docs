@@ -1,0 +1,45 @@
+import { Callout } from 'nextra/components'
+
+# Event Defaults
+
+The **Event Creation** tab controls which fields are required on the New Event form, and which are even shown.
+
+## Required-field toggles
+
+| Toggle | Default | Effect when off |
+|---|---|---|
+| **Customer name required** | on | Field still shown but accepts empty value. |
+| **Customer email required** | on | Field still shown. **Off breaks the gallery-created email**, the password-reset flow, and most automation that needs a recipient. |
+| **Admin email required** | on | Field still shown. Off means expiration warnings + archive notifications have nowhere to go. |
+| **Event date required** | on | Off means slugs are generated with a random hex suffix instead of the date. |
+| **Expiration required** | on | Off allows galleries that never expire (`expires_at = null`). Manual archive is the only cleanup path. |
+
+<Callout type="warning">
+Disabling **Customer email required** or **Admin email required** is supported but the UI shows a banner — too many features assume there is somewhere to send a notification, and you will get silent failures rather than errors.
+</Callout>
+
+## Form behavior
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Default: require gallery password** | on | Pre-checks the "Require Password" box on the Create Event form. Per-event override still works. |
+| **Show filter bar in gallery** | on | When off, the search/sort/filter bar is hidden in the public gallery view. |
+
+## Phone field
+
+The phone field is **off by default** because most photographers do not need it. When enabled:
+
+- A new `Customer Phone` input appears on the Create Event and Edit Event forms.
+- The value is persisted to the `events.customer_phone` column.
+- It is included in the read-only Event Information panel.
+- It is included in `event.*` webhook payloads (`customer_phone` field).
+
+When disabled, the field is hidden, existing values stay in the database (so toggling back on does not lose data), and webhook payloads send `customer_phone: null`.
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Enable phone field on event form** | off | Master toggle for the customer phone input. |
+
+## Where the validation lives
+
+These toggles are read by `backend/src/routes/adminEvents.js` and `backend/src/routes/v1/events.js` on every event-create request. Bad input that ignores the requirement returns `400 Bad Request` with a field-specific error.

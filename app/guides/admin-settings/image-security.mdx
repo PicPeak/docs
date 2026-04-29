@@ -1,0 +1,87 @@
+import { Callout } from 'nextra/components'
+
+# Image Security Settings
+
+The **Image Security** tab governs how aggressively PicPeak protects photos from being saved without permission, and how the rate limiter throttles abusive clients.
+
+This page is the authoritative reference for what each protection level *actually does*. See [Photo Protection](/features/photo-protection) for the conceptual overview and the caveats (no protection is bulletproof against a determined attacker).
+
+## Default protection level
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Default protection level** | `standard` | Pre-fills new events. Existing events keep whatever level they were created with. |
+
+Levels:
+
+| Level | Right-click | Canvas overlay | DevTools detection | Watermark | Fragmentation | When to use |
+|---|---|---|---|---|---|---|
+| `basic` | blocked | no | no | optional | no | Public sample galleries — block accidental "Save Image" only |
+| `standard` | blocked | no | no | optional | no | **Default**. Most paid client galleries. |
+| `enhanced` | blocked | yes (transparent canvas overlay) | yes (device fingerprint, suspicious-activity logs) | optional | no | High-value commercial work |
+| `maximum` | blocked | yes | yes (aggressive — closes lightbox on detection) | required | yes (image split into reassembled tiles) | Premium / forensic-grade |
+
+Per-event override on the Edit Event page wins over this default.
+
+## Image quality
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Default JPEG quality** | `85` | Quality (1–100) used by Sharp for delivered images. Thumbnails have their own quality setting in [Thumbnails](/guides/admin-settings/thumbnails). |
+
+## Rate limiting
+
+These limits apply to image and thumbnail requests **per IP**. Hitting any of them returns `429 Too Many Requests` and increments the suspicious-activity counter.
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Max image requests per minute** | `30` | Short burst limit. |
+| **Max image requests per 5 minutes** | `100` | Medium-window limit. |
+| **Max image requests per hour** | `500` | Long-window limit. |
+
+A normal guest browsing a gallery rarely exceeds 100 requests in 5 minutes; bots scraping every photo do.
+
+## Suspicious activity
+
+Counts violations (rate-limit hits, devtools-detection triggers, broken-token attempts) per IP and acts on them.
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Suspicious activity threshold** | `10` | After this many violations the IP is flagged as "suspicious". Logged to `security_events`. |
+| **Auto-block IPs** | on | When `true`, suspicious IPs hitting the auto-block threshold are blocked entirely. |
+| **Auto-block threshold** | `50` | Violation count that triggers an IP block (when auto-block is on). |
+| **Block suspicious IPs** | on | Master toggle for IP blocking. Off = log only. |
+
+Blocked IPs receive `403 Forbidden` on every photo / thumbnail request until manually unblocked from the Image Security dashboard.
+
+## Monitoring
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Security monitoring enabled** | on | Off = no security events recorded at all. Disable only for debugging. |
+| **Log security events to DB** | on | Off = events go to the application log only, not the `security_events` table. |
+| **DevTools protection** | on | Embeds the client-side detection code that triggers a violation when DevTools opens on a protected gallery. |
+
+## Canvas rendering
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Enable canvas rendering** | off | When on, photos at protection level `enhanced` and above are drawn into a `<canvas>` element instead of `<img>`, which breaks naive screenshot tools and prevents drag-to-save on most browsers. |
+
+Costs ~10–30 ms of client render time per photo and disables `<img>`-based browser features (e.g. lazy loading hints, native zoom). Worth it for premium galleries; overkill for casual ones.
+
+## Fragmentation
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Default fragmentation level** | `3` | Number of tiles the image is split into (1–10) when protection level is `maximum`. The browser reassembles the tiles into a canvas — works against pixel-perfect copy tools but breaks accessibility (screen readers can't read a fragmented image). |
+
+<Callout type="warning">
+Fragmentation is the most aggressive option and degrades the user experience the most. Reserve it for galleries where the photographer has explicitly asked for forensic-level protection.
+</Callout>
+
+## Where it's enforced
+
+- Rate limits: `backend/src/middleware/secureImageMiddleware.js`
+- Settings consumed by: `backend/src/services/imageProcessor.js` (canvas, watermark, fragmentation), `backend/src/routes/adminImageSecurity.js` (dashboard + IP unblock)
+- Suspicious-IP state lives in process memory plus the `security_events` table — restarting the backend clears the in-memory blocks but the DB log persists.
