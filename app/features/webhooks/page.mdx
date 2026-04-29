@@ -30,10 +30,29 @@ Common use cases:
   "type": "event.published",
   "created_at": "2026-04-28T05:25:00.000Z",
   "data": {
-    "event": { "id": 123, "slug": "wedding-smith", "share_url": "https://..." }
+    "event": {
+      "id": 123,
+      "slug": "wedding-smith",
+      "event_name": "Smith Wedding",
+      "event_type": "wedding",
+      "event_date": "2026-05-12",
+      "share_url": "https://picpeak.example.com/gallery/wedding-smith/abc123",
+      "share_token": "abc123",
+      "customer_name": "Jane Smith",
+      "customer_email": "jane@example.com",
+      "customer_phone": "+49 30 12345678"
+    }
   }
 }
 ```
+
+Every `event.*` payload uses the same canonical event sub-object. Fields you have not stored (or that the global phone-field toggle has disabled) come back as `null` — the keys are always present so receivers do not have to distinguish "field missing" from "field null".
+
+`event.archived` adds `archive_path`. `event.expired` adds `expires_at`.
+
+<Callout type="warning">
+Webhook payloads include customer contact info (name, email, phone) and the gallery share token. Only point webhooks at receivers you trust — anything that receives the payload has everything it needs to message the customer or open the gallery.
+</Callout>
 
 Always sent as headers:
 
