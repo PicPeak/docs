@@ -87,24 +87,38 @@ docker compose up -d
 
 ## Database migrations
 
-Migrations run automatically on startup. To run them manually:
+Migrations run automatically on container startup via the backend's `wait-for-db.sh` (which calls `npm run migrate:safe` once Postgres is reachable). Manually triggering them is rarely needed.
+
+<Callout type="warning">
+Avoid running `npm run migrate` while the backend is still booting — the in-container migration is already in progress, and a parallel run can leave the schema half-applied. Wait for `docker compose ps` to report the backend as `healthy`, then exec into it if you need to inspect migration state.
+</Callout>
+
+If you need to inspect migration status post-boot:
 
 ```bash
-docker exec picpeak-backend npm run migrate
+docker exec picpeak-backend npm run migrate:safe
 ```
+
+`migrate:safe` is idempotent — it skips any migrations already recorded in `knex_migrations` and prints a summary.
 
 ## Health checks
 
 ```bash
-# Backend
-curl http://localhost:3001/api/health
+# Backend (responds with { status: "ok", pid, uptime })
+curl http://localhost:3001/health
 
-# Frontend
-curl http://localhost:3000
+# Frontend (Nginx /health endpoint, returns "healthy")
+curl http://localhost:3000/health
 
-# PostgreSQL
-docker exec picpeak-postgres pg_isready
+# PostgreSQL — pin -d to your DB_NAME so the probe hits the real
+# database (otherwise pg_isready defaults to a db named after the
+# user and the postgres container logs spurious FATAL messages).
+docker exec picpeak-postgres pg_isready -U picpeak -d picpeak_prod
 ```
+
+<Callout type="info">
+**Upgrading from an older release?** If your postgres container logs spam `FATAL: database "picpeak" does not exist` even though the install works, you're hitting the pg_isready default-database quirk. Fixed in the production compose file as of the post-#484 release; pull the latest compose with `git pull` (or re-download `docker-compose.production.yml`) and restart.
+</Callout>
 
 ## Useful commands
 
