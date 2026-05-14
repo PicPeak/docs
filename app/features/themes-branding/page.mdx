@@ -1,3 +1,5 @@
+import { Callout } from 'nextra/components'
+
 # Themes and Branding
 
 PicPeak provides extensive customization options so galleries can match your studio's brand.
@@ -35,6 +37,78 @@ PicPeak can be fully white-labeled:
 - Replace the logo and branding in the admin panel.
 - Customize the login screen appearance.
 - Use your own domain with a reverse proxy.
+
+### Login-page logo controls
+
+A separate set of knobs apply only to `/admin/login` and `/customer/login` (gallery and admin chrome keep their own size settings):
+
+- **Show tinted frame behind the login logo** --- toggle off when your logo already includes its own backdrop.
+- **Logo size on login pages** --- Small / Medium / Large / Extra large.
+
+Both live under **Settings > Branding > Login pages logo**.
+
+## Gallery footer
+
+Each public gallery footer is composed of three configurable layers, all in **Settings > Branding**:
+
+### Legal links
+
+The Impressum and Datenschutz CMS pages each have a **Show in footer** toggle. Disable either to hide it from the gallery footer (the page itself stays accessible at its URL --- existing links don't break).
+
+### Social-media icons
+
+Five URL fields render as icons in the gallery footer above the legal-links row. Each is independent --- leave a field empty to hide that icon. The whole row is omitted when none are configured.
+
+| Field | Notes |
+|---|---|
+| Facebook | Full URL |
+| Instagram | Full URL |
+| WhatsApp | A `wa.me` URL or a phone number with country code (auto-converted) |
+| X / Twitter | Full URL |
+| YouTube | Full URL |
+
+Icons open in a new tab with `rel="noopener noreferrer"`.
+
+### Gallery promotional banner
+
+A markdown-authored banner shown above (default) or below the gallery footer --- useful for seasonal offers, print discounts, or a single CTA to your booking page.
+
+| Setting | Values |
+|---|---|
+| Position | Above footer / Below footer |
+| Alignment | Left / Center (default) / Right |
+| Content | Markdown --- bold, italic, links, lists, headings |
+
+Per-event override: each event editor has a three-way switch under **Edit Event > Promotional Banner**:
+
+- **Inherit** (default) --- use the global content as-is.
+- **Custom** --- override with this event's own markdown for that gallery only.
+- **Off** --- suppress the banner entirely for that event, even if the global one is set.
+
+Markdown is sanitised server-side via `marked` + DOMPurify with a tight allowlist (no `<img>`, no tables, no scripts). Links automatically get `target="_blank" rel="noopener noreferrer nofollow"`.
+
+## Social-share preview image (Open Graph)
+
+When a gallery URL is shared on WhatsApp, Facebook, Slack, Telegram, Discord, LinkedIn, Mastodon, Bluesky, etc., PicPeak serves Open Graph + Twitter Card meta tags so the link preview shows a thumbnail, title, and description instead of a naked URL.
+
+By default the `og:image` is your branding logo. Each event has an opt-in to use the **hero photo** as the preview image instead:
+
+1. Open the event editor.
+2. Pick a hero photo (the toggle is disabled until one is selected).
+3. Tick **Use hero photo as social-share preview**.
+4. Save.
+
+<Callout type="warning">
+The thumbnail is fetched **unauthenticated** by every link-preview crawler --- enabling the toggle effectively makes the hero photo public to anyone the URL is shared with. Default is off; pick a hero you're comfortable surfacing publicly before enabling.
+</Callout>
+
+To verify a gallery's preview metadata from the host:
+
+```bash
+curl -A 'WhatsApp/2' https://your-host/gallery/<slug>
+```
+
+This returns a small HTML response with the OG meta tags --- the same response Meta's, Slack's, etc. crawlers receive.
 
 ## Public landing page
 

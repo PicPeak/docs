@@ -14,6 +14,7 @@ export default {
   'video-support': 'Video Support',
   feedback: 'Feedback',
   'multi-admin': 'Multi-Admin',
+  'customer-accounts': 'Customer Accounts',
   'storage-backends': 'Storage Backends (S3)',
   webhooks: 'Webhooks',
 }

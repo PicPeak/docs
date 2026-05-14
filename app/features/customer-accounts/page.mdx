@@ -1,0 +1,102 @@
+import { Callout } from 'nextra/components'
+
+# Customer Accounts
+
+Recurring clients --- studios, agencies, repeat private customers --- often book multiple shoots over time. Customer accounts give them a single login that lists every gallery they have access to, replacing the per-gallery URL + password juggling.
+
+This is a separate user tier from your admins:
+
+| Tier | Logs in at | Sees |
+|---|---|---|
+| Admin | `/admin/login` | Everything they have permission for |
+| Customer | `/customer/login` | A dashboard listing every gallery they're assigned to, no per-event passwords |
+| Guest | `/gallery/<slug>` (per-event password) | One specific gallery |
+
+The per-event-password and shareable-link flows continue to work unchanged --- customer accounts are an additional path, not a replacement.
+
+## Enabling the customer portal
+
+Customer accounts are gated behind a feature flag:
+
+1. Open **Settings > Features**.
+2. Enable the **Clients** card under the Clients section.
+3. The **Clients** entry appears in the admin sidebar; **Accounts** is the first sub-page.
+
+<Callout type="info">
+The `customerPortal` flag controls **admin UI visibility** (sidebar entry, /admin/clients pages), not access revocation. Existing customers keep working when the flag is off --- their `/customer/*` endpoints still respond, their gallery sessions stay valid. To revoke access for a specific customer, use one of the per-record tools below instead.
+</Callout>
+
+## Inviting a customer
+
+From **Clients > Accounts**:
+
+1. Click **Invite customer**.
+2. Enter their email; optionally pre-fill name, company, address, and other profile fields.
+3. PicPeak emails an invitation link with a single-use 7-day token.
+4. The customer follows the link, creates a password, lands on `/customer/login`.
+
+After accepting, the customer profile is editable on both sides --- the admin from the customer detail page, the customer from `/customer/profile`.
+
+Pending invitations show on the **Invitations** tab and can be cancelled from there.
+
+## Assigning galleries to a customer
+
+Two ways to wire a customer to a gallery:
+
+### From the event editor
+
+The **Customer accounts** picker on the Edit Event form is a multi-select autocomplete --- search by email or company. Anyone you add gets the gallery on their dashboard immediately.
+
+### From the customer detail page
+
+The **Manage galleries** dialog on the Assigned events card lets you reconcile a customer's full assignment list in one round-trip. Useful when a single customer has many galleries to add or remove at once.
+
+| What you do | What happens |
+|---|---|
+| Add an event chip | Customer's dashboard shows it on next refresh |
+| Remove an event chip | Customer's gallery JWT for that event is **invalidated on the very next request** (returns 403 with `CUSTOMER_ASSIGNMENT_REVOKED`) --- they're booted out instantly, no token blacklist needed |
+
+Removing an assignment doesn't affect the per-event-password flow --- guests with the password can still open the gallery if it has one. Only the customer's own login-based access is revoked.
+
+## Customer dashboard
+
+After login, the customer sees a dashboard listing every assigned gallery with thumbnails, dates, and status. Clicking through opens the gallery directly --- no per-event password required, even if the gallery has one configured for guests.
+
+The dashboard header (logo + company name) is configurable from **Settings > Branding > Customer dashboard header**. Toggle each off if you want a more minimal customer-facing shell.
+
+## Locking out a customer
+
+Three different actions, three different scopes:
+
+| Action | Mechanism | Scope | Real-time? |
+|---|---|---|---|
+| Remove from one gallery | "Manage galleries" dialog removes the junction row; `verifyGalleryAccess` re-checks on every customer-minted JWT | One gallery | Yes (next request) |
+| Deactivate the account | Sets `customer_accounts.is_active = false` and bumps `password_changed_at`; rejects every outstanding JWT | All galleries | Yes (next request) |
+| GDPR-erase the account | Wipes profile + invalidates everything | All galleries; profile data anonymised | Permanent |
+| Force re-login | Send password-reset email; on apply, bumps `password_changed_at` | All galleries | On apply |
+
+All four are on the customer detail page under **Account actions**.
+
+## Sub-features (in progress)
+
+The **Clients** sidebar section is shaped to host more than just Accounts --- the architecture supports per-customer Calendar, Quotes, Bills, and Messaging surfaces that ship as separate features. When a sub-feature is enabled in **Settings > Features**, its sub-nav entry appears automatically inside `/admin/clients`. Sub-features that are still off don't show.
+
+## Email notifications
+
+Customer-related emails follow the same template system as the rest of PicPeak (**Settings > Email > Templates**, under the **Customers** category):
+
+- `customer_invitation` --- the invite-link email
+- `customer_password_reset` --- admin- or self-triggered reset
+- `customer_gallery_assigned` --- digest sent when an admin adds new gallery access (one email per save, not one per gallery)
+
+All three carry hand-translated `en` + `de`; other locales are machine-translated and clearly flagged in the Templates editor.
+
+## Permissions (RBAC)
+
+Three new admin permissions ship with the customer portal:
+
+- `customers.view` --- see the Accounts page
+- `customers.create` --- invite, edit assignments, deactivate, reset passwords
+- `customers.delete` --- GDPR-erase
+
+Granted to `super_admin` and `admin` roles by default. Editor and viewer roles are intentionally locked out --- managing customer records is a write-class operation on a different user tier.
