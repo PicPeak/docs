@@ -33,27 +33,13 @@ DB_PASSWORD=<paste generated value>
 REDIS_PASSWORD=<paste generated value>
 ```
 
-### Set file permissions
-
-Docker needs write access to storage directories. Set `PUID` and `PGID` in `.env` to match your host user:
-
-```bash
-# Find your user/group IDs
-id -u   # → e.g. 1000
-id -g   # → e.g. 1000
-```
-
-```env
-PUID=1000
-PGID=1000
-```
-
-Then create the directories:
+### Create storage directories
 
 ```bash
 mkdir -p events/active events/archived data logs backup storage
-chmod -R 755 events data logs backup storage
 ```
+
+The backend container will chown these to its internal `nodejs` user on first boot — no `PUID`/`PGID` setup needed. If you've pinned `user:` in a compose override, see [Permissions](/deployment/docker#permissions) for the manual pre-chown step.
 
 ### Start PicPeak
 

@@ -34,22 +34,28 @@ The production compose file mounts these host directories into the backend conta
 
 PostgreSQL and Redis use named Docker volumes (`postgres-data`, `redis-data`).
 
-## PUID/PGID
+## Permissions
 
-<Callout type="warning">
-Set `PUID` and `PGID` in your `.env` to match your host user. Without this, bind-mounted directories may not be writable.
-</Callout>
+As of the post-#484 release, the backend container starts as root, chowns the bind-mounted host directories (`/app/storage`, `/app/data`, `/app/logs`) to UID 1001 (the in-container `nodejs` user), then drops privileges via `su-exec` before running the app. **Fresh installs need no host-side `chown`.**
+
+The `nodejs` runtime user is hard-coded — `PUID`/`PGID` env vars from older docs are no longer read.
+
+### Pinning a specific runtime UID (advanced)
+
+If your environment requires the app to run as a specific host UID (e.g. shared NFS exports where 1001 is taken), pre-chown the host directories and pin `user:` in your compose override:
+
+```yaml
+services:
+  backend:
+    user: "<uid>:<gid>"
+```
 
 ```bash
-# On the host
-id -u  # PUID
-id -g  # PGID
+# On the host, matching the UID you pinned above
+chown -R <uid>:<gid> ./storage ./data ./logs
 ```
 
-```env
-PUID=1000
-PGID=1000
-```
+When `user:` is set to anything other than root, the entrypoint's self-chown branch is skipped. A preflight check then verifies the bind mounts are writable; if they aren't, the container exits immediately with a clear error pointing back to this section — no silent restart loop.
 
 ## External database
 
@@ -139,3 +145,37 @@ docker exec picpeak-backend node scripts/show-admin-credentials.js --reset
 # Check disk usage
 du -sh events/ storage/ backup/
 ```
+
+## Troubleshooting fresh installs
+
+These are the symptoms that have surfaced on first `docker compose up -d` against a clean host. All have been fixed in the post-#484 / #494 / #511 release window — pull the latest images and compose file before troubleshooting further.
+
+### Backend in a restart loop, no obvious error in `docker logs`
+
+**Cause:** the container couldn't write to the bind-mounted host directories. Until the post-#484 release the entrypoint silently swallowed the `mkdir` failure, hit a confusing migration error, and exited — looking like a database problem when it was actually filesystem permissions.
+
+**Fix:** pull the post-#484 backend image. The new entrypoint chowns the bind mounts itself on first boot and re-execs as `nodejs`. If you've pinned `user:` in a compose override, see [Permissions](#permissions) above for the manual pre-chown step.
+
+### `relation "photos" does not exist` on cold-start Postgres
+
+**Cause:** the `events.hero_photo_id` FK was declared inline before the `photos` table existed in the same init transaction. Postgres rejects this; SQLite silently accepted it, which is why long-lived SQLite installs were unaffected.
+
+**Fix:** resolved in #494 — column is declared without the inline FK, then the FK is added via `ALTER TABLE` after both tables exist. Pull the latest backend image, `docker compose down -v`, `up -d`.
+
+### `column "created_at" does not exist` in `backup_runs` index migrations
+
+**Cause:** migration 035 created two indexes referencing a `created_at` column, but the underlying table was built by migration 029 with a `started_at` column. The wrapping try/catch swallowed the error, so migrations reported success while the indexes were never built.
+
+**Fix:** resolved in #511 — migration 035 now uses `started_at`, and a new migration 105 backfills the indexes on installs where 035 silently failed. No manual action needed; the backfill runs on next boot.
+
+### `duplicate key value violates unique constraint "migrations_filename_unique"` on `004_add_categories_and_cms.js`
+
+**Cause:** `run-migrations-safe.js` snapshotted the applied-migrations set before `detectExistingSchema()` inserted rows for table-mapped legacy migrations, so the loop re-ran a migration whose internal `insert into migrations` then collided with the row `detectExistingSchema` had just written.
+
+**Fix:** resolved in #511 — the applied set is re-queried after the detection step. Only triggered when a previous boot landed in a partial state (typically after one of the earlier-listed bugs aborted mid-init).
+
+### Postgres logs spam `FATAL: database "picpeak" does not exist`
+
+**Cause:** `pg_isready` defaults to a database named after the connecting user when `-d` isn't passed. The healthcheck was hitting that default DB instead of the real one, and Postgres logged a FATAL on every probe (every 2 seconds) — noisy but not actually breaking anything.
+
+**Fix:** resolved in #488 / #511 — the production compose file pins `pg_isready -d picpeak_prod`. Pull the latest `docker-compose.production.yml`.
