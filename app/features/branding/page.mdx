@@ -98,6 +98,41 @@ The HTML editor supports a small set of placeholders that are substituted at ren
 {{ brand_primary_hex }}, {{ brand_accent_hex }}, etc.  — color tokens
 ```
 
+## Social link previews
+
+When a gallery URL is shared on WhatsApp, Facebook, Slack, etc., the link preview that appears in chat is fetched by the receiving platform — not generated client-side. PicPeak serves three different responses depending on who's asking:
+
+| Fetcher | What gets served | Configured by |
+|---|---|---|
+| Known social crawlers (WhatsApp, Facebook, Slack, Telegram, Discord, LinkedIn, Pinterest, Mastodon, Bluesky, etc.) hitting `/gallery/<slug>` | A small HTML page with per-event `og:title` (event name) + `og:description` (welcome message or fallback) + `og:image` (brand logo, or hero photo if [opted in](/features/themes-branding#social-share-preview-image-open-graph)) | Admin Branding (company name, logo) + per-event settings |
+| Regular browsers hitting `/gallery/<slug>` | The SPA shell — React loads, fetches gallery data, updates the document title client-side | Admin Branding (company name → `<title>`) |
+| Anything else: link-preview services that cache metadata with a non-crawler User-Agent (WhatsApp **Business API**, Twilio, LinkPreview.net, Slack ImgProxy, etc.) | The static SPA shell as-is — no JS executes, no per-event lookup, just the raw HTML head | `BRAND_TITLE` / `BRAND_DESCRIPTION` env vars on the frontend container |
+
+The first two paths cover most cases automatically — admin Branding settings flow through. The third path is what bites you when someone shares a gallery via WhatsApp's Business API or a marketing automation tool: those fetchers don't carry a recognisable crawler UA, so they end up reading the static shell.
+
+### Branding the static fallback
+
+Set these two env vars on the frontend container (root `.env` file, picked up by both `docker-compose.yml` and `docker-compose.production.yml`):
+
+```env
+BRAND_TITLE=Your Studio Name
+BRAND_DESCRIPTION=Wedding and event photography by Your Studio Name.
+```
+
+Then restart the frontend service:
+
+```bash
+docker compose -f docker-compose.production.yml up -d frontend
+```
+
+No frontend rebuild required — the values are substituted into `index.html` at container start via `envsubst`. Defaults to `BRAND_TITLE=PicPeak` and a generic description when unset, so existing deployments see no behaviour change until you flip them.
+
+<Callout type="info">
+Receiving platforms cache link previews aggressively — WhatsApp Business in particular can hold a preview for hours to days. After changing `BRAND_TITLE`, expect previously-sent links to keep showing the old metadata until the receiver re-crawls. New sends pick up the change immediately.
+</Callout>
+
+See [Environment Variables → Social link preview fallback](/deployment/environment-variables#social-link-preview-fallback) for the reference table.
+
 ## White-label admin
 
 The admin panel itself shows your logo and company name in place of the PicPeak branding when these fields are set. The "Powered by PicPeak" footer link can be hidden from the public site only — the admin panel always credits the project (this is a community norm, not a license requirement).
