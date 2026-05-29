@@ -1,0 +1,160 @@
+import { Callout } from 'nextra/components'
+
+# CRM Settings
+
+Every CRM-related toggle and default lives under **Settings → CRM**. This page is the reference for what each setting does, where it's used, and what the safe defaults are.
+
+<Callout type="warning">
+Many CRM settings concern legal or financial defaults (payment terms, IBAN, VAT rates, contract block bodies). Read the [CRM overview's Legal & financial defaults section](/features/crm#legal--financial-defaults) before customising these for real customer-facing use.
+</Callout>
+
+For the feature flags that turn each CRM module on / off, see **Settings → Features** (documented inline on the Features tab itself — `quotes`, `bills`, `contracts`, `hoursLogging`, `calendar`, `taxReport`, `clients`, `customerPortal`, `crmDevelopment`).
+
+## Business profile
+
+The issuer block that appears on every quote / contract / invoice PDF.
+
+| Setting | Used in | Notes |
+|---|---|---|
+| Business name | Issuer block, email signatures | Required — documents refuse to render without it |
+| Address (street, city, postal, country) | Issuer block | Required |
+| Tax ID (Steuernummer / VAT number) | Tax report, issuer block | Required if your jurisdiction needs it visible on invoices |
+| Phone, website, email | Issuer block, footer | Optional |
+| Timezone | Calendar rendering, scheduled-send timing | Required for the [Calendar](/features/crm/calendar) feature |
+| Default currency | Default for new quotes / invoices | Can be overridden per document |
+| Default language | Default for new quotes / invoices | Can be overridden per document |
+
+The values seeded on first install come from your `.env` (`ADMIN_*` vars) and a placeholder fallback. **Replace every placeholder before sending any real document.**
+
+## Business bank accounts
+
+The CRM supports multiple bank accounts (e.g. one CHF, one EUR). Each invoice references one bank account by ID; the issuer block on the PDF shows that account's IBAN.
+
+Per account:
+
+- Account holder name
+- IBAN (validated client-side via the `iban` library)
+- BIC / SWIFT (optional)
+- Currency
+- Default-for-currency flag (one account per currency can be marked default; new invoices in that currency pick it)
+- QR-bill enabled (Swiss only — uses the `swissqrbill` library to render the QR payment slip on the PDF)
+- Creditor reference type (for Swiss QR-bills: `QRR` vs `SCOR` vs `NON` — your bank dictates which)
+
+<Callout type="warning">
+**Confirm with your bank** that the IBAN + reference format you ship to customers is what their payment systems expect. Swiss QR-bill formatting varies between cantonal banks; a wrong creditor-reference type means the customer's bank rejects the QR scan.
+</Callout>
+
+## Payment terms
+
+Templates that you attach to quotes / invoices to set the customer's payment deadline. Three template types coexist (migration 124 split):
+
+### Legacy templates (`payment_term_templates`)
+
+Single-row terms like "Net 30" or "Sofort fällig". Seeded with German / English bilingual presets:
+
+- **Komplettzahlung nach Auslieferung** (full payment on delivery)
+- **Sofort fällig** (immediate)
+- **Net 14**, **Net 30** — pay by 14 / 30 days after issue
+- **10 % Anzahlung / 90 % nach Lieferung** (10 % deposit, 90 % on delivery — implicit installment hint)
+
+You can edit, deactivate, or add your own. Active templates appear in the quote / invoice editor dropdown.
+
+### Split templates (Net-days + timing)
+
+A newer model splits "when is it due" (`payment_net_days_templates`: 14 days, 30 days, etc.) from "when does the timer start" (`payment_timing_templates`: from-issue, from-delivery, from-acceptance). Pick one of each → composite term.
+
+This shape supports things the legacy single-row templates couldn't, like "Net 30 from delivery" vs "Net 30 from acceptance".
+
+### Skonto (early-payment discount)
+
+Each template can carry a Skonto offer ("2 % discount if paid within 7 days"). When enabled (`crm_quotes_skonto_enabled`), the discount is rendered on the PDF and the customer-portal bills tab.
+
+`skonto_disabled` per-invoice override exists for cases where you want to suppress the Skonto on a specific invoice without removing it from the template.
+
+## Document numbering
+
+Configurable in **Settings → CRM → Document numbering**.
+
+Each document type (quote, invoice, contract) gets a format string. Defaults:
+
+- Quotes: `Q-{YEAR}-{SEQ:04d}` → `Q-2026-0042`
+- Invoices: `INV-{YEAR}-{SEQ:04d}` → `INV-2026-0042`
+- Contracts: `K-{YEAR}-{SEQ:04d}` → `K-2026-0042`
+
+Available tokens:
+- `{YEAR}` — 4-digit current year
+- `{MONTH:02d}` — 2-digit month
+- `{SEQ}` or `{SEQ:0Nd}` — sequence number, zero-padded to N digits
+
+The sequence counter is **per-document-type per-year**, gap-free, atomic. Storno documents draw from the **same** sequence as regular invoices (§14 UStG requires this).
+
+<Callout type="info">
+**Changing the format string mid-year is safe** — the sequence counter advances regardless of how it's formatted. But your customers will see the format change, which can confuse them. Pick a format and stick with it for the year.
+</Callout>
+
+## Reminder defaults (invoice dunning)
+
+When `crm_invoices_reminders_enabled` is true, configures the dunning ladder.
+
+| Setting | Default | Notes |
+|---|---|---|
+| Days past due → reminder 1 | 7 | `invoice_reminder_first` email |
+| Days past due → reminder 2 | 14 | `invoice_reminder_second` email |
+| Days past due → reminder 3 (final) | 30 | `invoice_reminder_final` email |
+| Late fee per cycle | 0 (disabled) | Set via `crm_invoices_late_fee_enabled` + amount |
+| Late fee currency | inherit from invoice | Per-document override possible |
+
+After reminder 3 no automatic reminders fire — the admin handles direct follow-up.
+
+## Event reminder defaults
+
+When `crm_event_reminders_enabled` is true (off by default), the scheduler sends a pre-event reminder to the customer.
+
+| Setting | Default | Notes |
+|---|---|---|
+| Days before event → reminder | 3 | `event_reminder_default` email |
+| Per-event-type overrides | none | `event_reminder_{type}` templates seeded for `wedding`, `family_session`, `corporate`, etc. — customise per type if the messaging differs |
+| Per-event opt-out | per-event | `events.event_reminder_disabled` flag — useful for repeat / commercial customers who don't want the reminder |
+
+## Terms of Service (ToS)
+
+Four free-text settings for the legal blurbs that appear on:
+
+- The customer portal footer (`crm_tos_customer_portal`)
+- The public quote response page (`crm_tos_quote_response`)
+- The public contract signing page (`crm_tos_contract_sign`)
+- The public payment-check page (`crm_tos_payment_check`)
+
+Each carries a default plain-language placeholder. **Replace with your own legal text reviewed by a lawyer** before going live.
+
+## Customer surface defaults
+
+When `customerPortal` is on, individual customers can have CRM surfaces selectively enabled. These settings control the **default** for newly-created customers:
+
+| Setting | Effect on new customers |
+|---|---|
+| Customer quotes default ON | New customers see the Quotes tab on their portal |
+| Customer bills default ON | New customers see the Bills tab |
+| Customer contracts default ON | New customers see the Contracts tab |
+| Customer hours default OFF | New customers don't get an Hours tab (rarely useful for customer-facing) |
+
+Each per-customer override is on the customer detail page.
+
+## Developer tools
+
+Enabling **CRM developer tools** (`crmDevelopment` feature flag) exposes:
+
+- An in-app email tester at `/admin/clients/dev` — preview every CRM-related email template (`quote_sent`, `invoice_paid_receipt`, `contract_fully_signed`, etc.) without waiting for the real lifecycle event.
+- Per-template "Render to preview" + "Send to my admin email" buttons.
+
+Strictly opt-in. Default off on every install. Useful for designing email overrides without spamming a real customer.
+
+## Per-event overrides
+
+A few CRM-adjacent settings live on the **event** record rather than globally:
+
+- `event_reminder_disabled` — turn off the pre-event reminder for this event
+- `event_reminder_offset_days` — override the default days-before for this event
+- `event_reminder_body_override` — override the default reminder email body for this event
+
+These show on the Edit Event form under **Reminders**.

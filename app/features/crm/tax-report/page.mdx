@@ -1,0 +1,75 @@
+import { Callout } from 'nextra/components'
+
+# Tax Report
+
+A per-period summary export of invoice revenue, suitable as input for your tax return or for handing to your accountant. Aggregates totals by VAT rate, currency, and document type; nets Storno cancellations against the original invoices they cancel.
+
+<Callout type="warning">
+**Not a tax filing.** This is a summary for your accountant. The categorisation, VAT-rate inheritance, and Storno netting rules below are documented so you (and your accountant) can audit what's included. Your jurisdiction's tax law and your accountant are the source of truth for what your tax filing actually needs.
+</Callout>
+
+## Prerequisites
+
+- **Feature flag**: `taxReport` enabled in **Settings → Features**. `bills=false` forces `taxReport=false` (no invoices → nothing to report).
+- **Business profile**: complete (`Settings → CRM → Business profile`) — your name, tax ID, and default VAT rate appear on the export.
+
+## What the report includes
+
+For the selected period (start date → end date, inclusive):
+
+| Section | Source | Notes |
+|---|---|---|
+| **Revenue by VAT rate** | `invoices.total_amount_minor`, `invoices.vat_rate` | Grouped by rate. Storno totals subtracted from their cancelled-invoice's bucket. |
+| **Revenue by currency** | `invoices.currency` | If you bill in CHF + EUR, separate rows. No cross-currency conversion — your accountant handles that. |
+| **Storno details** | `invoices` where `kind='storno'` and `sent_at` is in period | Each Storno listed with its `cancels_invoice_id` so the audit trail is visible. |
+| **Open / overdue at period end** | `invoices.status` snapshot | Not technically revenue (cash basis) but useful context — accrual-basis filers care, cash-basis filers can ignore. |
+| **Hour-billing breakdown** | `invoice_line_items` where the source entry was a `customer_hour_entries` row | Subset of total revenue — shows how much of the period's billing came from time-based work. |
+
+The report is generated server-side from the live data on each request (cached briefly to avoid DB hammering). Re-running the same period any time should yield the same numbers — invoices are immutable, Storno entries don't move, and the aggregation is deterministic.
+
+## Generating the export
+
+From **Clients → Tax report**:
+
+1. Pick a period (preset buttons for current quarter, last quarter, current year, last year, or custom dates).
+2. Click **Generate**.
+3. The page renders the summary tables.
+4. Download as PDF via the **Export PDF** button — the same PDF your accountant gets.
+
+The PDF carries your business profile header, the period, and every table above. Storno entries are highlighted in red so they're visible at a glance.
+
+## What's NOT in the report
+
+- **Payments received** — only invoice issuance dates matter; when a customer actually paid is not in this export. (Cash-basis filers usually want payment dates; PicPeak's payment-log table has the data but it's not aggregated into this export today. Open question per project backlog.)
+- **VAT paid on supplier invoices** — PicPeak doesn't track your purchases / expenses. The tax report is a **sales-side** summary only.
+- **Cross-currency conversion** — if you bill in two currencies, two separate per-currency totals appear; no FX conversion is applied.
+- **Late fees** — `late_fee_amount_minor` accruals don't appear; they're informational only and aren't part of the invoice total per §14 UStG.
+- **Quotes and contracts** — quotes are pre-revenue; unsigned contracts are not income. Only actual `sent` / `paid` invoices contribute.
+
+## Storno netting
+
+The report's revenue totals are **net of Storno**. Example:
+
+| Document | Issued | Total | Storno? |
+|---|---|---|---|
+| INV-2026-0001 | 2026-01-15 | 1,000 | Yes, by STO-2026-0042 |
+| STO-2026-0042 | 2026-01-20 | −1,000 | (cancels INV-0001) |
+| INV-2026-0002 | 2026-01-18 | 500 | No |
+
+For Q1 2026, the report shows **500** total revenue (not 1,500 minus 1,000 in two rows). The Storno detail table lists the cancellation for audit, but the headline revenue number is the net.
+
+If the original invoice was issued in Q4 2025 and the Storno in Q1 2026, the Storno hits Q1 (subtracts from Q1 revenue). Your accountant decides whether to restate the original period — outside what the report does.
+
+## Per-customer breakdown
+
+The detail-level toggle on the report adds a per-customer summary alongside the period totals: how much revenue you billed each customer in the period, with their `customer_number` for cross-reference. Useful for the "top customers" question that comes up in year-end accounting.
+
+## Working with your accountant
+
+Suggested workflow:
+
+1. Export the report at the end of each quarter (or whatever your filing cadence is).
+2. Hand the PDF to your accountant alongside the underlying invoice exports if they need source documents (every individual invoice PDF is still on storage; download as needed).
+3. Your accountant reconciles against bank statements, expense receipts, and any cross-currency / cross-period adjustments.
+
+The export deliberately stays simple — it's input to a real tax workflow, not a replacement for one.

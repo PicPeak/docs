@@ -1,0 +1,56 @@
+import { Callout } from 'nextra/components'
+
+# Calendar
+
+A unified calendar view that overlays your scheduled events (`events.event_date`), hour entries (`customer_hour_entries`), and scheduled invoice send dates onto one timeline. Use it as the daily / weekly view for "what's coming up", and drag-create hour entries directly on the grid.
+
+Built on FullCalendar (`@fullcalendar/react`) — keyboard navigation, drag-to-create, click-to-edit work as you'd expect from a standard calendar widget.
+
+## Prerequisites
+
+- **Feature flag**: `calendar` enabled in **Settings → Features**.
+- **Business profile timezone**: set in **Settings → CRM → Business profile**. The calendar renders entries in that timezone — wrong timezone means entries on the calendar drift relative to when they were logged.
+
+## What appears on the calendar
+
+- **Events** (gallery shoots) — at their `event_date`, with `event_time_start` / `event_time_end` if set, or all-day otherwise (`is_full_day=true`, the default for events created before the calendar columns were added in migration 137 — backfilled on upgrade).
+- **Hour entries** — at `entry_date` + `start_time`, or all-day if duration-only.
+- **Scheduled invoice sends** — where `invoices.scheduled_send_at` is in the future and `status='scheduled'`. Useful preview of "the customer will see an invoice land that day".
+
+Each entry type uses a distinct color so the eye can separate them at a glance (configurable in branding — not the CRM page, but the global theme tokens).
+
+## Drag-creating an hour entry
+
+From the calendar view, click-and-drag across a time range to spawn the **HourEntryDragCreateModal**:
+
+- Customer picker (only customers with `feature_hours_logging` ON appear)
+- Description (free text)
+- Hourly rate override (optional)
+- Pre-filled start / end / duration from the drag selection
+
+On save, the entry is created with `status='unbilled'` — see [Hours logging → Billing entries](/features/crm/hours-logging#billing-entries-per-event-customer).
+
+You can also create entries via the **HourEntryInlinePopover** by clicking a single time slot — same form, less keyboard navigation.
+
+## Editing entries
+
+Click any entry on the calendar to open the editor. Three states:
+
+- **Unbilled hour entry** → fully editable. Save updates the entry; revisit later via either the calendar or the customer's Hours tab.
+- **Billed hour entry** → read-only with a lock icon. To change it, Storno the invoice that billed it, edit, re-bill.
+- **Event** → opens the event editor (same form as Gallery Management → Events → Edit).
+- **Scheduled invoice send** → opens the invoice detail page in a new tab.
+
+## Single-day events only
+
+Multi-day events, recurring events, and iCal/.ics export are intentional scope deferrals — see project backlog. If you book a multi-day shoot, the workaround today is one event per day (or one event for the whole range with the day-spanning details in `welcome_message`).
+
+## Customer self-booking
+
+A locked roadmap feature (`calendarBooking` flag). The card appears in the Features tab with a lock icon — enabling it has no effect because the server-side clamps it to `false` on every save. The shape of the eventual feature: customers see your availability via the calendar and book a slot themselves, which spawns an event + a "needs admin confirmation" status.
+
+Not yet built. The flag exists to mark it as on-the-roadmap.
+
+## Timezones and DST
+
+All times are stored in UTC and rendered in your business profile's timezone. DST transitions are handled by FullCalendar — a 2:30 AM entry in March will display at 3:30 AM after the spring-forward, etc. If a customer is in a different timezone, that's a per-customer setting on the customer record (today: not exposed in the calendar UI; the entry shows in the admin's timezone regardless).

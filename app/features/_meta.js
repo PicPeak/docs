@@ -17,4 +17,5 @@ export default {
   'customer-accounts': 'Customer Accounts',
   'storage-backends': 'Storage Backends (S3)',
   webhooks: 'Webhooks',
+  crm: 'CRM (Beta)',
 }
