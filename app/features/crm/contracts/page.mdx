@@ -1,0 +1,96 @@
+import { Callout } from 'nextra/components'
+
+# Contracts
+
+Contracts are block-composed legal documents (booking confirmation, terms, cancellation policy, etc.) that the customer signs either in-browser via the public signing page or by uploading a wet-signed PDF back to you. Once signed by the customer and countersigned by the admin, the stored PDF gets a SHA-256 hash committed so you can later verify it hasn't been tampered with.
+
+<Callout type="warning">
+**Seeded contract blocks are examples only.** They are written as templates in plain German and English but have not been reviewed for any specific jurisdiction. Before you ever send a contract to a customer, **have a lawyer in your jurisdiction review the blocks you intend to use.** The admin UI surfaces this reminder near the Send action; do not dismiss it lightly.
+</Callout>
+
+## Prerequisites
+
+- **Feature flag**: `contracts` enabled in **Settings → Features**.
+- **Business profile**: complete (`Settings → CRM → Business profile`) — the issuer block appears on every contract.
+- **Block library populated**: open **Clients → Contracts → Block Library** at least once after enabling the feature; the self-heal seed inserts the example block set on first access.
+
+## Block library
+
+A contract is composed from named blocks (e.g. "Booking Fee Clause", "Cancellation Policy", "Copyright Transfer"). Each block has:
+
+- A **section** label (`preamble`, `body`, `payment`, `cancellation`, `delivery`, etc.) — used to group blocks visually in the contract editor and on the rendered PDF.
+- A **body** in plain text or basic markdown — rendered into the PDF section.
+- An optional **language** filter — DE blocks won't appear in an EN contract picker and vice versa.
+
+You can edit the seeded blocks, add your own, or disable blocks you don't use. The library lives at **Clients → Contracts → Block Library**.
+
+When a contract includes a block, the body text is **snapshotted into `contract_block_inclusions`** at composition time. Editing the source block later does NOT alter contracts that already included it — the customer who signed yesterday's contract sees yesterday's wording on download, not today's edits.
+
+## Composing a contract
+
+From **Clients → Contracts**, click **New contract**. The editor surfaces:
+
+- **Customer + business + language + currency** — same shape as the quote editor.
+- **Title** — the contract title shown to the customer ("Booking Confirmation — Smith Wedding").
+- **Block picker** — multi-select from the library. Drag to reorder within each section.
+- **Signing-mode toggle** — in-browser canvas signature, wet-signed PDF upload, or both.
+- **Linked event** — optional. If set, the lineage card on the event shows the contract; signing the contract can optionally trigger a status update on the event.
+
+## Sending a contract
+
+Send transitions the contract from `draft` → `sent`:
+
+1. Re-renders the PDF from the current block snapshots, business profile, and customer data.
+2. Persists the PDF to storage.
+3. Mints a public action token (`contract_action_tokens`) for the signing flow.
+4. Queues the `contract_sent` email to the customer (primary email — contracts are decision-maker correspondence, not billing).
+
+## Customer signing flow
+
+The customer follows the link in the email to `/contracts/sign/<token>`. They see:
+
+- The contract content, fully rendered (issuer block, recipient block, all included blocks in order)
+- The PDF download link
+- The signing affordance based on the contract's signing-mode:
+  - **In-browser canvas**: draw signature with mouse / finger on a `signature_pad` canvas, type name, click Sign.
+  - **PDF upload**: download the contract PDF, sign it physically, scan / photograph it, upload the signed PDF back.
+  - **Both**: pick either path.
+
+On submit:
+- The signature image (canvas) or the uploaded signed PDF is persisted alongside the contract.
+- The contract transitions to `signed`.
+- The admin gets the `contract_signed_admin_notification` email.
+
+## Countersigning
+
+Once the customer has signed, the admin sees a **Countersign** action on the detail page. Countersigning:
+
+1. Adds the admin's signature (canvas drawing, same as the customer flow) to the stored document.
+2. Re-renders the final PDF with both signatures.
+3. Computes a SHA-256 hash of the final PDF bytes and stores it in `contracts.integrity_hash`.
+4. Transitions the contract to `fully_signed`.
+5. Queues the `contract_fully_signed` email to the customer with the final PDF attached.
+
+After countersigning, the contract is read-only for both parties.
+
+## Integrity check
+
+Once a contract has an `integrity_hash`, the admin detail page shows a **Verify integrity** action. The current button re-reads the stored PDF, recomputes the SHA-256, and compares it to the stored hash:
+
+- ✅ Hash matches → "Integrity verified" toast
+- ❌ Hash mismatch → "PDF has been modified since signing" error — investigate immediately (filesystem corruption, manual file replacement, backup-restore inconsistency)
+
+A planned hardening pass adds an **upload-and-verify** variant where you can drop a PDF (e.g. the customer emailed you "their copy" of the signed contract) and verify it against the stored hash. Useful for catching after-the-fact tampering attempts. Not yet shipped — see project backlog.
+
+## Storno / cancellation
+
+Contracts don't have a Storno path. To cancel a `fully_signed` contract:
+
+1. Issue a written cancellation outside PicPeak (the legal mechanism varies — your lawyer will know the right shape).
+2. Mark the contract `cancelled` on the admin detail page — this is a status change, not a re-signing event. The original signed PDF and integrity hash stay intact for audit.
+
+If you also need to refund money already invoiced under this contract, that's an [invoice Storno](/features/crm/invoices#storno-cancellation) on the related invoice(s).
+
+## Per-customer feature override
+
+`customer_accounts.feature_contracts` toggle on the customer detail page hides the contract surface for that customer when off. Useful for casual / wedding clients where a contract isn't part of the workflow.

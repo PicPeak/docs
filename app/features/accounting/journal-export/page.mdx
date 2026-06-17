@@ -1,0 +1,89 @@
+import { Callout } from 'nextra/components'
+
+# Treuhänder / Journal Export
+
+A **collective-journal export** (Sammelbuchungsjournal) you hand to your Treuhänder / accountant to import into their double-entry software. picpeak does NOT keep its own Bilanz / Erfolgsrechnung — your accountant's tool does, and this export is the bridge.
+
+<Callout type="warning">
+**Match the format your accountant asks for.** Banana's `.txt` (tab-separated) import is documented in [banana.ch doc 9946/9947](https://www.banana.ch); bexio uses standard CSV; the generic format is for "any tool you can map". The `banana_ie` variant exists for accountants who need Banana with the Liechtenstein chart of accounts. Pick the one your Treuhänder actually wants — guessing means a re-export.
+</Callout>
+
+## Prerequisites
+
+- **Feature flags**: `accounting` + `taxReport` enabled (the export lives on the tax-report page).
+- **Settings → Accounting** complete: chart of accounts reviewed, VAT codes mapped, expense categories pointed at the right ledger accounts.
+- **Revenue / costs to export**: at minimum some `sent` invoices in the period; ideally also categorised inbound documents and expenses if you want the cost side.
+
+## Where to find it
+
+`/admin/accounting/tax-report` — pick a period, then the **Export** action exposes the format options.
+
+## Formats
+
+| Format | File | Use case |
+|---|---|---|
+| `generic` | `journal_<from>_to_<to>_<currency>_generic.csv` | Maximum-columns CSV (comma-separated, RFC-4180-quoted). For tools without a specific Banana / bexio importer |
+| `banana` | `journal_<from>_to_<to>_<currency>_banana.txt` | Tab-separated `.txt` — Banana's "Text file with column headers" import (CH chart of accounts) |
+| `banana_ie` | `journal_<from>_to_<to>_<currency>_banana_ie.txt` | Same shape as `banana`, Liechtenstein chart variant |
+| `bexio` | `journal_<from>_to_<to>_<currency>_bexio.csv` | Comma CSV in bexio's expected shape |
+
+The Banana variants are deliberately **tab-separated `.txt`, not CSV** — Banana's importer refuses anything else (its file picker only sees `.txt`).
+
+## Columns (generic format)
+
+| Column | Source | Notes |
+|---|---|---|
+| `Date` | Posting date | `YYYY-MM-DD` regardless of locale |
+| `DocNumber` | Invoice / inbound document number | Your audit reference |
+| `Description` | Free text — invoice subject or expense description | Sanitised against CSV formula injection |
+| `Source` | `invoice` / `storno` / `inbound` / `expense` | Where the row came from |
+| `Event` | Event name (snapshotted) | Blank when booked to the company |
+| `DebitAccount` / `DebitAccountName` | Ledger account from the chart of accounts | The "where the value moves to" side |
+| `CreditAccount` / `CreditAccountName` | Same | The "where the value moves from" side |
+| `VatCode` | VAT code label (e.g. `UN81`, `VST26`, `BZ`) | Used by Banana / bexio to apply the VAT rate on import |
+| `Currency` | ISO 4217 (e.g. `CHF`, `EUR`) | One row = one currency |
+| `GrossAmount` / `NetAmount` / `VatAmount` | Decimal (`.` separator) | Converted from minor-unit integers at export time |
+
+Banana / bexio formats are subsets of these columns reshaped to match their importer headers.
+
+## How postings are built
+
+The `buildPostings` step walks four sources and emits one row per posting:
+
+1. **Revenue from sent invoices** — credit to the revenue account (per `revenue_rate_account_map` setting, indexed by VAT rate); debit to debtors (`1100` by default).
+2. **Storno cancellations** — same shape with negated amounts. Listed separately so the Treuhänder sees the cancellation as a discrete posting.
+3. **Inbound supplier invoices** (when `incomingInvoices` is on) — credit to creditors (`2000` by default); debit to the expense account (per category mapping) plus optional input-VAT debit to `1170` when reclaimable.
+4. **Internal expenses** (when `expenses` is on) — same expense-account debit; cash or owner-equity credit per the expense kind.
+
+Postings are sorted chronologically across all four sources, so the export looks like a single running journal.
+
+## Currency
+
+Each export is **per-currency**. If you bill in CHF and EUR, you generate two separate exports. There is no FX conversion — your accountant handles cross-currency reconciliation on their side.
+
+## Formula-injection defence
+
+Every cell that could carry user-controlled content (supplier name, invoice number, payment reference, description) is checked for a leading `=`, `+`, `-`, `@`, tab, or carriage-return character and prefixed with a single quote when found. This blocks the Excel / Numbers / Banana formula-execution vector — a malicious supplier filename like `=cmd|"/C calc"!A1` would otherwise execute on import.
+
+The defence applies to **both** the quoted CSV and the unquoted Banana tab format (the tab format has no surrounding quotes, so it's the more exposed of the two).
+
+## VAT-code snapshots
+
+A VAT-code rename in **Settings → Accounting** does **not** retroactively rewrite historical exports. When a code is attached to a quote or invoice the rate is snapshotted onto the document (migration 130), and the journal export uses the snapshot. This matters when your Treuhänder asks for a re-export of last quarter after you've renamed `MWST81` → `UN81` — the old period still exports with the codes it had at the time.
+
+## What's NOT in the journal
+
+- **Payment movements** — when the customer actually paid, when you actually paid a supplier. The export is about the bookkeeping events (invoice issuance, cost recognition), not the cash flow.
+- **Bank reconciliation** — your accountant matches the export against bank statements; picpeak doesn't have bank-feed integration.
+- **Year-end adjustments** — depreciation, accruals, deferred revenue. Out of scope; that's your Treuhänder's domain.
+
+## Working with your Treuhänder
+
+Recommended cadence:
+
+1. End of quarter (or your filing cadence): generate the tax report + journal export in your Treuhänder's preferred format.
+2. Send them the journal file alongside the tax-report PDF.
+3. They import the journal into their software (Banana / bexio / Dr. Tax / whatever), reconcile against your bank, post the period close.
+4. You file what they tell you to file.
+
+The export deliberately stays simple — it's input to a real accounting workflow, not a replacement for one.

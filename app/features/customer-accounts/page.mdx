@@ -81,6 +81,21 @@ All four are on the customer detail page under **Account actions**.
 
 The **Clients** sidebar section is shaped to host more than just Accounts --- the architecture supports per-customer Calendar, Quotes, Bills, and Messaging surfaces that ship as separate features. When a sub-feature is enabled in **Settings > Features**, its sub-nav entry appears automatically inside `/admin/clients`. Sub-features that are still off don't show.
 
+### Per-customer CRM toggles
+
+When the CRM features (`quotes`, `bills`, `contracts`) are enabled globally, each customer carries individual override columns:
+
+| Column | Effect when off |
+|---|---|
+| `feature_quotes` | Customer's Quotes tab hidden; quote PDFs refused |
+| `feature_bills` | Customer's Bills tab hidden; invoice PDFs refused |
+| `feature_contracts` | Customer's Contracts tab hidden; contract PDFs refused (migration 131) |
+| `feature_hours` | Customer's Hours tab hidden (rarely useful customer-facing) |
+
+Gating is **master AND per-customer** as of PR #622 — an admin disabling Bills globally is honoured for customers even if their per-customer `feature_bills=true`. Earlier the customer routes checked only the per-customer column; this is now closed via the shared `customerFeatureAllowed()` helper that wraps `getEffectiveFeaturesForCustomer()`.
+
+Defaults for newly-created customers are configurable in **Settings > CRM > Customer surface defaults**.
+
 ## Email notifications
 
 Customer-related emails follow the same template system as the rest of PicPeak (**Settings > Email > Templates**, under the **Customers** category):

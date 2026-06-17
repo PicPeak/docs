@@ -1,58 +1,126 @@
 import { Callout } from 'nextra/components'
 
-# CRM
+# CRM (Beta)
 
-PicPeak's CRM area is the **Clients** workspace in the admin panel. It currently covers customer accounts and gallery assignments, with the navigation already prepared for calendar, quotes, bills, and messaging modules as they ship.
-
-<Callout type="info">
-If you are looking for the login-based customer portal, the detailed feature page is [Customer Accounts](/features/customer-accounts). This page is the stable CRM entry point for `/features/crm`.
+<Callout type="warning">
+**Beta — use at your own risk.** The CRM module is feature-flagged off by default on every install. The schema is settled, the workflows have been tested end-to-end, but the surface is broad and new — expect edge cases, polish gaps, and missing translations outside EN + DE. Seeded contract blocks, payment-term templates, and tax defaults are **examples only**; verify with a lawyer, your bank, and your tax advisor before sending any real document to a customer.
 </Callout>
 
-## What is available today
+PicPeak ships an integrated CRM module that lives alongside the gallery side of the product: quotes → contracts → invoices end-to-end, hour logging, a unified calendar, and a tax report. Every document in one engagement shares a `deal_uuid` so the lineage card on each detail page shows you the full chain at a glance.
 
-| Area | Admin path | What it does |
+The CRM is designed for the same single-operator / small-studio mental model as the rest of PicPeak: every admin on one install shares CRM data, and `created_by_admin_id` is captured on every record for audit purposes. See [Tenancy model](#tenancy-model) below.
+
+The CRM is the **sales-side** module — quotes, contracts, invoices issued to customers. The cost-side counterpart (supplier invoice capture, internal expenses, Treuhänder export) is the separate [Accounting module](/features/accounting). They share the same data model but the surfaces split: `/admin/clients/*` for CRM, `/admin/accounting/*` for accounting.
+
+## Modules
+
+| Module | What it does | Docs |
 |---|---|---|
-| Customer records | `/admin/clients/accounts` | Invite recurring clients, edit profile data, deactivate accounts, trigger password resets, and GDPR-erase records. |
-| Gallery assignments | Event editor or customer detail page | Attach one or more galleries to a customer account so the client sees them in their dashboard without juggling gallery URLs and passwords. |
-| Customer dashboard | `/customer/login` | Clients log in once and see every gallery assigned to them, with thumbnails, status, and direct gallery access. |
-| Customer email templates | Settings > Email > Templates | Invitation, password reset, and gallery-assignment emails under the **Customers** category. |
-| Permissions | Admin roles / RBAC | `customers.view`, `customers.create`, and `customers.delete` govern who can manage customer data. |
+| Quotes | Create, send, accept/decline, convert to event + contract + invoice. Public response page for the customer. | [Quotes](/features/crm/quotes) |
+| Contracts | Block-based composition, in-browser signing, countersign, integrity check on stored PDF. | [Contracts](/features/crm/contracts) |
+| Invoices | Single-row and installment-spawned invoices, Storno (cancellation) for §14 / §11 UStG compliance, monthly drafts, payment-check token on the customer side. | [Invoices](/features/crm/invoices) |
+| Hours logging | Per-customer hourly rate, log entries against a customer, bill them into an invoice with one click. | [Hours logging](/features/crm/hours-logging) |
+| Calendar | Drag-create hour entries, calendar view of events + entries. | [Calendar](/features/crm/calendar) |
+| Tax report | Per-period summary export for your tax return. Lives under the [Accounting module](/features/accounting) since PR #622. | [Tax report](/features/crm/tax-report) |
+| Customer portal (CRM surfaces) | What customers see on their portal: quotes to respond to, contracts to sign, invoices to pay. | [Customer portal CRM views](#customer-portal-crm-views) |
 
-The classic gallery flow still works unchanged: per-event share links, gallery passwords, guest access, and client-access preview links continue to be available. CRM customer accounts are an additional workflow for repeat customers.
+CRM admin settings live under **Settings → CRM** (see [Admin Settings → CRM](/guides/admin-settings/crm)); accounting-side settings (chart of accounts, VAT codes, VAT registration, default rates) live under **Settings → Accounting** (see [Admin Settings → Accounting](/guides/admin-settings/accounting)).
 
-## Enabling CRM / Clients
+## Turning the CRM on
 
-1. Open **Settings > Features**.
-2. Enable the **Clients** card under the Clients section.
-3. The **Clients** entry appears in the admin sidebar.
-4. Open **Clients > Accounts** to invite or manage customers.
+The CRM ships **completely off** on every install. To enable:
 
-The feature flag controls admin UI visibility. It does **not** act as an emergency access revocation switch. To revoke access, remove gallery assignments, deactivate the account, reset the password, or GDPR-erase the customer record.
+1. Open **Settings → Features**.
+2. Enable the parent **Clients** card (gates the entire `/admin/clients/*` surface).
+3. Enable each CRM sub-feature you want to use:
+   - **Quotes** — quote editor + public response page
+   - **Bills** — invoice editor + Storno + customer-side bills tab
+   - **Contracts** — block library + send + signing flow
+   - **Hours logging** — per-customer hour entries + "Bill these hours" flow
+   - **Calendar** — calendar view of events and hour entries
+4. Optional: enable **CRM developer tools** to access the in-app email-template tester (`/admin/clients/dev`). Strictly opt-in; useful when you want to preview a `quote_sent` or `invoice_paid_receipt` email without waiting for the real lifecycle event.
 
-## Typical workflow
+If you want the cost-side tracking (supplier invoices, expenses) and the Treuhänder export, also enable the **Accounting** module — see the [Accounting overview](/features/accounting). The Tax report sub-flag (`taxReport`) lives there now, not under Clients.
 
-1. Create or import the gallery as usual.
-2. Invite the customer from **Clients > Accounts**.
-3. Assign one or more galleries from either:
-   - the **Customer accounts** picker on the Edit Event form, or
-   - the **Manage galleries** dialog on the customer detail page.
-4. The customer logs in at `/customer/login` and sees their assigned galleries.
-5. If access needs to be removed, delete the assignment. PicPeak re-checks assignment status on every customer-minted gallery token, so revoked access is rejected on the next request.
+Dependency rules enforced server-side:
+- `quotes=false` forces `bills=false` (an invoice without a quote chain is still allowed, but the bills UI hides if quotes are off, and most paths assume both are present).
+- `calendar=false` forces `calendarBooking=false` (the latter is a roadmap placeholder — see below).
 
-## Planned CRM sub-features
+## Locked roadmap flags
 
-The Clients navigation is designed to host more than customer accounts. The architecture supports additional sub-features such as:
+Three flags appear in the Features tab as **placeholders with a lock icon**:
 
-- Calendar
-- Quotes
-- Bills / invoices
-- Messaging
+- `reminderEmails` (parent flag — individual reminder template settings still apply when this is locked)
+- `calendarBooking` (customer self-booking against the admin calendar)
+- `messaging` (admin ↔ customer thread on the portal)
 
-These sub-features appear in `/admin/clients` only when their feature flags are enabled and the corresponding module exists in the build.
+These are intentional UI surfaces for features that are designed but not yet built. Enabling them in the Features tab has no effect — the server side clamps them to `false` on every save. They live there so you can see what's on the roadmap without a separate planning page.
 
-## Related documentation
+## Tenancy model
 
-- [Customer Accounts](/features/customer-accounts)
-- [Creating Events](/guides/creating-events)
-- [Email Templates](/guides/email-templates)
-- [API Events](/api/events)
+**All admins on one install share CRM data.** Every quote, contract, invoice, hour entry, and customer is visible to every admin holding the relevant `*.view` permission. There is no per-admin scoping.
+
+This matches how the rest of PicPeak works (galleries, customer accounts, events) — the mental model is a small studio team where any admin can pick up any customer's work.
+
+What this means in practice:
+- **Audit trail is preserved.** Every record carries `created_by_admin_id`, and the `activity_log` table tracks every send / convert / countersign action. If you need to know who did what, the trail is there even though access isn't restricted by it.
+- **Use separate installs for genuinely separate operators.** If two photographers want to share infrastructure but not see each other's books, run two PicPeak installs.
+- **Future-proofed.** If per-admin scoping is added later, the `created_by_admin_id` data is already there from day one — no backfill needed.
+
+See the [PR #555 discussion](https://github.com/the-luap/picpeak/pull/555) for the design conversation if you want the full background.
+
+## Legal & financial defaults
+
+PicPeak ships with **example data** for several legally and financially sensitive areas. These are starting points for you to customise — **none of them is legal or financial advice**.
+
+### Contract blocks
+
+The block library is seeded with example clauses for common photo-shoot contract structures (booking fee, deliverables, copyright, cancellation, etc.). They are written in plain German and English **as templates**, not as enforceable text reviewed for any specific jurisdiction.
+
+Before you ever send a contract to a customer, **have a lawyer in your jurisdiction review the blocks you intend to use.** The editor surfaces a disclaimer reminder near the Send action — see [Contracts](/features/crm/contracts) for the full disclosure path.
+
+### Payment terms
+
+Seeded payment-term templates ("Net 14", "Net 30", "Sofort fällig", "10% Anzahlung / 90% nach Lieferung", etc.) are presets — they assume defaults like 14-day Skonto windows that may not match your actual terms. Audit and edit them in **Settings → CRM → Payment terms** before using.
+
+### IBAN, QR-bill, and tax settings
+
+`business_profile` carries your IBAN, your bank reference details, and your default tax rate. The seeded values are placeholders that get filled in from your installation env / first-run. **Confirm with your bank** that the IBAN + reference format you ship to customers is what their systems expect, especially if you're issuing Swiss QR-bills (the `swissqrbill` library is used to render them — formatting choices like creditor reference type can vary by bank).
+
+### Tax export
+
+The tax-report export aggregates invoice totals by period. It is a **summary for your accountant**, not a tax filing. The categorisation, VAT-rate inheritance, and Storno netting rules are documented per [Tax report](/features/crm/tax-report), but your accountant is the source of truth for what your jurisdiction requires.
+
+See `docs/crm-disclaimers.md` in the main repo for the full disclaimer set the project commits to.
+
+## Customer portal CRM views
+
+When customer accounts are enabled (`clients` + `customerPortal` feature flags), customers logging in at `/customer/login` see additional tabs alongside their gallery dashboard:
+
+- **Quotes** — pending quotes waiting on their response, accepted/declined history.
+- **Contracts** — contracts to sign, signed contracts to download.
+- **Bills** — open invoices with payment instructions (IBAN, QR-bill PDF download), paid history with receipts.
+
+Each customer's CRM tabs are gated by the `customer_accounts.feature_quotes` / `feature_bills` / `feature_contracts` toggles on that customer's profile — so you can selectively expose them per-customer (a wedding client probably doesn't need the contracts tab post-shoot; a commercial client might want the full set).
+
+See [Customer accounts](/features/customer-accounts) for the underlying authentication and assignment model.
+
+## Storage requirements
+
+The CRM stores generated PDFs (quotes, contracts, invoices, Storno documents) on the storage backend you've configured for galleries (local disk, S3, or external-media path). One PDF per document, plus the customer-signed PDF for contracts. Sizing is modest — expect ~50–200 KB per document.
+
+PDFs are regenerated on each send (so cosmetic changes to your business profile flow into the next send automatically), but the **stored** PDF is what was actually delivered. The integrity check on contracts uses a SHA-256 of the stored bytes — see [Contracts](/features/crm/contracts).
+
+## Database notes
+
+The CRM adds approximately 20 new tables in migration `107_crm_consolidated.js`, all idempotent (`hasTable`/`hasColumn` guarded). Fresh installs see no impact when the feature flags are off — empty tables, no traffic, no admin UI surfaces.
+
+Money is stored as **INTEGER minor units** (cents/Rappen) + ISO 4217 currency code — never DECIMAL/FLOAT, to avoid drift on totals.
+
+`deal_uuid` (the lineage key) is a UUID assigned to the first document in a chain (usually a quote) and carried forward to every document spawned from it. The lineage card on each detail page joins on it to show you "this quote → that contract → those installment invoices" in one view.
+
+## Known limitations
+
+Single-day events only on the calendar. Multi-day, recurring events, iCal/.ics export, and overlap conflict warnings are deliberate scope deferrals — see the project backlog. Customer self-booking against the calendar is in the roadmap but not yet built (the `calendarBooking` flag is locked).
+
+`createQuote` and the equivalent invoice / contract create paths use the `claimNextSequence` helper for gap-free numbering. On SQLite this requires the in-transaction handoff that landed in [d1aecaa](https://github.com/the-luap/picpeak/commit/d1aecaa) — if you're running an older snapshot, upgrade or formally require PostgreSQL.

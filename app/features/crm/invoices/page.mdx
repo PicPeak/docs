@@ -1,0 +1,154 @@
+import { Callout } from 'nextra/components'
+
+# Invoices
+
+Invoices are the financial endpoint of the CRM lineage. They get spawned from accepted quotes (single or split across installments), from converted contracts, or created standalone for ad-hoc billing. Every invoice has a gap-free sequence number (`invoice_number`), supports Storno (cancellation per §14 / §11 UStG), and can be sent to the customer's `billing_email` independently of their primary email.
+
+<Callout type="warning">
+**Seeded defaults are examples only.** Payment-term templates ("Net 14", "Sofort fällig", etc.), default Skonto windows, IBAN / QR-bill setup, and VAT rates are placeholders. **Confirm with your bank and your tax advisor** before issuing the first real invoice, especially if you're issuing Swiss QR-bills (the `swissqrbill` library is used; formatting choices like creditor reference type can vary by bank).
+</Callout>
+
+## Prerequisites
+
+- **Feature flag**: `bills` enabled in **Settings → Features**. `quotes=false` forces `bills=false`.
+- **Business profile**: complete, including a bank account (`business_bank_accounts`). Invoices refuse to render without one — the issuer block needs an IBAN.
+- **Customer**: existing record in **Clients → Accounts**.
+
+## Invoice lifecycle
+
+| Status | Meaning |
+|---|---|
+| `scheduled` | Created with a future `scheduled_send_at`; the scheduler will send it on that date |
+| `pending_delivery` | Spawned by an installment plan with a delivery trigger (`on_delivery` or `on_acceptance`) — waits for the trigger event |
+| `sent` | Emailed to the customer; PDF persisted |
+| `partially_paid` | A partial payment has been logged but the open amount > 0 |
+| `paid` | Fully paid (manual mark or payment-check confirmation) |
+| `overdue` | Past due date, not paid — reminders engage based on `reminder_level` |
+| `cancelled` | A Storno has been issued for this invoice |
+
+## Creating an invoice
+
+Three paths to spawn an invoice:
+
+### Standalone
+
+From **Clients → Bills**, click **New invoice**. Same editor shape as the quote editor — pick customer, line items, payment terms. Save as draft or send immediately. No quote / contract upstream → no `deal_uuid` lineage.
+
+### From a quote
+
+When you [convert an accepted quote](/features/crm/quotes#converting-a-quote), the Invoice toggle (on by default) spawns one invoice if the quote has no installment plan, or N sibling invoices if it has one. All siblings share the quote's `deal_uuid`.
+
+### From a contract
+
+`createFromContract` spawns an invoice using the contract's line items as a starting point. Same `deal_uuid` chain.
+
+### From hour entries
+
+The "Bill these hours" action on a customer with `per_event` billing cadence (see [Hours logging](/features/crm/hours-logging)) creates a single invoice with one line item per unbilled hour entry.
+
+## Installment plans
+
+When a quote (or accepted offer) is broken into N installments, conversion spawns N sibling invoices in one transaction. Each carries:
+
+- A unique `invoice_number` (gap-free — see [Numbering](#numbering))
+- The same `deal_uuid` and a shared `installment_plan_id`
+- An `installment_index` (1 of N, 2 of N, ...)
+- An `installment_label` ("Anzahlung 30 %", "Rate 2: nach Lieferung", ...)
+- A trigger:
+  - `scheduled`: send on a fixed date
+  - `on_acceptance`: send immediately after the parent quote is accepted (typical for an Anzahlung)
+  - `on_delivery`: send when the linked event is marked delivered (typical for the final installment)
+
+Editing the plan as a whole after spawn is **not yet shipped** — see project backlog. Today, after siblings exist:
+- You can edit individual siblings (line items, dates) but not the plan structure.
+- To restructure the plan, Storno every unsent / unpaid sibling and respawn from a new quote.
+
+## Sending an invoice
+
+The Send action:
+
+1. Re-renders the PDF (issuer block, line items, totals, payment instructions, Swiss QR-bill on EUR/CHF if `crm_invoices_qr_enabled` is true).
+2. Persists the PDF to storage.
+3. Routes the email per the [billing-recipient resolution](#email-routing) below.
+4. Transitions to `sent`, stamps `sent_at`.
+
+Scheduled invoices use the same path automatically on `scheduled_send_at`.
+
+## Email routing
+
+Invoices, Storno documents, and payment reminders use the **`billing_email`-aware routing** introduced in PR #555:
+
+| Document class | `To:` | `CC:` |
+|---|---|---|
+| Invoice, Storno, payment reminder | `billing_email` if set, else `email` | `email` if `billing_email` took the To: slot, plus any per-document `cc_pdf_email` |
+| Quote, contract, event reminder, gallery share | `email` (always — decision-maker address) | per-document `cc_pdf_email` if set |
+| Payment-check, paid-notification | Admin contact (internal flow) | — |
+
+This means a customer with a separate accounts-payable email (`billing@customer.com`) gets the invoice there, with their primary contact CC'd. Quotes and contracts still go to the decision-maker.
+
+## Payment-check tokens
+
+When `crm_invoices_payment_check_enabled` is true, each sent invoice mints an `invoice_payment_check_tokens` row with a per-invoice token. The customer can visit `/bills/check/<token>` to confirm they've paid (typically after triggering the bank transfer).
+
+The customer side:
+- Shows the invoice details + total
+- Shows a "Confirm payment" button
+- Optionally collects the customer's payment method + reference
+
+On submit, the admin gets a `invoice_payment_check_notification` email with what the customer reported. The admin then verifies against the bank statement and either:
+- Marks the invoice `paid` in the admin UI (transitions, queues the `invoice_paid_receipt` email to the customer)
+- Or flags a mismatch and follows up directly
+
+The payment-check token does NOT automatically mark the invoice paid — it's a customer-initiated **claim** that the admin verifies. This avoids the social-engineering risk of "click here to mark your invoice paid".
+
+## Reminders
+
+When `crm_invoices_reminders_enabled` is true, the scheduler walks `overdue` invoices and sends a series of reminder emails based on `reminder_level`:
+
+- Level 1: `invoice_reminder_first` (defaults to 7 days past due)
+- Level 2: `invoice_reminder_second` (defaults to 14 days past due, more direct tone)
+- Level 3: `invoice_reminder_final` (defaults to 30 days past due, mentions late-fee accrual)
+
+After level 3, no automatic reminders fire — admin handles direct follow-up.
+
+If `crm_invoices_late_fee_enabled` is true, each reminder cycle can also accrue a configurable late-fee amount to `late_fee_amount_minor`. This shows on the customer's bills tab but does NOT modify the invoice total — the invoice itself is immutable once sent (§14 UStG); the late fee is a separate line on the next correspondence.
+
+## Storno / cancellation
+
+§14 (4) Nr. 4 UStG (Germany) and §11 UStG (Austria) require issued invoices to be **immutable**. To cancel an invoice:
+
+1. Issue a **Storno** — a new document with a fresh `invoice_number` (same sequence as regular invoices) whose `kind='storno'` and `cancels_invoice_id` points at the original.
+2. The Storno carries the original line items with negated totals, plus a header line referencing the cancelled invoice number.
+3. The original invoice transitions to `cancelled`; the Storno is the legal cancellation record.
+
+To split or replace a sent invoice, **the rule is also Storno + new**: Storno the original, then issue one or more new invoices (sharing `deal_uuid` for lineage). Never edit a sent invoice in place — even if the schema would technically let you.
+
+The detail page exposes a **Issue Storno** action on any `sent` / `partially_paid` / `overdue` / `paid` invoice. Refunding the customer for any payment already received is **outside PicPeak** — issue the bank transfer or refund through your payment provider; the Storno is the document trail, not the money movement.
+
+## Monthly drafts
+
+When a customer is configured with `billing_cadence='monthly'`, instead of issuing per-hour-or-per-event invoices, PicPeak maintains a single **running draft** invoice per period (per `monthly_period_start` / `monthly_period_end`). Every billable hour entry or event auto-appends as a line item to the running draft.
+
+On the period's `billing_cycle_day`, the scheduler:
+1. Finalises the running draft → assigns invoice_number, freezes totals, transitions to `scheduled` (or `sent` if `scheduled_send_at` was now).
+2. Opens a fresh draft for the next period.
+
+The admin can also manually trigger an out-of-cycle send via the **Trigger monthly bill** action on the customer detail page (useful when a long-running project completes mid-period and the customer wants the invoice now).
+
+## Numbering
+
+Invoice numbers come from `claimNextSequence` against the `document_sequences` table — atomic, gap-free, per-year. Default format is `INV-{YEAR}-{SEQ:04d}` (e.g. `INV-2026-0042`). Configurable in **Settings → CRM → Document numbering**.
+
+Storno documents draw from the **same** sequence — they get the next number after the most recent regular invoice. This is required by §14 (4) Nr. 4 UStG; a Storno is a kind of invoice for sequencing purposes.
+
+## VAT code on the invoice
+
+When the [Accounting module](/features/accounting) is on, the invoice editor exposes a **VAT code** dropdown (`VatRateSelect`) populated from **Settings → Accounting → VAT codes**. Pick the code (e.g. `UN81` for Swiss normal-rate output VAT) and the rate is read from the code definition.
+
+The code is **snapshotted onto the invoice** (migration 130): `vat_code_snapshot` stores the code, name, rate, and account number at the moment of save. A later rename or rate change in **Settings → Accounting** does NOT retroactively rewrite historical invoices or the journal export — the snapshot wins. This matters when your Treuhänder asks for a re-export of last quarter after you've renamed codes.
+
+When the Accounting module is off, the editor falls back to the legacy single-rate input (`vat_rate` on the invoice) and the code column is empty in any export.
+
+## Per-customer feature override
+
+`customer_accounts.feature_bills` toggle on the customer detail page hides the bills tab for that customer when off. Gating is master AND per-customer — see [Customer accounts → Per-customer CRM toggles](/features/customer-accounts#per-customer-crm-toggles).

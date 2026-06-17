@@ -1,0 +1,155 @@
+import { Callout } from 'nextra/components'
+
+# Accounting Settings
+
+Every Accounting-related toggle and default lives under **Settings → Accounting**. This tab is the configuration counterpart to the [Accounting feature](/features/accounting); operational pages (inbox, expenses, tax report) live at `/admin/accounting/*`, settings live here.
+
+<Callout type="warning">
+**Verify with your Treuhänder before booking real money.** The seeded chart of accounts follows the Swiss/LI KMU-Kontenrahmen, the VAT codes assume CH/LI rates, and the default mileage rate (CHF 0.70/km) is a guideline. None of it is legal or tax advice. **Your accountant is the source of truth for your jurisdiction.**
+</Callout>
+
+The tab appears in Settings only when the `accounting` feature flag is on (**Settings → Features → Accounting**).
+
+## Default rates
+
+Single-line settings that drive the [Internal expenses](/features/accounting/expenses) entry form:
+
+| Setting | Default | Notes |
+|---|---|---|
+| Mileage rate (CHF / km) | 0.70 | Snapshotted onto each mileage expense at entry time — later changes don't rewrite history |
+| Per-diem rate (CHF / day) | 0.00 | Set this to your per-diem amount before logging the first per-diem expense |
+| Require a proof file on every expense | off | When on, the expense form refuses to save without an attached receipt / photo |
+
+Stored as integer minor units (Rappen) in `app_settings`; the UI input is in decimal CHF.
+
+## VAT registration & reclaim
+
+The single most important block to get right — it drives whether the tax report computes a VAT payable at all, and whether input VAT on costs is reclaimable.
+
+### Are you VAT-registered?
+
+Single toggle: **VAT-registered (charge output VAT + reclaim input VAT)**.
+
+- **On** — your invoices charge output VAT; supplier input VAT is reclaimable (subject to the reclaim-country list below). The tax report computes `vatPayableMinor = output VAT − reclaimable input VAT`.
+- **Off** — small business / under threshold. You charge no VAT; supplier input VAT is a cost (not reclaimable). The tax report reports `vatPayableMinor: null` and surfaces a "configure VAT registration" warning rather than guessing.
+
+<Callout type="info">
+**Crossing the registration threshold mid-year** needs a manual decision — flip the flag at the right moment, then talk to your Treuhänder about how to declare the split period. picpeak doesn't model mid-year registration changes natively.
+</Callout>
+
+### Reclaim countries
+
+When VAT-registered, pick the countries whose input VAT is **reclaimable** on your tax filing. Typically just your domestic country (CH / LI for a Swiss-based business). Costs from any other country are treated as `foreign_vat_non_reclaimable` regardless of how they're categorised on the document.
+
+The picker is multi-select — `Cmd`/`Ctrl`-click to add. Stored as an ISO-3166-1 alpha-2 code list in `accounting_vat_reclaim_countries`.
+
+## VAT codes
+
+The full set of VAT codes the system knows about. Seeded with the Swiss/LI MWST codes from migration 129:
+
+| Code | Name | Rate | Direction | VAT account |
+|---|---|---|---|---|
+| `UN81` | Umsatz Normalsatz 8.1% | 8.1% | output | 2200 |
+| `UN26` | Umsatz reduzierter Satz 2.6% | 2.6% | output | 2200 |
+| `UN38` | Umsatz Beherbergung 3.8% | 3.8% | output | 2200 |
+| `UN00` | Umsatz ohne MWST / befreit | 0% | output | — |
+| `VST81` | Vorsteuer 8.1% | 8.1% | input | 1170 |
+| `VST26` | Vorsteuer 2.6% | 2.6% | input | 1170 |
+| `VST00` | Keine Vorsteuer | 0% | input | — |
+| `BZ` | Bezugsteuer (Reverse Charge) 8.1% | 8.1% | input | 1170 |
+
+You can add codes, deactivate codes (instead of deleting — keeps mappings + exports stable for past data), and edit names. Deleting a code that's been used on documents is refused.
+
+### Treatment → code maps
+
+Two mapping settings drive what code gets attached when categorising:
+
+- **Cost tax-treatment → input-VAT code** — maps the inbound-document tax-treatment field (`domestic` / `reverse_charge_service` / `foreign_vat_non_reclaimable` / `import_goods`) to a default input VAT code. Used when you categorise a supplier invoice.
+- **Revenue rate → output-VAT code** — maps an invoice's VAT rate (e.g. 8.1) to a default output VAT code (`UN81`). Used when an invoice is sent; the code is snapshotted onto the invoice (migration 130) so future code-renames don't retroactively change historical exports.
+
+Both maps live in `app_settings` (`accounting_tax_treatment_vat_code_map`, `accounting_rate_vat_code_map_output`).
+
+## Chart of accounts
+
+The full chart of accounts — `ledger_accounts` rows from migration 129. Seeded with a condensed Swiss/LI KMU-Kontenrahmen suitable for a services / photography SME.
+
+### Seeded accounts
+
+| Number | Name | Type |
+|---|---|---|
+| 1000 | Kasse | asset |
+| 1020 | Bank | asset |
+| 1100 | Forderungen aus Lieferungen und Leistungen (Debitoren) | asset |
+| 1170 | Vorsteuer MWST | asset |
+| 1300 | Aktive Rechnungsabgrenzung | asset |
+| 1500 | Mobiliar und Einrichtungen | asset |
+| 1520 | Büromaschinen, Informatik, Kommunikation | asset |
+| 2000 | Verbindlichkeiten aus Lieferungen und Leistungen (Kreditoren) | liability |
+| 2200 | Geschuldete MWST (Umsatzsteuer) | liability |
+| 2300 | Passive Rechnungsabgrenzung | liability |
+| 2800 | Eigenkapital | equity |
+| 3000 | Produktionsertrag (Fotografie) | revenue |
+| 3200 | Handelsertrag | revenue |
+| 3400 | Dienstleistungsertrag | revenue |
+| 3940 | Weiterverrechnete Spesen | revenue |
+| 4000 | Materialaufwand | expense |
+| 4400 | Aufwand für bezogene Dienstleistungen | expense |
+| 6000 | Raumaufwand (Miete) | expense |
+| 6100 | Unterhalt und Reparaturen | expense |
+| 6200 | Fahrzeug- und Transportaufwand | expense |
+| 6300 | Sachversicherungen, Abgaben, Gebühren | expense |
+| 6500 | Verwaltungsaufwand | expense |
+| 6510 | Telefon, Internet, Porti | expense |
+| 6570 | Informatikaufwand (Software) | expense |
+| 6600 | Werbeaufwand | expense |
+| 6640 | Reise- und Spesenaufwand | expense |
+| 6700 | Sonstiger Betriebsaufwand | expense |
+| 6800 | Abschreibungen | expense |
+
+### CRUD rules
+
+- **Add** any account number — the form validates type (`asset` / `liability` / `equity` / `revenue` / `expense`) and uniqueness on the number.
+- **Edit** name and type. Number is immutable once created (it's the cross-reference key used by every other mapping).
+- **Delete** is refused for any account currently referenced by a category mapping, a default-account setting, or a VAT code. Deactivate instead by removing all references first.
+- **Default accounts** (Debitors `1100`, Creditors `2000`, output VAT `2200`, input VAT `1170`, etc.) live in `app_settings` and can be remapped to a different account number if your accountant uses a different chart layout.
+
+### Expense category → ledger account
+
+Each expense category maps to a ledger account. Editable inline from the chart-of-accounts manager:
+
+- Infrastruktur & Miete → 6000
+- Equipment & Hardware → 6700
+- Software & Lizenzen → 6570
+- Material & Verbrauch → 4000
+- (plus any custom categories — pick an account when you create them)
+
+The mapping is what drives the **DebitAccount** column in the Treuhänder export for expense rows.
+
+## Feature flags vs. Settings
+
+The Accounting settings tab does NOT contain the feature on/off toggles. Those live in **Settings → Features**:
+
+- `accounting` — master (parent of everything below)
+- `incomingInvoices` — supplier invoice capture
+- `incomingMail` — IMAP poller
+- `expenses` — internal expense ledger
+- `taxReport` — tax report + Treuhänder export
+
+The Accounting settings tab is hidden when `accounting` is off.
+
+## IMAP credentials
+
+IMAP host / user / password for the [incoming-mail poller](/features/accounting/incoming-invoices#imap-intake) live in **Settings → Email**, NOT here. They sit alongside the existing SMTP outbound config because they're the inbound half of the same mail server (typically same host, different port).
+
+## Where this maps in the data model
+
+| Setting | Stored in | As |
+|---|---|---|
+| Mileage rate | `app_settings.accounting_km_rate_minor` | Integer minor units |
+| Per-diem rate | `app_settings.accounting_per_diem_rate_minor` | Integer minor units |
+| Require proof | `app_settings.accounting_require_proof` | Boolean |
+| VAT-registered | `app_settings.accounting_vat_registered` | Boolean |
+| Reclaim countries | `app_settings.accounting_vat_reclaim_countries` | JSON array of ISO-3166-1 alpha-2 codes |
+| Chart of accounts | `ledger_accounts` table | One row per account |
+| VAT codes | `vat_codes` table | One row per code |
+| Treatment / rate maps | `app_settings.*_vat_code_map*` | JSON objects |

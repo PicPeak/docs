@@ -8,4 +8,6 @@ export default {
   status: 'System Status',
   moderation: 'Moderation',
   analytics: 'Analytics',
+  crm: 'CRM (Beta)',
+  accounting: 'Accounting (Beta)',
 }

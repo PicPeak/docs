@@ -1,0 +1,83 @@
+import { Callout } from 'nextra/components'
+
+# Internal Expenses
+
+Internal expenses are the costs you incur **without a supplier invoice** — mileage to a wedding shoot, per-diems on a destination assignment, cash receipts you can't get a proper bill for. The expenses ledger lives alongside the [Incoming invoices inbox](/features/accounting/incoming-invoices) and feeds the same tax report + Treuhänder export.
+
+<Callout type="warning">
+**Rates and treatments are guidance, not advice.** The seeded CHF 0.70/km mileage rate and per-diem defaults are starting points — your actual deductible rate depends on your jurisdiction, your business type, and your Treuhänder's view. **Verify before claiming on your tax return.**
+</Callout>
+
+## Prerequisites
+
+- **Feature flag**: `expenses` enabled in **Settings → Features**. The parent `accounting` flag must also be on.
+- **Settings → Accounting** configured — at minimum the mileage and per-diem rates (defaults seed CHF 0.70/km and CHF 0.00 per diem).
+
+## Where to find it
+
+`/admin/accounting/expenses` — the **Internal expenses** ledger page.
+
+## Expense kinds
+
+Three flavours, distinguished by the `kind` column:
+
+| Kind | What it captures | How the amount is computed |
+|---|---|---|
+| `amount` | A cash receipt with a fixed total | Enter the amount directly |
+| `mileage` | Kilometres driven for business | `quantity` (km) × `rate_minor` (CHF/km — snapshotted from settings at entry time) |
+| `per_diem` | Days on assignment | `quantity` (days) × `rate_minor` (CHF/day) |
+
+The km and per-diem rates are **snapshotted at entry time** into `rate_minor` so a later rate-change in settings doesn't retroactively rewrite historical expense totals.
+
+## Booking targets
+
+Every expense is booked to one of:
+
+- **An event** (`event_id` set) — appears on that event / customer in cost reports
+- **The company** (`event_id` NULL) — pure overhead, no customer attribution
+
+Booking to an event is what enables **re-billing the customer** through the event's CRM chain — see the same workflow as incoming invoices.
+
+## Categories
+
+Expense categories (`expense_categories`) bucket expenses for reporting:
+
+- Equipment & Hardware
+- Software & Lizenzen
+- Material & Verbrauch
+- Reise & Spesen
+- Verwaltung
+- (plus any you add)
+
+Each category maps to a **ledger account** in the chart of accounts (migration 129 seeds `Software & Lizenzen` → `6570 Informatikaufwand`, etc.) so the Treuhänder journal export knows which account to book the cost to. Editable under **Settings → Accounting → Chart of accounts**.
+
+## Proof file
+
+Each expense can carry a `proof_file_path` — a receipt photo, screenshot of the bank charge, mileage record. When `accounting_require_proof` is enabled in **Settings → Accounting**, the entry form refuses to save without one.
+
+<Callout type="info">
+**When to require proof.** Your jurisdiction usually mandates documentary evidence for cash expenses over a certain threshold (CHF 200 in many CH cases). The `require_proof` toggle is a blunt all-or-nothing — finer-grained "require for amounts > X" is in the project backlog.
+</Callout>
+
+## Re-billing an expense
+
+When the expense is booked to an event, you can mark it for re-bill the same way as an incoming invoice — appears as a line item on a draft customer invoice (with optional markup), and the expense row gets linked back via `billed_invoice_id` + `billed_invoice_line_item_id`.
+
+This is how mileage to a customer's wedding shoot flows back onto their invoice without you re-entering it manually.
+
+## Tax treatment
+
+Internal expenses default to `disposition='eigener_aufwand'` (your company's cost). The `tax_treatment` defaults to `domestic` — input VAT reclaimable when you're VAT-registered. Override per-entry for unusual cases (e.g. a per-diem in EU on a `reverse_charge_service` treatment).
+
+## What's NOT in scope
+
+- **No automatic OCR** of cash receipts — you enter amounts manually. Receipt → expense automation is in the project backlog but not shipped.
+- **No mileage tracking** — you tell picpeak how many kilometres; it doesn't read your GPS / car logger.
+- **No multi-currency rate snapshots** beyond what `business_profile.default_currency` provides — mileage rates assume CHF.
+
+## Permissions
+
+- `accounting.view` — see the ledger, open detail views
+- `accounting.manage` — create / edit / delete expense entries, attach proofs, re-bill to clients
+
+Both granted to `super_admin` and `admin` by default.

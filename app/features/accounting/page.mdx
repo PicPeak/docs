@@ -1,0 +1,89 @@
+import { Callout } from 'nextra/components'
+
+# Accounting (Beta)
+
+<Callout type="warning">
+**Beta — verify before going live.** The Accounting module ships off by default on every install. It is **not** a replacement for double-entry accounting software (Banana, bexio, etc.); it captures supplier invoices, tracks internal expenses, and produces a collective-journal export your Treuhänder / accountant can import. Tax-treatment defaults, VAT codes, mileage / per-diem rates, and the chart of accounts are **examples only** — none of them is legal or financial advice. Verify everything with your accountant before booking real money.
+</Callout>
+
+The Accounting module is the cost-side counterpart to the [CRM's sales side](/features/crm). It owns three operational pages plus the relocated [Tax report](/features/crm/tax-report):
+
+| Page | What it does | Docs |
+|---|---|---|
+| Incoming invoices | Capture supplier invoices (manual upload or IMAP intake), categorise them, re-bill the customer, pay the supplier. | [Incoming invoices](/features/accounting/incoming-invoices) |
+| Internal expenses | Log company-internal costs (mileage, per-diem, cash with proof). | [Expenses](/features/accounting/expenses) |
+| Tax report | Per-period revenue + cost summary, with the Treuhänder / Banana journal export. | [Tax report](/features/crm/tax-report) |
+| Treuhänder export | Single-row collective-journal export in `generic`, `banana`, `banana_ie`, or `bexio` format. | [Journal export](/features/accounting/journal-export) |
+
+All accounting configuration (chart of accounts, VAT codes, VAT registration, default rates) lives under **Settings → Accounting** — see the [Admin Settings → Accounting](/guides/admin-settings/accounting) reference.
+
+## Why it's a separate module from CRM
+
+The CRM lives at `/admin/clients/*` and tracks revenue-side documents (quotes, contracts, invoices). The Accounting module lives at `/admin/accounting/*` and tracks cost-side data (supplier invoices, expenses) plus the cross-cutting reporting (tax report, collective journal). They share the same data model (one `events` table, one `business_profile`, one `vat_codes`) but split the surfaces so admins who only do client work never see the accounting pages, and admins who only do bookkeeping don't need the CRM enabled.
+
+## Turning the Accounting module on
+
+The whole module ships **completely off** on every install. To enable:
+
+1. Open **Settings → Features**.
+2. Enable the parent **Accounting** card.
+3. Enable each sub-feature you want:
+   - **Incoming invoices** (`incomingInvoices`) — manual upload + IMAP intake of supplier invoices
+   - **Expenses** (`expenses`) — internal expense ledger (mileage, per-diem, cash)
+   - **Tax report** (`taxReport`) — period summary + Treuhänder export
+   - **Incoming mail** (`incomingMail`) — IMAP poller that drops attachments into the Incoming-invoices inbox (separate flag because IMAP credentials are required)
+4. Configure **Settings → Accounting** — at minimum: VAT-registration state, default account numbers, mileage / per-diem rates if you'll use them.
+
+<Callout type="info">
+**Migrating from a Tax-report-only install.** If you had `taxReport=true` before upgrading to PR #622, the `accounting` master flag auto-enables on the migration so the Tax report doesn't vanish from your sidebar (it relocated from `/admin/clients/tax-report` to `/admin/accounting/tax-report`). The old URL keeps working as a redirect.
+</Callout>
+
+## Permissions
+
+Two RBAC permissions ship with the module (migration 123):
+
+- `accounting.view` — read access to the inbox, expenses ledger, tax report, and journal export
+- `accounting.manage` — capture inbound documents, set dispositions, re-bill to clients, mark suppliers paid
+
+Both granted to `super_admin` and `admin` roles by default. Editor and viewer roles are intentionally locked out — booking expenses against real money is a write-class operation on the financial surface.
+
+## Data model
+
+| Table | What it holds |
+|---|---|
+| `inbound_documents` | Supplier invoices captured from email or upload. Carries the disposition, tax treatment, supplier-payment status, and re-bill linkage. |
+| `expenses` | Internal-only expense rows (kind = `amount` / `mileage` / `per_diem`), with optional proof file and event linkage. |
+| `received_emails` | Audit log of every message the IMAP poller processed (dedup key = `message_id`). Mirrors the outgoing `email_queue`. |
+| `ledger_accounts` | Chart of accounts. Seeded with the Swiss/LI KMU-Kontenrahmen; admin-editable. |
+| `vat_codes` | VAT codes (CH/LI rates 8.1 / 2.6 / 3.8 / 0 + Bezugsteuer reverse charge). Each carries a direction (`output` / `input`) and an account-number link. |
+| `expense_categories` | Buckets for grouping (Equipment, Software, etc.); each maps to a ledger account. |
+
+Both `inbound_documents` and `expenses` can be **booked to an event** (`event_id` set) or **booked to the company** (`event_id` NULL). Booking to an event is what enables Weiterverrechnung — re-billing the customer through that event's CRM chain.
+
+Money is stored as **INTEGER minor units** (Rappen / cents), same as the CRM side — never DECIMAL/FLOAT.
+
+## Legal & financial defaults
+
+The seeded chart of accounts (`ledger_accounts`), the VAT codes (`vat_codes`), the default mileage rate (`accounting_km_rate_minor` = CHF 0.70/km), and the default per-diem rate are **examples only**. They follow the Swiss/Liechtenstein KMU-Kontenrahmen as a starting point, but:
+
+- Your Treuhänder / accountant is the source of truth for which accounts your jurisdiction needs.
+- The CHF 0.70/km is a guideline; some clients / accountants use other rates.
+- VAT codes assume CH/LI rates — different countries need different codes.
+
+**Audit the chart and VAT codes against your accountant's expectations before booking real expenses.** The Accounting settings page surfaces a disclaimer banner exactly for this reason.
+
+## Where things live in the admin UI
+
+- `/admin/accounting` — landing index that links to whichever sub-pages your flags allow.
+- `/admin/accounting/inbox` — Incoming invoices (`incomingInvoices` flag).
+- `/admin/accounting/expenses` — Internal expenses (`expenses` flag).
+- `/admin/accounting/tax-report` — Tax report + Treuhänder export (`taxReport` flag).
+- **Settings → Accounting** tab — chart of accounts, VAT codes, VAT registration, default rates.
+- **Settings → Email** — IMAP credentials for the incoming-mail poller (alongside the existing SMTP outbound section).
+
+## Known limitations
+
+- **Not full double-entry.** picpeak attaches account + VAT codes to the data it captures (revenue from invoices, costs from inbound documents and expenses) and exports a collective journal. Native double-entry books (Bilanz, Erfolgsrechnung, running ledger) are **not** in scope — your Treuhänder's software is.
+- **Single currency per period summary.** The tax report's VAT-payable and totals are per-currency only — no FX conversion in either direction.
+- **VAT registration is a flat toggle.** No support for mid-year switches between registered / unregistered — verify with your Treuhänder how to handle a threshold crossing.
+- **Foreign-VAT reclaim is country-list-driven.** A row's `tax_treatment` ultimately decides whether VAT is reclaimable; the country list determines what's "domestic". Mixed jurisdictions need per-row classification today.

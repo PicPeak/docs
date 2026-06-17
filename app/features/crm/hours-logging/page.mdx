@@ -1,0 +1,86 @@
+import { Callout } from 'nextra/components'
+
+# Hours Logging
+
+Time-based billing for projects priced by the hour (post-production, retouching, archival work). You configure an hourly rate per customer, log entries against them throughout the project, and bill them into invoices either ad-hoc ("Bill these hours now") or on a recurring monthly cadence.
+
+## Prerequisites
+
+- **Feature flag**: `hoursLogging` enabled in **Settings → Features**.
+- **Customer**: existing in **Clients → Accounts** with the per-customer **Hour logging** toggle ON.
+- **Hourly rate**: set on the customer detail page (`customer_accounts.hourly_rate_minor`). The install-wide default (`Settings → CRM → Default hourly rate`) is a fallback when the customer rate is unset, but for billing to actually run, the customer needs a rate of their own — see the note below.
+
+<Callout type="warning">
+**Hourly rate gotcha**: today, billing an hour entry requires a `customer_accounts.hourly_rate_minor` set on that specific customer — the install-wide default is shown for reference but is NOT applied automatically at billing time. If the customer rate is unset, the "Bill these hours" action fails with an error. Set the per-customer rate explicitly before logging entries you intend to bill.
+</Callout>
+
+## Per-customer hour-logging toggle
+
+Turn hour logging on for the customers who actually need it from the customer detail page. The toggle controls:
+
+- Whether the **Hours** tab appears for this customer
+- Whether the customer's `customer_hour_entries` rows are queryable from the calendar
+- Whether the "Bill these hours" action is exposed
+
+A customer with the toggle OFF has no Hours tab and entries can't be created against them.
+
+## Logging hours
+
+From **Clients → Hours**, pick a customer. The entry editor takes:
+
+- **Date** — when the work was done
+- **Start / end time** OR **duration in minutes** — pick whichever shape fits your workflow
+- **Description** — what was done (free text)
+- **Hourly rate override** — optional per-entry rate (overrides the customer's default for this entry only — useful for premium work or discounts)
+
+The entry status is `unbilled` on save. It stays unbilled until either:
+
+- You hit **Bill these hours** on a `per_event` customer → a new invoice spawns containing every unbilled entry as a line item
+- The monthly scheduler picks it up for a `monthly` customer → entry gets auto-appended to the running monthly draft
+
+## Calendar integration
+
+When `calendar` is enabled, hour entries appear on the calendar at their `entry_date` + `start_time` (or all-day if only `duration_minutes` is set). You can drag-create an entry directly from the calendar view — see [Calendar](/features/crm/calendar) for the create-from-calendar UX.
+
+A billed entry shows a **lock icon** on the calendar — visual cue that editing this entry would mean editing an issued invoice (which §14 UStG forbids). The detail editor for billed entries is read-only.
+
+## Billing entries (per-event customer)
+
+For customers with `billing_cadence='per_event'`, you bill entries on demand:
+
+1. Open **Clients → Hours**, select the customer.
+2. Filter to **Unbilled** entries.
+3. Click **Bill these hours**.
+
+The service-layer flow (`billUnbilledEntries` in `customerHoursService.js`):
+
+1. Reads all `unbilled` entries for the customer
+2. Computes the effective rate per entry (entry override > customer default > error)
+3. Calls `invoiceService.createInvoice` with a line item per entry
+4. Stamps each entry with `status='billed'`, `invoice_id`, `invoice_line_item_id`, `billed_at`
+5. Returns `{ invoiceId, entriesBilled: N }`
+
+The spawned invoice lands in `draft` for review — you can edit before sending, add discount lines, change payment terms, etc. The entries stay locked to the invoice the moment they're billed.
+
+## Billing entries (monthly customer)
+
+For customers with `billing_cadence='monthly'`, the workflow is different:
+
+1. Log entries throughout the month — they get `status='unbilled'`.
+2. The scheduler auto-appends each new entry as a line item to the customer's **running monthly draft** invoice (one per billing period).
+3. On the customer's `billing_cycle_day`, the scheduler finalises the draft → assigns invoice_number → transitions to `scheduled`/`sent`.
+4. A fresh draft opens for the next period.
+
+You can also manually trigger the cycle via **Trigger monthly bill** on the customer detail page — useful when a project completes mid-period and you want to invoice now.
+
+The customer's hour entries don't need a "Bill these hours" action in monthly mode — they're already flowing into the next invoice.
+
+## Storno + hour entries
+
+If a Storno is issued for an invoice containing hour-entry line items, the entries flip back to `status='unbilled'` and re-appear on the unbilled list — ready to be re-billed on a new invoice (or written off, your call). The Storno trail preserves the audit history of the original billing event.
+
+## Reporting
+
+The **Clients → Hours** index for "no customer selected" shows an aggregate view of every customer's unbilled hours + open monetary amount — useful for "what work is unbilled across all clients right now". This is post-PR-555 enhancement (see [feedback in PR #555](https://github.com/the-luap/picpeak/pull/555#issuecomment-4572465673)); if you're on a pre-enhancement install, you'll see an empty state instead until you pick a customer.
+
+The [Tax report](/features/crm/tax-report) aggregates billed-hour totals into the per-period summary alongside other invoice revenue.

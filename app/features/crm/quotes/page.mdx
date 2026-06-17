@@ -1,0 +1,97 @@
+import { Callout } from 'nextra/components'
+
+# Quotes
+
+Quotes are the entry point of the CRM lineage. You build a quote with line items, send it to the customer over email, they accept or decline on a public response page, and an accepted quote can be converted into an event + contract + invoice (any combination, configurable per quote).
+
+## Prerequisites
+
+- **Feature flag**: `quotes` enabled in **Settings → Features**.
+- **Customer**: at least one customer in **Clients → Accounts**. Quotes always target an existing customer record (one-off shoots for unknown emails aren't supported — create the customer first, send the quote second).
+- **Business profile**: complete (`Settings → CRM → Business profile`) with at least your business name, address, and a bank account on the issuer block. Quotes refuse to render without these.
+
+## Quote lifecycle
+
+| Status | Meaning | Public response page |
+|---|---|---|
+| `draft` | Created or edited; not visible publicly | Token not minted |
+| `sent` | Emailed to customer; public token live | Active |
+| `accepted` | Customer accepted; ready to convert | Locked (action taken) |
+| `declined` | Customer declined; admin can resend after edits | Locked (action taken) |
+| `expired` | `valid_until` passed without a response; scheduler set this | Locked (read-only) |
+| `converted` | Accepted + event/contract/invoice spawned from it | Locked (terminal) |
+
+Status transitions are validated server-side — you can't jump from `draft` directly to `accepted`, for example. Edits on a `sent` quote drop it back to `draft` and invalidate the existing public token; the customer needs a fresh send after that.
+
+## Creating a quote
+
+From **Clients → Quotes**, click **New quote**. The editor surfaces:
+
+- **Customer + business** — picks the customer record, the language for the rendered PDF (DE / EN), the currency, and which of your bank accounts the issuer block uses (relevant if you maintain CHF + EUR accounts).
+- **Issue date / valid until** — the customer can respond up to `valid_until`. After that the scheduler flips the quote to `expired` automatically.
+- **Line items** — quantity, description, unit price (minor units), discount %, VAT rate. Each line's net / VAT / total is computed by the server on save; the editor shows live previews but never trusts them.
+- **Negative line items** — allowed for manual discount rows ("Treuerabatt", "Frühbucherrabatt"). A server-side guard rejects saves whose total goes below zero (`QUOTE_TOTAL_NEGATIVE` / 400) so a mis-typed discount can't accidentally mint a credit-balance quote.
+- **Line item presets** — frequently-used items can be saved to the preset library (`quote_line_item_presets`) from the editor. Insert one with a single click instead of retyping it.
+- **Payment terms** — pick a template ("Net 14", "Sofort fällig", custom split). The chosen terms render on the PDF and flow forward into the spawned invoice when the quote converts. See [Payment terms](/guides/admin-settings/crm#payment-terms) for the seeded templates and how to add your own.
+- **Installment plan** — optional. If you split the quote into N installments, accepting + converting spawns N sibling invoices sharing one `deal_uuid`. See [Invoices → Installments](/features/crm/invoices#installment-plans).
+
+## Sending a quote
+
+Click **Send** on a `draft` quote to:
+
+1. Re-render the PDF with current data and persist it to storage.
+2. Mint a 64-hex public action token (`quote_action_tokens`) with an expiry matching `valid_until`.
+3. Queue the `quote_sent` email to the customer's primary email address (NOT `billing_email` — quotes are decision-maker correspondence).
+4. Transition the quote to `sent`.
+
+The email contains a deep link `https://your.install/quotes/respond/<token>` that opens the public response page. The PDF is attached, the link in the body offers the same content.
+
+## Public response page
+
+The customer-facing page at `/quotes/respond/<token>` shows:
+
+- The quote details (read-only) and total
+- A button group: **Accept** / **Decline**
+- A free-text field for an optional message
+- The PDF download link
+- A "valid until {{at}}" or "you have {{minutes}} minutes left" countdown (DE / EN respectively — see [#550](https://github.com/the-luap/picpeak/issues/550) for the variable threading detail)
+
+Acceptance is single-action — once the customer clicks Accept (or Decline), the response is locked in. The admin is notified by email (`quote_accepted_admin_notification` / `quote_declined_admin_notification`). The token's `used_at` is stamped.
+
+<Callout type="info">
+Public tokens are guarded by `publicTokenGuards.loadActionToken`: existence (404), expiry (410 — NULL expiry treated as expired, defensive), one-shot semantics where applicable, and a per-IP 20-attempt / 15-min lockout against prefix brute force. Token hashing on storage is a planned hardening pass; for now the raw token in the DB is the link-as-sent.
+</Callout>
+
+## Converting a quote
+
+When a quote is `accepted`, the detail page exposes a **Convert** action with three independent toggles:
+
+| Target | Default | What gets spawned |
+|---|---|---|
+| Event | On if the customer is repeat / has events configured | A new event tied to this customer; the gallery side becomes available |
+| Contract | Off | A new contract draft with the quote's customer pre-filled — admin then composes blocks and sends it |
+| Invoice | On | One invoice if no installment plan, or N sibling invoices if the quote has an installment plan |
+
+All spawned documents inherit the quote's `deal_uuid` so the lineage card shows the chain. The quote transitions to `converted` (terminal) and can no longer be re-sent or re-edited.
+
+## Editing after send
+
+A `sent` quote can be edited, but:
+
+1. The edit drops the quote back to `draft`.
+2. The existing public token is invalidated (next request returns 410).
+3. The PDF is regenerated on the next Send.
+
+This is intentional — the customer should never be looking at a stale PDF while you're tweaking the version they're being asked to respond to.
+
+## VAT code on the quote
+
+When the [Accounting module](/features/accounting) is on, the line-item editor exposes a **VAT code** dropdown (`VatRateSelect`) populated from **Settings → Accounting → VAT codes**. Picking a code (e.g. `UN81`) reads the rate from the code definition rather than typing the percentage by hand.
+
+The code is **snapshotted onto the quote** when saved (migration 130) so a later rate / code rename in Settings doesn't retroactively change historical quote PDFs.
+
+## Per-customer feature override
+
+`customer_accounts.feature_quotes` (toggled from the customer detail page) can disable quote creation for a specific customer even when the install-wide `quotes` flag is on. Useful when you want to run a customer on a simpler workflow (gallery + invoice only, no quote step).
+
+When the per-customer flag is off, the customer detail page hides the "New quote" action and the service layer refuses `createQuote` calls for that customer (`CUSTOMER_FEATURE_DISABLED` / 409). Gating is master AND per-customer — see [Customer accounts → Per-customer CRM toggles](/features/customer-accounts#per-customer-crm-toggles).
