@@ -101,6 +101,34 @@ docker exec picpeak-backend npm run migrate:safe
 
 `migrate:safe` is idempotent — it skips any migrations already recorded in `knex_migrations` and prints a summary.
 
+## Resource requirements
+
+- **4 GB RAM minimum** for normal photo-upload workloads. Sharp/libvips decodes the full uncompressed frame before resize, and the default two worker loops at sharp-concurrency 2 can push peak RSS past 1.5 GB on a batch of 20-MP+ photos. Add Postgres + Redis + Node baseline and one busy batch is enough to OOM-kill the backend on a 2 GB VPS — visible as 503 Service Unavailable on thumbnail requests until `restart: unless-stopped` brings the container back.
+
+- **2 vCPU minimum.** Sharp is CPU-bound on decode + resize.
+
+### Low-memory hosts
+
+Running on 2 GB RAM (e.g. an entry-level VPS) is workable, but you need to tune the upload-processor concurrency down. The backend auto-detects total RAM at startup via `os.totalmem()` — on a host that reports under 3 GB, `UPLOAD_PROCESSOR_CONCURRENCY` defaults to **1** instead of 2 (and prints a one-shot warning naming the override). You can pin the value explicitly in `.env`:
+
+```env
+# Single worker loop — slower batch processing, lower peak RSS
+UPLOAD_PROCESSOR_CONCURRENCY=1
+```
+
+Throughput trade-off: a 100-photo batch takes roughly twice as long with a single worker but won't OOM. Persistent 503s on thumbnails immediately after an upload batch on a low-memory host are almost always the backend getting OOM-killed and restarting — `docker logs picpeak-backend` shows the cycle.
+
+### Memory cap (optional, recommended on shared hosts)
+
+`docker-compose.production.yml` ships a commented `mem_limit` example on the backend service. Uncomment and tune to your host's RAM budget. With a cap set, the kernel OOM-killer takes the container (not the whole host) and `restart: unless-stopped` brings it back — quicker recovery than waiting for the host to swap-thrash itself out.
+
+```yaml
+backend:
+  # …
+  mem_limit: 3g
+  memswap_limit: 3g
+```
+
 ## Health checks
 
 ```bash
