@@ -4,7 +4,7 @@ import { Steps, Callout, Tabs } from 'nextra/components'
 
 Get PicPeak running in under five minutes with Docker.
 
-**Requirements:** Docker v20.10+ and Docker Compose v2.0+. At least 2 CPU cores, 2 GB RAM, 20 GB storage.
+**Requirements:** Docker v20.10+ and Docker Compose v2.0+. At least 2 CPU cores, **4 GB RAM** (2 GB is workable only with [`UPLOAD_PROCESSOR_CONCURRENCY=1`](/deployment/docker#low-memory-hosts) — sharp/libvips decode peaks past 1.5 GB on heavy upload batches and OOM-kills the backend on smaller hosts, surfacing as 503s on thumbnails), 20 GB storage.
 
 <Steps>
 
