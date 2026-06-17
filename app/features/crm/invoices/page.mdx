@@ -141,6 +141,14 @@ Invoice numbers come from `claimNextSequence` against the `document_sequences` t
 
 Storno documents draw from the **same** sequence — they get the next number after the most recent regular invoice. This is required by §14 (4) Nr. 4 UStG; a Storno is a kind of invoice for sequencing purposes.
 
+## VAT code on the invoice
+
+When the [Accounting module](/features/accounting) is on, the invoice editor exposes a **VAT code** dropdown (`VatRateSelect`) populated from **Settings → Accounting → VAT codes**. Pick the code (e.g. `UN81` for Swiss normal-rate output VAT) and the rate is read from the code definition.
+
+The code is **snapshotted onto the invoice** (migration 130): `vat_code_snapshot` stores the code, name, rate, and account number at the moment of save. A later rename or rate change in **Settings → Accounting** does NOT retroactively rewrite historical invoices or the journal export — the snapshot wins. This matters when your Treuhänder asks for a re-export of last quarter after you've renamed codes.
+
+When the Accounting module is off, the editor falls back to the legacy single-rate input (`vat_rate` on the invoice) and the code column is empty in any export.
+
 ## Per-customer feature override
 
-`customer_accounts.feature_bills` toggle on the customer detail page hides the bills tab for that customer when off. Useful for free / friends-and-family shoots where you don't want to expose an empty bills tab.
+`customer_accounts.feature_bills` toggle on the customer detail page hides the bills tab for that customer when off. Gating is master AND per-customer — see [Customer accounts → Per-customer CRM toggles](/features/customer-accounts#per-customer-crm-toggles).

@@ -9,4 +9,5 @@ export default {
   moderation: 'Moderation',
   analytics: 'Analytics',
   crm: 'CRM (Beta)',
+  accounting: 'Accounting (Beta)',
 }

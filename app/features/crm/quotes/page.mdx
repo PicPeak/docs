@@ -84,8 +84,14 @@ A `sent` quote can be edited, but:
 
 This is intentional — the customer should never be looking at a stale PDF while you're tweaking the version they're being asked to respond to.
 
+## VAT code on the quote
+
+When the [Accounting module](/features/accounting) is on, the line-item editor exposes a **VAT code** dropdown (`VatRateSelect`) populated from **Settings → Accounting → VAT codes**. Picking a code (e.g. `UN81`) reads the rate from the code definition rather than typing the percentage by hand.
+
+The code is **snapshotted onto the quote** when saved (migration 130) so a later rate / code rename in Settings doesn't retroactively change historical quote PDFs.
+
 ## Per-customer feature override
 
 `customer_accounts.feature_quotes` (toggled from the customer detail page) can disable quote creation for a specific customer even when the install-wide `quotes` flag is on. Useful when you want to run a customer on a simpler workflow (gallery + invoice only, no quote step).
 
-When the per-customer flag is off, the customer detail page hides the "New quote" action and the service layer refuses `createQuote` calls for that customer (`CUSTOMER_FEATURE_DISABLED` / 409).
+When the per-customer flag is off, the customer detail page hides the "New quote" action and the service layer refuses `createQuote` calls for that customer (`CUSTOMER_FEATURE_DISABLED` / 409). Gating is master AND per-customer — see [Customer accounts → Per-customer CRM toggles](/features/customer-accounts#per-customer-crm-toggles).

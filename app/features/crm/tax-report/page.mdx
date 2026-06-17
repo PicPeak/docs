@@ -2,16 +2,21 @@ import { Callout } from 'nextra/components'
 
 # Tax Report
 
-A per-period summary export of invoice revenue, suitable as input for your tax return or for handing to your accountant. Aggregates totals by VAT rate, currency, and document type; nets Storno cancellations against the original invoices they cancel.
+A per-period summary of invoice revenue (and, when the Accounting module is on, also supplier-invoice and expense costs), suitable as input for your tax return or for handing to your accountant. Aggregates totals by VAT rate, currency, and document type; nets Storno cancellations against the original invoices they cancel; computes a VAT payable when you're VAT-registered.
 
 <Callout type="warning">
 **Not a tax filing.** This is a summary for your accountant. The categorisation, VAT-rate inheritance, and Storno netting rules below are documented so you (and your accountant) can audit what's included. Your jurisdiction's tax law and your accountant are the source of truth for what your tax filing actually needs.
 </Callout>
 
+<Callout type="info">
+**Now part of the Accounting module.** The Tax report relocated from `/admin/clients/tax-report` to `/admin/accounting/tax-report` in PR #622 alongside the new [Incoming invoices](/features/accounting/incoming-invoices) + [Expenses](/features/accounting/expenses) surfaces. The old URL keeps working as a redirect. See the [Accounting overview](/features/accounting) for the full module.
+</Callout>
+
 ## Prerequisites
 
-- **Feature flag**: `taxReport` enabled in **Settings → Features**. `bills=false` forces `taxReport=false` (no invoices → nothing to report).
+- **Feature flag**: `taxReport` enabled in **Settings → Features**. The parent `accounting` flag must also be on (auto-enabled on upgrade if you had `taxReport=true` previously).
 - **Business profile**: complete (`Settings → CRM → Business profile`) — your name, tax ID, and default VAT rate appear on the export.
+- **VAT registration**: configured in **Settings → Accounting** if you want a VAT-payable number (otherwise the report shows "configure VAT registration" instead of guessing).
 
 ## What the report includes
 
@@ -29,22 +34,42 @@ The report is generated server-side from the live data on each request (cached b
 
 ## Generating the export
 
-From **Clients → Tax report**:
+From **Accounting → Tax report**:
 
 1. Pick a period (preset buttons for current quarter, last quarter, current year, last year, or custom dates).
 2. Click **Generate**.
 3. The page renders the summary tables.
-4. Download as PDF via the **Export PDF** button — the same PDF your accountant gets.
+4. Download as **PDF** for the human-readable summary, or as **CSV** for a tabular dump your accountant can pivot.
 
 The PDF carries your business profile header, the period, and every table above. Storno entries are highlighted in red so they're visible at a glance.
+
+### Export scope
+
+A scope selector controls **which side(s) of the books** the export covers:
+
+| Scope | What's included | When to use |
+|---|---|---|
+| **Complete** | Revenue + costs + summary | Default — what your accountant gets for normal periods |
+| **Income only** | Revenue + the income-by-rate breakdown; no cost rows, no expense / inbound rows | Liechtenstein flat-20 % Gewinnungskosten case — hand the Treuhänder just the income basis so they apply the 20 % deduction on their side |
+| **Cost only** | Cost rows (inbound invoices + expenses) + reclaim summary; no revenue rows | Cost-side audit, or when the income side has already been handed over separately |
+
+The scope filters both the ledger detail rows and the summary tables — Income-only drops the cost rows AND the cost portion of the summary; Cost-only drops the income-by-rate breakdown. The PDF and CSV export both honour the scope.
+
+<Callout type="info">
+**The 20 % deduction itself stays out of picpeak.** picpeak hands the Treuhänder the income basis; they apply whatever flat-rate or actual-cost calculation your jurisdiction allows. picpeak doesn't compute the deduction or decide which calculation is better — that's the accountant's call.
+</Callout>
+
+### Treuhänder / journal export
+
+Same page also exposes the **collective-journal export** for direct import into Banana / bexio / a generic CSV-importing tool. See [Journal export](/features/accounting/journal-export) for the format details.
 
 ## What's NOT in the report
 
 - **Payments received** — only invoice issuance dates matter; when a customer actually paid is not in this export. (Cash-basis filers usually want payment dates; PicPeak's payment-log table has the data but it's not aggregated into this export today. Open question per project backlog.)
-- **VAT paid on supplier invoices** — PicPeak doesn't track your purchases / expenses. The tax report is a **sales-side** summary only.
 - **Cross-currency conversion** — if you bill in two currencies, two separate per-currency totals appear; no FX conversion is applied.
 - **Late fees** — `late_fee_amount_minor` accruals don't appear; they're informational only and aren't part of the invoice total per §14 UStG.
 - **Quotes and contracts** — quotes are pre-revenue; unsigned contracts are not income. Only actual `sent` / `paid` invoices contribute.
+- **Bank reconciliation** — your accountant matches the export against bank statements; picpeak doesn't have bank-feed integration.
 
 ## Storno netting
 
@@ -59,6 +84,28 @@ The report's revenue totals are **net of Storno**. Example:
 For Q1 2026, the report shows **500** total revenue (not 1,500 minus 1,000 in two rows). The Storno detail table lists the cancellation for audit, but the headline revenue number is the net.
 
 If the original invoice was issued in Q4 2025 and the Storno in Q1 2026, the Storno hits Q1 (subtracts from Q1 revenue). Your accountant decides whether to restate the original period — outside what the report does.
+
+## VAT payable
+
+When the Accounting module is on and **Settings → Accounting → VAT registration** is configured, the report computes a **VAT payable** for the period:
+
+```
+vatPayableMinor = output VAT charged − reclaimable input VAT
+```
+
+Output VAT is summed from sent invoices grouped by VAT code. Reclaimable input VAT comes from inbound supplier invoices and expenses where the `tax_treatment` resolves to a reclaimable code (typically `domestic` when registered, or `reverse_charge_service` which books both sides). Costs with treatment `foreign_vat_non_reclaimable` or `import_goods` are excluded from the reclaim — VAT charged on those is a real cost on your books.
+
+### When VAT registration is not configured
+
+If you haven't told picpeak whether you're VAT-registered, the report returns `vatPayableMinor: null` and surfaces a **configure VAT registration** warning rather than guessing from `output VAT > 0`. This is deliberate — a zero-output-VAT quarter (all exempt cross-border invoices, for instance) used to silently flip the report into "not registered" mode and hide the reclaim, which masked a real input-VAT refund.
+
+Fix: open **Settings → Accounting**, set the VAT-registered toggle + reclaim countries, and re-generate the report.
+
+### Reclaim countries
+
+The country list in **Settings → Accounting** decides which supplier countries count as "domestic" for reclaim purposes. Today this is enforced **per-row** via the document's `tax_treatment` field, not auto-derived from `supplier_country` — full country-derived classification (where picpeak would set `tax_treatment` from the supplier address) is on the roadmap but not shipped.
+
+In practice this means: a supplier outside your reclaim countries needs `tax_treatment='foreign_vat_non_reclaimable'` set explicitly on the inbound document, or its VAT will be (incorrectly) included in the reclaim.
 
 ## Per-customer breakdown
 

@@ -10,6 +10,8 @@ PicPeak ships an integrated CRM module that lives alongside the gallery side of 
 
 The CRM is designed for the same single-operator / small-studio mental model as the rest of PicPeak: every admin on one install shares CRM data, and `created_by_admin_id` is captured on every record for audit purposes. See [Tenancy model](#tenancy-model) below.
 
+The CRM is the **sales-side** module — quotes, contracts, invoices issued to customers. The cost-side counterpart (supplier invoice capture, internal expenses, Treuhänder export) is the separate [Accounting module](/features/accounting). They share the same data model but the surfaces split: `/admin/clients/*` for CRM, `/admin/accounting/*` for accounting.
+
 ## Modules
 
 | Module | What it does | Docs |
@@ -19,10 +21,10 @@ The CRM is designed for the same single-operator / small-studio mental model as 
 | Invoices | Single-row and installment-spawned invoices, Storno (cancellation) for §14 / §11 UStG compliance, monthly drafts, payment-check token on the customer side. | [Invoices](/features/crm/invoices) |
 | Hours logging | Per-customer hourly rate, log entries against a customer, bill them into an invoice with one click. | [Hours logging](/features/crm/hours-logging) |
 | Calendar | Drag-create hour entries, calendar view of events + entries. | [Calendar](/features/crm/calendar) |
-| Tax report | Per-period summary export for your tax return. | [Tax report](/features/crm/tax-report) |
+| Tax report | Per-period summary export for your tax return. Lives under the [Accounting module](/features/accounting) since PR #622. | [Tax report](/features/crm/tax-report) |
 | Customer portal (CRM surfaces) | What customers see on their portal: quotes to respond to, contracts to sign, invoices to pay. | [Customer portal CRM views](#customer-portal-crm-views) |
 
-All CRM admin settings live under **Settings → CRM** — see the [Admin Settings → CRM](/guides/admin-settings/crm) reference for every toggle and default.
+CRM admin settings live under **Settings → CRM** (see [Admin Settings → CRM](/guides/admin-settings/crm)); accounting-side settings (chart of accounts, VAT codes, VAT registration, default rates) live under **Settings → Accounting** (see [Admin Settings → Accounting](/guides/admin-settings/accounting)).
 
 ## Turning the CRM on
 
@@ -36,8 +38,9 @@ The CRM ships **completely off** on every install. To enable:
    - **Contracts** — block library + send + signing flow
    - **Hours logging** — per-customer hour entries + "Bill these hours" flow
    - **Calendar** — calendar view of events and hour entries
-   - **Tax report** — tax export tab
 4. Optional: enable **CRM developer tools** to access the in-app email-template tester (`/admin/clients/dev`). Strictly opt-in; useful when you want to preview a `quote_sent` or `invoice_paid_receipt` email without waiting for the real lifecycle event.
+
+If you want the cost-side tracking (supplier invoices, expenses) and the Treuhänder export, also enable the **Accounting** module — see the [Accounting overview](/features/accounting). The Tax report sub-flag (`taxReport`) lives there now, not under Clients.
 
 Dependency rules enforced server-side:
 - `quotes=false` forces `bills=false` (an invoice without a quote chain is still allowed, but the bills UI hides if quotes are off, and most paths assume both are present).

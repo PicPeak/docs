@@ -1,0 +1,159 @@
+import { Callout } from 'nextra/components'
+
+# Incoming Invoices
+
+Capture supplier invoices (the bills you receive — from your accountant, hosting provider, equipment supplier, etc.), classify them, pay the supplier, and optionally re-bill the cost to your customer through the CRM. Documents land in the inbox via two paths: manual upload, or the IMAP poller that watches your `rechnungen@…` mailbox.
+
+<Callout type="warning">
+**Tax treatment is your call.** PicPeak captures the supplier invoice and offers a set of standard treatments (`domestic`, `reverse_charge_service`, `foreign_vat_non_reclaimable`, `import_goods`), but the right treatment for a specific bill depends on your jurisdiction, your VAT status, and the supplier's country. **Verify with your Treuhänder** before relying on the report numbers.
+</Callout>
+
+## Prerequisites
+
+- **Feature flag**: `incomingInvoices` enabled in **Settings → Features**. The parent `accounting` flag must also be on.
+- **Optional — IMAP intake**: `incomingMail` flag plus IMAP credentials in **Settings → Email**. See [IMAP intake](#imap-intake) below.
+- **Settings → Accounting** configured: at minimum the VAT codes + tax-treatment → VAT-code map, so categorised documents pick up the right rate.
+
+## Where to find it
+
+`/admin/accounting/inbox` — the **Incoming invoices** page in the Accounting section.
+
+## Lifecycle
+
+Each row in the inbox carries a `status` field:
+
+| Status | Meaning |
+|---|---|
+| `unsorted` | Newly captured; needs a disposition |
+| `duplicate` | A file with the same SHA-256 was already in the inbox; flagged for the Duplikat workflow |
+| `categorized` | Disposition set (rebill / durchlaufend / eigener Aufwand) |
+| `declined` | Rejected — bill we don't want to book at all (spam, duplicate-from-supplier, mis-sent) |
+
+## Capture paths
+
+### Manual upload
+
+Click **Upload invoice** in the inbox. Accepted MIME types: `application/pdf`, `image/jpeg`, `image/png`. The file is hashed (SHA-256) on save; if a file with the same hash already exists in the inbox the new row is flagged `duplicate` and linked to the original via `duplicate_of_id` so you can decide whether to keep, reject, or merge.
+
+The PDF preview surface rasterises each page via poppler's `pdftoppm` into a PNG and serves it under a strict CSP (`default-src 'none'; img-src 'self' data:`). The raw PDF is never displayed inline — admins see the rasterised PNG only, so a malicious supplier PDF can't execute scripts or phone home from the browser. Documents are capped at **200 renderable pages**; anything larger refuses to preview but still captures the file.
+
+### IMAP intake
+
+When the `incomingMail` flag is on and **Settings → Email** has IMAP credentials configured, a background poller checks your mailbox every minute and drops attachments into the inbox automatically.
+
+#### IMAP configuration
+
+Under **Settings → Email** (alongside the existing SMTP outgoing config):
+
+| Setting | Notes |
+|---|---|
+| `imap_host` | Your IMAP server (e.g. `imap.gmail.com`, `imap.mail.me.com`). RFC1918 addresses are refused on save + test |
+| `imap_port` | Defaults to 993 |
+| `imap_secure` | TLS — defaults on |
+| `imap_user` | Mailbox login — usually the email address you receive bills at |
+| `imap_pass` | Mailbox password. Stored masked (`********`) on GET; the real value is preserved on PATCH when masked is sent back |
+| `imap_folder` | Folder to poll — defaults to `INBOX`. The Settings UI offers a folder-picker that lists the available paths |
+
+Three test actions on the page:
+
+- **Test connection** — proves login + opens the folder, reports message + unread counts. Non-destructive.
+- **List folders** — populates the folder dropdown with what your server exposes.
+- **Round-trip test** — sends a uniquely-tagged email through the saved SMTP config to the IMAP mailbox, then polls IMAP until it arrives. Proves the whole pipeline (outgoing delivery → incoming reception) in one click. The test message is auto-deleted on receipt so it never reaches the inbox.
+
+<Callout type="info">
+**Round-trip test polling** uses an exponential backoff (×1.5, capped at 8s) so a 30-second test does about 5 polls — friendlier to IMAP servers that throttle frequent `SELECT`/`SEARCH` requests.
+</Callout>
+
+#### What the poller does
+
+Every 60 seconds, when the `incomingMail` flag is on:
+
+1. Open the configured folder; `SEARCH` for messages within the last 90 days (regardless of `\Seen` — so mail you already read in another client is still logged).
+2. Cheap envelope-only fetch to get UIDs + message-IDs; drop anything already in `received_emails` (the audit log).
+3. For each fresh message: claim a `received_emails` row with `status='processing'` BEFORE downloading the body. The `message_id` column is `UNIQUE` (migration 128), so on a multi-replica install a second poller racing the same message loses the unique-constraint write and skips cleanly — no double-ingest.
+4. Parse the message, extract attachments with `application/pdf` / `image/jpeg` / `image/png` MIME types, save each into the inbox.
+5. Finalise the `received_emails` row (`status=ingested` / `no_attachment` / `error`), mark the IMAP message `\Seen`.
+
+If a worker crashes between claim and finalise, the stuck `processing` row is reclaimed after 10 minutes so the attachment isn't orphaned forever.
+
+#### The Received tab
+
+The audit log surfaces at **Settings → Email → Received** (mirrors the existing **Sent emails** view). Every message the poller processed shows up — even ones with no attachments — so you can verify "did the bill from supplier X arrive yesterday?" without diving into your mail client.
+
+## Dispositions
+
+Once a document is in the inbox, you assign a **disposition** — what to do with the cost. Five values:
+
+| Disposition | Effect | When to use |
+|---|---|---|
+| `rebill` (Weiterverrechnung) | Books a line item onto a customer invoice with optional markup. Customer pays you, you pay the supplier. | A subcontractor's invoice that goes onto the customer's bill |
+| `durchlaufend` (pass-through) | Booked as a pass-through cost — neutral on your books, recharged to the customer at the same amount. | Travel costs you pre-pay and bill back without markup |
+| `eigener_aufwand` (own cost) | Booked to your company as an expense. Customer doesn't see it. | Office rent, your accounting software subscription, etc. |
+| `duplikat` | Marks the doc as a duplicate of an existing row. Carries forward `duplicate_of_id`. Doesn't appear in cost totals. | The same bill arrived twice (e.g. supplier resent) |
+| `abgelehnt` (rejected) | Doc kept for audit but excluded from all cost reporting. | Spam, mis-sent invoice, anything you decided not to book |
+
+`rebill` and `durchlaufend` both require an `event_id` (which event / customer the cost goes against). `eigener_aufwand` requires a `category_id` (which expense bucket — Equipment, Software, etc.).
+
+## Tax treatments
+
+Alongside the disposition, each booked document gets a tax treatment that drives the VAT-code lookup:
+
+| Treatment | What it means |
+|---|---|
+| `domestic` | Supplier in your country — input VAT is reclaimable when you're VAT-registered |
+| `reverse_charge_service` | Service from an EU supplier (Bezugsteuer / acquisition VAT) — you book BOTH the input and output VAT, net effect zero |
+| `foreign_vat_non_reclaimable` | Supplier outside your reclaim countries — VAT charged is a real cost, not reclaimable |
+| `import_goods` | Goods import — VAT cleared at customs, separate handling |
+
+The treatment maps through `Settings → Accounting → VAT codes` to a specific VAT code (e.g. `VST81` for domestic 8.1% input). That code drives the chart-of-accounts booking in the Treuhänder export.
+
+## Re-billing the customer (Weiterverrechnung)
+
+When you set `disposition='rebill'` and pick an event, a markup option becomes available:
+
+- **None** — recharge the gross amount as-is.
+- **Percent** — apply N% on top (e.g. 10% admin overhead).
+- **Flat** — fixed Rappen / cent amount.
+
+The booking spawns a line item on a **new draft invoice** for that customer (or appends to the running monthly draft if the customer is on monthly billing). The `inbound_documents` row is linked back via `billed_invoice_id` + `billed_invoice_line_item_id` so the chain is auditable both directions.
+
+The document is NOT removed from the inbox — it stays `categorized` so you can prove which supplier bill drove which customer-facing line item.
+
+## Paying the supplier
+
+The cost is your payable until you settle it with the supplier. Mark a document **Supplier paid** in the detail view:
+
+- `supplier_paid_at` — when you transferred
+- `supplier_payment_method` — `bank_transfer` / `cash` / `twint` / `paypal` / `card` / `other`
+- `supplier_payment_ref` — bank reference, transaction ID, whatever lets you reconcile against your bank statement
+
+This is admin-only bookkeeping — picpeak does NOT move money, it records that you did.
+
+## Duplicate handling
+
+The SHA-256 of the file is checked on every capture. A match auto-flags the new row `duplicate` with `duplicate_of_id` pointing at the original. From the row's detail view you can:
+
+- **Keep both** — leave the duplicate flagged but visible (rare; e.g. supplier reissued with a corrected amount).
+- **Reject** — set disposition `abgelehnt`, drop it from cost totals.
+- **Merge** — manually mark this row as the canonical one and reject the original.
+
+<Callout type="info">
+**Why we don't `UNIQUE` the SHA column.** The duplicate flow is a manual decision; a unique constraint would silently drop the second row before you got to decide. The IMAP poller's de-dup uses the `message_id` UNIQUE on `received_emails` instead, which catches multi-replica races on email ingestion. The file SHA stays a soft key.
+</Callout>
+
+## Storage
+
+Captured files live under `storage/business-docs/inbound/<year>/` (so the directory tree groups by year). Rasterised page PNGs live alongside under `inbound/rendered/<docId>/`. Both are local-disk only — there is no S3 path for inbound documents today.
+
+Path-traversal protection is enforced by `assertPathInside([storagePath/business-docs])` on every download / render route — the captured filename is whitelisted at intake (`email-<timestamp>-<rand>.<ext>` for IMAP, `<subdir>-<timestamp>.<ext>` for manual upload) so nothing supplier-controlled ever reaches the filesystem path.
+
+## Per-page resource bounds
+
+To prevent a hostile 1000-page PDF from walking your rasteriser, the document's stored `page_count` is **capped to 200 at ingest** (`Math.min(pageCount, 200)`). The render endpoint refuses any page number outside `[1, 200]`. `pdftoppm` itself is timeout-bounded to 25 seconds with a 4MB stderr cap.
+
+## Permissions
+
+- `accounting.view` — see the inbox, open documents, view the previews
+- `accounting.manage` — capture, set disposition / tax treatment, mark supplier paid, re-bill
+
+Both granted to `super_admin` and `admin` by default.

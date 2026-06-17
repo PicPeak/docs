@@ -18,4 +18,5 @@ export default {
   'storage-backends': 'Storage Backends (S3)',
   webhooks: 'Webhooks',
   crm: 'CRM (Beta)',
+  accounting: 'Accounting (Beta)',
 }
