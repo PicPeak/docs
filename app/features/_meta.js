@@ -15,6 +15,7 @@ export default {
   feedback: 'Feedback',
   'multi-admin': 'Multi-Admin',
   'customer-accounts': 'Customer Accounts',
+  crm: 'CRM',
   'storage-backends': 'Storage Backends (S3)',
   webhooks: 'Webhooks',
 }

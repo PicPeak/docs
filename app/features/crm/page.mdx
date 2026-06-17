@@ -1,0 +1,58 @@
+import { Callout } from 'nextra/components'
+
+# CRM
+
+PicPeak's CRM area is the **Clients** workspace in the admin panel. It currently covers customer accounts and gallery assignments, with the navigation already prepared for calendar, quotes, bills, and messaging modules as they ship.
+
+<Callout type="info">
+If you are looking for the login-based customer portal, the detailed feature page is [Customer Accounts](/features/customer-accounts). This page is the stable CRM entry point for `/features/crm`.
+</Callout>
+
+## What is available today
+
+| Area | Admin path | What it does |
+|---|---|---|
+| Customer records | `/admin/clients/accounts` | Invite recurring clients, edit profile data, deactivate accounts, trigger password resets, and GDPR-erase records. |
+| Gallery assignments | Event editor or customer detail page | Attach one or more galleries to a customer account so the client sees them in their dashboard without juggling gallery URLs and passwords. |
+| Customer dashboard | `/customer/login` | Clients log in once and see every gallery assigned to them, with thumbnails, status, and direct gallery access. |
+| Customer email templates | Settings > Email > Templates | Invitation, password reset, and gallery-assignment emails under the **Customers** category. |
+| Permissions | Admin roles / RBAC | `customers.view`, `customers.create`, and `customers.delete` govern who can manage customer data. |
+
+The classic gallery flow still works unchanged: per-event share links, gallery passwords, guest access, and client-access preview links continue to be available. CRM customer accounts are an additional workflow for repeat customers.
+
+## Enabling CRM / Clients
+
+1. Open **Settings > Features**.
+2. Enable the **Clients** card under the Clients section.
+3. The **Clients** entry appears in the admin sidebar.
+4. Open **Clients > Accounts** to invite or manage customers.
+
+The feature flag controls admin UI visibility. It does **not** act as an emergency access revocation switch. To revoke access, remove gallery assignments, deactivate the account, reset the password, or GDPR-erase the customer record.
+
+## Typical workflow
+
+1. Create or import the gallery as usual.
+2. Invite the customer from **Clients > Accounts**.
+3. Assign one or more galleries from either:
+   - the **Customer accounts** picker on the Edit Event form, or
+   - the **Manage galleries** dialog on the customer detail page.
+4. The customer logs in at `/customer/login` and sees their assigned galleries.
+5. If access needs to be removed, delete the assignment. PicPeak re-checks assignment status on every customer-minted gallery token, so revoked access is rejected on the next request.
+
+## Planned CRM sub-features
+
+The Clients navigation is designed to host more than customer accounts. The architecture supports additional sub-features such as:
+
+- Calendar
+- Quotes
+- Bills / invoices
+- Messaging
+
+These sub-features appear in `/admin/clients` only when their feature flags are enabled and the corresponding module exists in the build.
+
+## Related documentation
+
+- [Customer Accounts](/features/customer-accounts)
+- [Creating Events](/guides/creating-events)
+- [Email Templates](/guides/email-templates)
+- [API Events](/api/events)
