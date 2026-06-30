@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "🐛 Bug in the PicPeak application (not the docs)"
+    url: https://github.com/PicPeak/picpeak/issues/new/choose
+    about: "Bugs in the backend, frontend, API, or runtime behaviour belong in the main repo, not here."
+  - name: "💬 Questions and discussion"
+    url: https://github.com/PicPeak/picpeak/discussions
+    about: "Use the PicPeak Discussions on the main repo for questions and broader topics."
