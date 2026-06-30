@@ -67,7 +67,7 @@ What this means in practice:
 - **Use separate installs for genuinely separate operators.** If two photographers want to share infrastructure but not see each other's books, run two PicPeak installs.
 - **Future-proofed.** If per-admin scoping is added later, the `created_by_admin_id` data is already there from day one — no backfill needed.
 
-See the [PR #555 discussion](https://github.com/the-luap/picpeak/pull/555) for the design conversation if you want the full background.
+See the [PR #555 discussion](https://github.com/PicPeak/picpeak/pull/555) for the design conversation if you want the full background.
 
 ## Legal & financial defaults
 
@@ -123,4 +123,4 @@ Money is stored as **INTEGER minor units** (cents/Rappen) + ISO 4217 currency co
 
 Single-day events only on the calendar. Multi-day, recurring events, iCal/.ics export, and overlap conflict warnings are deliberate scope deferrals — see the project backlog. Customer self-booking against the calendar is in the roadmap but not yet built (the `calendarBooking` flag is locked).
 
-`createQuote` and the equivalent invoice / contract create paths use the `claimNextSequence` helper for gap-free numbering. On SQLite this requires the in-transaction handoff that landed in [d1aecaa](https://github.com/the-luap/picpeak/commit/d1aecaa) — if you're running an older snapshot, upgrade or formally require PostgreSQL.
+`createQuote` and the equivalent invoice / contract create paths use the `claimNextSequence` helper for gap-free numbering. On SQLite this requires the in-transaction handoff that landed in [d1aecaa](https://github.com/PicPeak/picpeak/commit/d1aecaa) — if you're running an older snapshot, upgrade or formally require PostgreSQL.

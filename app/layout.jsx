@@ -24,7 +24,7 @@ const logo = (
 const navbar = (
   <Navbar
     logo={logo}
-    projectLink="https://github.com/the-luap/picpeak"
+    projectLink="https://github.com/PicPeak/picpeak"
   />
 )
 
@@ -42,7 +42,7 @@ export default async function RootLayout({ children }) {
         <Layout
           navbar={navbar}
           pageMap={await getPageMap()}
-          docsRepositoryBase="https://github.com/the-luap/picpeak"
+          docsRepositoryBase="https://github.com/PicPeak/picpeak"
           footer={footer}
           sidebar={{ defaultMenuCollapseLevel: 1 }}
         >

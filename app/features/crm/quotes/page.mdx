@@ -54,7 +54,7 @@ The customer-facing page at `/quotes/respond/<token>` shows:
 - A button group: **Accept** / **Decline**
 - A free-text field for an optional message
 - The PDF download link
-- A `valid until {{at}}` or `you have {{minutes}} minutes left` countdown (DE / EN respectively — see [#550](https://github.com/the-luap/picpeak/issues/550) for the variable threading detail)
+- A `valid until {{at}}` or `you have {{minutes}} minutes left` countdown (DE / EN respectively — see [#550](https://github.com/PicPeak/picpeak/issues/550) for the variable threading detail)
 
 Acceptance is single-action — once the customer clicks Accept (or Decline), the response is locked in. The admin is notified by email (`quote_accepted_admin_notification` / `quote_declined_admin_notification`). The token's `used_at` is stamped.
 
