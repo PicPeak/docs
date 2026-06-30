@@ -1,3 +1,27 @@
+# Build artifacts
 node_modules
 .next
 out
+.npm
+coverage
+*.tsbuildinfo
+
+# Environment + secrets (defense in depth — no .env files committed today)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+.pnpm-debug.log*
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Misc
+Thumbs.db
