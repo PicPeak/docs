@@ -16,6 +16,22 @@ PicPeak provides two Docker Compose files:
 | `postgres` | `postgres:15-alpine` | 5432 | PostgreSQL database |
 | `redis` | `redis:7-alpine` | 6379 | Session and cache store |
 
+## Supported architectures
+
+The pre-built images on GHCR ship as multi-arch manifests covering `linux/amd64` and `linux/arm64`. Docker pulls the variant matching your host automatically — no `platform:` flags or compose edits needed.
+
+| Host | Native variant |
+|---|---|
+| x86_64 Linux servers (most VPS / cloud hosts) | `linux/amd64` |
+| Apple Silicon Macs (M1 / M2 / M3 / M4) | `linux/arm64` |
+| Raspberry Pi 4/5, AWS Graviton, Ampere, ARM64 Linux | `linux/arm64` |
+
+`postgres:15-alpine` and `redis:7-alpine` are already multi-arch upstream, so the entire stack runs natively on every supported host.
+
+<Callout>
+If you're on a transitional image tag from before multi-arch was published (cached `:stable` / `:latest` from earlier releases), an `docker-compose.amd64.override.yml` ships in the repo as an opt-in fallback. Load it with `-f docker-compose.amd64.override.yml` to force `linux/amd64` on backend and frontend until your next `docker compose pull`. ARM64 Linux hosts should never load this override — forcing emulation on a native host is the wrong choice.
+</Callout>
+
 ## Production deployment
 
 ```bash
