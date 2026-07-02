@@ -2,36 +2,32 @@ import { Steps, Callout, Tabs } from 'nextra/components'
 
 # Quick Start
 
-Get PicPeak running in under five minutes with Docker.
+Get PicPeak running in under five minutes with Docker, running the steps yourself.
+
+<Callout>
+Want a single command? [Simple Install](/getting-started/simple-install) installs Docker, generates everything, and starts the stack for you.
+</Callout>
 
 **Requirements:** Docker v20.10+ and Docker Compose v2.0+. At least 2 CPU cores, **4 GB RAM** (2 GB is workable only with [`UPLOAD_PROCESSOR_CONCURRENCY=1`](/deployment/docker#low-memory-hosts) — sharp/libvips decode peaks past 1.5 GB on heavy upload batches and OOM-kills the backend on smaller hosts, surfacing as 503s on thumbnails), 20 GB storage.
 
 <Steps>
 
-### Clone and configure
+### Clone the repository
 
 ```bash
 git clone https://github.com/PicPeak/picpeak.git
 cd picpeak
-cp .env.example .env
 ```
 
-Generate secure secrets and edit `.env`:
+You don't need to manage secrets: on first boot the stack generates `JWT_SECRET`, `DB_PASSWORD`, and `REDIS_PASSWORD` automatically. `.env` is optional and only holds overrides (domain, ports, SMTP). Copy the template if you want to set any:
 
 ```bash
-# Generate values
-openssl rand -base64 64    # use for JWT_SECRET
-openssl rand -base64 32 | tr -d '$'  # use for DB_PASSWORD
-openssl rand -base64 32 | tr -d '$'  # use for REDIS_PASSWORD
+cp .env.example .env   # optional
 ```
 
-Open `.env` and set these three values:
-
-```env
-JWT_SECRET=<paste generated value>
-DB_PASSWORD=<paste generated value>
-REDIS_PASSWORD=<paste generated value>
-```
+<Callout type="info">
+Any secret you *do* set in `.env` is used as-is. If you leave them unset, they're generated once and persisted — never regenerated, so your database password can't drift.
+</Callout>
 
 ### Create storage directories
 
@@ -63,9 +59,9 @@ Wait for all containers to report as healthy:
 docker compose ps
 ```
 
-### Open PicPeak
+### Create your admin account
 
-Open `http://localhost:3000` in your browser. The admin panel is at `http://localhost:3000/admin`.
+Open `http://localhost:3000/admin`. On a fresh install you're taken to the `/setup` screen — paste the one-time setup token (from `docker compose logs backend | grep -i "setup token"` or `data/SETUP_TOKEN`) and set your email + password. See [First Login](/getting-started/first-login) for details.
 
 </Steps>
 
@@ -73,4 +69,4 @@ Open `http://localhost:3000` in your browser. The admin panel is at `http://loca
 The frontend (port 3000) serves the UI and proxies API requests to the backend (port 3001). You don't need to access port 3001 directly.
 </Callout>
 
-**Next:** [First Login](/getting-started/first-login) — find your admin password and complete the mandatory password change.
+**Next:** [First Login](/getting-started/first-login) — create your admin account with the one-time setup token.

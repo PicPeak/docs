@@ -1,0 +1,106 @@
+import { Steps, Callout, Tabs } from 'nextra/components'
+
+# Simple Install
+
+The install script sets up PicPeak with a single command — it installs Docker if needed, generates all secrets, writes the configuration, and starts the stack. Best for photographers and studios who want a working install without editing config files.
+
+<Callout>
+Prefer to run the steps yourself, or already have Docker? See [Quick Start](/getting-started/quick-start) for the manual Docker path.
+</Callout>
+
+**Requirements:** a Linux host (Ubuntu, Debian, Fedora, RHEL/CentOS, Raspberry Pi OS), run as `root`/`sudo`. Docker installs are recommended (~4 GB RAM); native installs work on smaller hosts like a Raspberry Pi.
+
+## Interactive install (recommended)
+
+<Steps>
+
+### Download and run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/PicPeak/picpeak/main/scripts/picpeak-setup.sh -o picpeak-setup.sh
+chmod +x picpeak-setup.sh
+sudo ./picpeak-setup.sh
+```
+
+### Answer the wizard
+
+The script asks a few questions, then shows a summary and asks you to confirm before it changes anything. Press Enter to accept the `[default]` shown in brackets.
+
+- **Install method** — Docker (recommended) or Native (systemd + SQLite, good for a Raspberry Pi)
+- **Install directory** — Docker only (default `~/picpeak`)
+- **Release channel** — `stable` (default) or `beta`
+- **Domain** — leave blank to run on the local IP over HTTP; you can add a domain later
+- **HTTPS** — with a domain: automatic HTTPS via Caddy (native), your own reverse proxy, or plain HTTP
+- **Admin email** — used for the account you create in the browser
+- **Email / SMTP** — configure now (Gmail, SendGrid, or custom) or skip
+
+### Let it install
+
+For a Docker install the script clones PicPeak, generates the machine secrets, writes a minimal `.env` pointed at `docker-compose.production.yml` (prebuilt images), creates the storage folders, and starts the stack. No secrets to manage by hand.
+
+### Create your admin account
+
+When it finishes, the script prints a **one-time setup token**:
+
+```
+Create your admin account in the browser:
+  1. Open  http://<host>:3000/admin
+  2. Enter your email and a password.
+  3. When prompted, paste this one-time setup token:
+       q7Fh2K9x…                 (also saved to data/SETUP_TOKEN)
+```
+
+Open the admin URL, paste the token, and set your email + password. See [First Login](/getting-started/first-login) for the full walkthrough.
+
+</Steps>
+
+## Unattended install
+
+Pass `--unattended` plus flags to install without any prompts — useful for automation, CI, or a NAS. The script fails fast on impossible combinations (e.g. `--enable-ssl` without `--domain`).
+
+<Tabs items={['Browser-first admin', 'Seeded admin (headless)']}>
+<Tabs.Tab>
+The stack comes up unattended; you finish by creating the admin in the browser (the setup token is printed / saved to `data/SETUP_TOKEN`).
+
+```bash
+sudo ./picpeak-setup.sh --docker --unattended --email admin@example.com
+```
+</Tabs.Tab>
+<Tabs.Tab>
+Fully headless — the admin is seeded from the password you pass, so there is no browser step.
+
+```bash
+sudo ./picpeak-setup.sh --docker --unattended \
+  --admin-password 'S0me-Str0ng-Pass' --channel beta
+```
+</Tabs.Tab>
+</Tabs>
+
+### Options
+
+| Flag | Purpose |
+| --- | --- |
+| `--docker` / `--native` | Install method (default: `docker`) |
+| `--unattended` | Run without prompts, using defaults + the flags below |
+| `--email EMAIL` | Admin email (default `admin@example.com`) |
+| `--admin-password PASS` | Seed the admin directly (skips the browser token step) |
+| `--domain DOMAIN` | Domain name (enables HTTPS URLs) |
+| `--enable-ssl` | Native only: provision HTTPS via Caddy (requires `--domain`) |
+| `--install-dir DIR` | Install directory (Docker; default `~/picpeak`) |
+| `--channel CHANNEL` | Image channel: `stable` (default) or `beta` |
+| `--port PORT` | User-facing port |
+| `--smtp-host` / `--smtp-port` / `--smtp-user` / `--smtp-pass` | Email configuration |
+| `--update` | Update an existing installation |
+| `--uninstall` | Remove PicPeak |
+
+## HTTPS
+
+- **Native + `--domain`** — the script can provision automatic HTTPS with [Caddy](https://caddyserver.com/) (Let's Encrypt).
+- **Docker + `--domain`** — terminate TLS with your own reverse proxy (Traefik, nginx, or a Cloudflare Tunnel) pointed at the frontend port. See [Reverse Proxy](/deployment/reverse-proxy) and [SSL](/deployment/ssl).
+
+## Updating and removing
+
+```bash
+sudo ./picpeak-setup.sh --update      # pull the latest images and restart
+sudo ./picpeak-setup.sh --uninstall   # remove PicPeak (prompts before deleting data)
+```
