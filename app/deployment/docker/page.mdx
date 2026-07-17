@@ -4,8 +4,8 @@ import { Callout } from 'nextra/components'
 
 PicPeak provides two Docker Compose files:
 
-- `docker-compose.yml` --- builds from source, includes MailHog for email testing.
-- `docker-compose.production.yml` --- uses pre-built images from GitHub Container Registry.
+- `docker-compose.yml` --- builds from source; includes an optional MailHog mail catcher for email testing, gated behind the `dev` profile (start it with `docker compose --profile dev up -d`).
+- `docker-compose.production.yml` --- uses pre-built images from GitHub Container Registry. **Use this one for production**, including for updates: run compose commands with `-f docker-compose.production.yml`.
 
 ## Services
 
