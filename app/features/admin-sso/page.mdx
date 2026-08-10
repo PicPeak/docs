@@ -2,7 +2,7 @@
 
 Let administrators sign in through an OpenID Connect identity provider — Keycloak, Authentik, Authelia, Pocket ID, Microsoft Entra ID, or any spec-compliant IdP. The scope is deliberately narrow: **admin logins only**. Gallery and customer access are untouched; LDAP shops bridge through Keycloak or Authentik.
 
-Available from v3.94 (beta).
+Available from v3.94 (beta); logout to IdP from v3.95 (beta).
 
 ## Setup
 
@@ -71,6 +71,7 @@ Good to know:
 - Only applies to sessions that **signed in via SSO**; local-password sessions are never redirected to the IdP.
 - **Register the post-logout redirect URI at the IdP** — it is shown in the settings card (`<frontend-base>/admin/login`; in Keycloak under "Valid post logout redirect URIs"). Unregistered URIs make the IdP show an error instead of returning to PicPeak.
 - Failure-proof: if the IdP advertises no `end_session_endpoint`, is unreachable, or the feature is off, the local logout completes normally without the IdP round-trip.
+- **Very large ID tokens** (above ~3.9 KB — typically an IdP that emits a long group list) do not fit in a browser cookie, so PicPeak cannot pass the token back as a logout hint. Logout still ends the IdP session, but the IdP asks for one confirmation click instead of signing out silently. This is expected, not a fault: trim the group or roles claim at the IdP if you want the silent path.
 - A session **timeout** deliberately does not end the IdP session — only an explicit logout does.
 
 ## Environment variables
