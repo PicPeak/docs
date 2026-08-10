@@ -1,0 +1,83 @@
+# Admin SSO (OIDC)
+
+Let administrators sign in through an OpenID Connect identity provider — Keycloak, Authentik, Authelia, Pocket ID, Microsoft Entra ID, or any spec-compliant IdP. The scope is deliberately narrow: **admin logins only**. Gallery and customer access are untouched; LDAP shops bridge through Keycloak or Authentik.
+
+Available from v3.94 (beta); logout to IdP from v3.95 (beta).
+
+## Setup
+
+1. Register a **confidential client** (authorization code + PKCE) at your IdP.
+2. In PicPeak, open **Settings → Privacy & Security → Single Sign-On (OIDC)** and copy the shown **Redirect URI** into the IdP client registration.
+3. Enter the Issuer URL (the base URL that serves `/.well-known/openid-configuration`), Client ID and Client Secret. Save, then use **Test connection** — it runs OIDC discovery server-side against the saved configuration.
+4. Enable SSO. The admin login page now shows the SSO button (label customizable).
+
+Good to know:
+
+- The client secret is AES-256-GCM encrypted at rest (`OIDC_ENCRYPTION_KEY`, falling back to `JWT_SECRET`) and write-only in the API — it is never displayed again.
+- Identity binding uses the IdP's stable subject (`sub`), never email alone. An existing local admin is linked one-time by email **only** when the ID token carries `email_verified: true`; their password keeps working afterwards.
+- **Auto-provision** (JIT) creates an admin account on first SSO login with the configured default role. With it off, only existing or linked admins can sign in.
+- MFA is the IdP's job on the SSO path; PicPeak's local TOTP still guards the password path.
+
+## Role mapping
+
+**Settings → SSO → Role mapping.** When enabled, PicPeak reads a role or group claim from the ID token, maps the values through your mapping table, and applies the result **on every login** — the IdP becomes the source of truth for roles.
+
+- The **roles claim** is a dot-path into the token claims (see the recipes below).
+- If several mappings match, the **highest-priority** PicPeak role wins (`super_admin` > `admin` > `editor` > `viewer`).
+- A login that maps to **no** role keeps its current role (existing admins) or gets the default role (JIT) — unless **Require a mapped role** is on, in which case the login is refused. That toggle expresses "only members of these IdP groups may sign in".
+- Safety: the **last active super admin is never demoted** by mapping — the login succeeds, the demotion is skipped and logged.
+
+### IdP recipes
+
+**Keycloak** — realm roles live in a nested claim:
+
+- Roles claim: `realm_access.roles`
+- Map realm roles (e.g. create `picpeak-admin` and `picpeak-viewer` realm roles and assign them to groups or users). Client roles land at `resource_access.<client-id>.roles` if you prefer per-client roles.
+
+**Authentik** — group names are flat:
+
+- Roles claim: `groups`
+- Map your Authentik group names directly. The default `openid profile email` scopes are enough; Authentik includes the groups scope by default.
+
+**Authelia** — group names are flat:
+
+- Roles claim: `groups`
+- Add the `groups` scope to the client registration and map your Authelia group names directly.
+
+**Pocket ID** — groups claim:
+
+- Roles claim: `groups`
+- Pocket ID puts group names in the `groups` claim when the scope is granted.
+
+**Microsoft Entra ID** — two options:
+
+- App roles (recommended): define app roles on the app registration and assign users/groups. Roles claim: `roles`; map the role **value** strings.
+- Groups: roles claim `groups` — but Entra emits **group object GUIDs**, not names, so map the GUIDs (e.g. `e4c95f86-…` → `admin`). Watch the groups-overage limit (~200 groups); prefer app roles for large tenants.
+
+**Google Workspace** — Google's ID tokens carry **no roles or groups claim**. Leave role mapping off (JIT default role plus manual role management), or front Google with Keycloak/Authentik if you need group-driven roles. Do not enable "Require a mapped role" against plain Google — it would refuse every login.
+
+## Login policy
+
+**Disable local password login** (Settings → SSO → Login policy): the login page shows only the SSO button and the API refuses password logins. Only possible while SSO is enabled; disabling SSO automatically restores password login.
+
+**Break-glass:** if the IdP is down or misconfigured while local login is disabled, set `OIDC_BREAK_GLASS=true` on the backend and restart — password login is available again immediately, regardless of settings.
+
+**Break-glass account invariant:** enabling SSO-only mode requires at least one **active super admin with a local password** (OIDC-owned accounts can never take the password route). Role mapping never demotes the last such account, and if it disappears anyway, the policy disarms itself and password login re-opens.
+
+## Logout to IdP
+
+**Also sign out of the identity provider** (Settings → SSO → Login policy): logging out of PicPeak also ends the IdP session via RP-initiated logout. Without it, the IdP session stays alive and the next click on the SSO button signs straight back in — surprising on shared machines.
+
+- Only applies to sessions that **signed in via SSO**; local-password sessions are never redirected to the IdP.
+- **Register the post-logout redirect URI at the IdP** — it is shown in the settings card (`<frontend-base>/admin/login`; in Keycloak under "Valid post logout redirect URIs"). Unregistered URIs make the IdP show an error instead of returning to PicPeak.
+- Failure-proof: if the IdP advertises no `end_session_endpoint`, is unreachable, or the feature is off, the local logout completes normally without the IdP round-trip.
+- **Very large ID tokens** (above ~3.9 KB — typically an IdP that emits a long group list) do not fit in a browser cookie, so PicPeak cannot pass the token back as a logout hint. Logout still ends the IdP session, but the IdP asks for one confirmation click instead of signing out silently. This is expected, not a fault: trim the group or roles claim at the IdP if you want the silent path.
+- A session **timeout** deliberately does not end the IdP session — only an explicit logout does.
+
+## Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `OIDC_ENCRYPTION_KEY` | Encrypts the client secret at rest (default: `JWT_SECRET`) |
+| `OIDC_BREAK_GLASS` | `true` = local password login always allowed |
+| `API_URL` / `FRONTEND_URL` | Source for the computed redirect URI (split-origin deployments set `API_URL`) |

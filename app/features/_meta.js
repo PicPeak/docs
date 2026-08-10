@@ -14,6 +14,7 @@ export default {
   'video-support': 'Video Support',
   feedback: 'Feedback',
   'multi-admin': 'Multi-Admin',
+  'admin-sso': 'Admin SSO (OIDC)',
   'customer-accounts': 'Customer Accounts',
   crm: 'CRM',
   'storage-backends': 'Storage Backends (S3)',
