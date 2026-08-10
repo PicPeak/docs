@@ -155,6 +155,92 @@ cat backup/db_20260428_022150.sql | docker exec -i picpeak-postgres psql -U picp
 tar -xzf backup/photos_20260428_022150.tar.gz -C /path/to/storage/
 ```
 
+## Coverage tab
+
+**Backup → Coverage** answers "what will the next backup actually include?" without having to run it:
+
+- **Database** — inline-dump mode + last dump timestamp + staleness check.
+- **Configured paths** — one row per backup-path entry with its current coverage status (`will-scan` / `skipped-by-toggle` / `skipped-by-feature-flag` / `missing-on-disk`).
+- **Drift detection** — flags top-level directories under `STORAGE_PATH` that exist on disk but have **no** matching backup-path row. This is the canary for "a feature shipped without a matching backup row" — the most common cause of silent data loss on older installs.
+
+The Coverage tab auto-fetches on open. If everything is green, your next backup will capture what you'd expect.
+
+## Integrity tab
+
+**Backup → Integrity** verifies that every `*_path` column on quotes / contracts / invoices / signatures actually resolves to a file on disk, **and** that files with a stored `*_sha256` still hash to the same value. Read-only, on-demand. Useful for:
+
+- Post-restore validation
+- Detecting bit-rot
+- Auditing legal-evidence artefacts before a tax review or dispute
+
+## Restoring an older backup on a newer image
+
+PicPeak's restore path is forward-compatible: a backup taken on an older version restores cleanly onto a newer image without any manual schema work. After loading the dump, the restore service runs the same `npm run migrate:safe` script that the container runs on every boot. Any migrations added between the backup's snapshot and the current image are applied inline, against the freshly-restored DB, before the restore is reported as complete.
+
+Net effect: even if a later release shipped a migration that adds a table, after restore your install has that table (empty), the right indexes, and any seed rows the migration emits — no "you'll need to restart the container once" footnote. The same applies to the install-from-backup trigger below: migrations land inside the restore boundary, so the moment the server prints `Server running on port 3000`, the schema matches the running image.
+
+## Disaster recovery (install from a backup)
+
+For full DR after `docker compose down -v`, host migration, drive replacement, or moving an install between hosts. PicPeak detects a trigger file on first boot and runs the restore before the admin UI surfaces. You open the browser, log in with your original credentials, and the install is fully populated — no onboarding wizard, no temporary admin step.
+
+### Prerequisites
+
+- Your install's backup files must already be present in the `/backup` mount. They survive `docker compose down -v` because `/backup` is a bind mount, not a Docker-managed volume.
+- The backup must contain a database dump. The restore cannot reconstruct your CRM data, customers, quotes, invoices, or admin users from a files-only backup. Confirm by inspecting any `backup-manifest-*.json` and checking that `database.backup_file` is non-null.
+
+### How the trigger works
+
+On every container start, PicPeak's boot sequence checks for a trigger file in the root of the `/backup` mount. If found **and** the destination database is empty, the restore runs automatically. After a successful restore the trigger file is deleted so the next boot doesn't redo the work. On failure the trigger file is preserved — fix the input and restart the container to retry.
+
+The trigger file is named **`RESTORE_ON_INSTALL`** (no extension) or **`RESTORE_ON_INSTALL.txt`** — either is accepted.
+
+**Auto-pick the newest backup** — create an empty trigger file:
+
+```sh
+touch /path/to/backup/RESTORE_ON_INSTALL
+```
+
+The boot hook scans `/backup/manifests/` for `backup-manifest-*.json` (or `.yaml`) and picks the one with the most recent modification time.
+
+**Use a specific backup** — write the manifest path (relative to the `/backup` mount root, or absolute) into the trigger file:
+
+```sh
+echo "manifests/backup-manifest-backup-20260530-190617-e9be97b3.json" \
+  > /path/to/backup/RESTORE_ON_INSTALL
+```
+
+Use this when you need an older backup — e.g. rolling back a data corruption that happened after the most recent backup ran.
+
+### Full DR walkthrough
+
+```sh
+# 1. Snapshot the backup outside the compose directory (belt + suspenders).
+SNAPSHOT=~/picpeak-snapshots/$(date +%Y%m%d-%H%M%S)
+mkdir -p "$SNAPSHOT" && cp -av /path/to/picpeak/backup/. "$SNAPSHOT/"
+
+# 2. Drop the trigger file (auto-pick newest shown).
+touch /path/to/picpeak/backup/RESTORE_ON_INSTALL
+
+# 3. Boot.
+docker compose down -v
+docker compose up -d
+docker compose logs -f backend --tail=100
+```
+
+When the boot log shows `Install-from-backup: restore completed successfully` followed by `Server running on port 3000`, the install is ready. Open the admin UI and log in with your original (pre-disaster) credentials.
+
+### Safety gates
+
+Three layers prevent accidental data loss:
+
+1. **The trigger file must exist.** No auto-magic — an admin explicitly drops the file to signal intent.
+2. **The destination database must be empty.** If it contains any events, the hook refuses to run. The fresh-install default admin is treated as throwaway and replaced by the backup's admin row, so a single admin user does not block the restore.
+3. **Failed restores roll back to the pre-restore state.** If anything fails after the DROP DATABASE step, PicPeak's automatic rollback restores the destination from the pre-restore safety backup it took before starting.
+
+<Callout type="warning">
+To intentionally clobber a populated install (dev rebuilds, staging refresh), set `INSTALL_FROM_BACKUP_FORCE=true` on the backend service. This skips gate #2 only — the trigger-file requirement and rollback-on-failure still apply.
+</Callout>
+
 ## Recommendations
 
 - Run a weekly full backup + daily incrementals (cron: `0 2 * * 0` for Sunday full, `0 3 * * 1-6` for Mon–Sat incremental — manage as two separate webhooks if needed).

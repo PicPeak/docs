@@ -8,5 +8,6 @@ export default {
   'cms-pages': 'CMS Pages',
   'email-templates': 'Email Templates',
   'custom-css': 'Custom CSS',
+  'custom-fonts': 'Custom Fonts',
   'backup-restore': 'Backup & Restore',
 }
