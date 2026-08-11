@@ -2,6 +2,7 @@ export default {
   index: 'Overview',
   'gallery-management': 'Gallery Management',
   'gallery-interface': 'Gallery Interface (Guest View)',
+  'live-slideshow': 'Live Slideshow',
   'draft-mode': 'Draft Mode',
   'themes-branding': 'Themes & Branding',
   branding: 'Branding',
