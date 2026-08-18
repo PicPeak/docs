@@ -10,6 +10,13 @@ It runs **entirely on your own server**, in a separate optional container. Nothi
   **Detected faces are personal data.** In the EU they are a *special category* under Art. 9 GDPR. You are the controller for your galleries: you need a lawful basis for the people in your photos before switching this on. PicPeak provides the switch — it cannot provide the consent.
 </Callout>
 
+<Callout type="error">
+  **Not available on the all-in-one image.** If you run PicPeak as the single
+  `picpeak-aio` container, face recognition cannot be switched on — the toggle
+  in Settings → Features is disabled and explains why. Use the standard
+  multi-container deployment if you want this feature.
+</Callout>
+
 ## What you need
 
 This feature needs one extra container, `picpeak-ml`. It is not part of the default deployment — if you don't run it, nothing about your install changes.
@@ -30,6 +37,24 @@ That's it. `FACE_ML_URL` defaults to `http://picpeak-ml:8000` — the container'
 </Callout>
 
 The container is roughly 400–700 MB on disk and uses ~300–500 MB of RAM while working. It is stateless: no database, no volumes, no ports published to the host.
+
+## Why not on the all-in-one image
+
+This is a performance decision, not a licensing or packaging one.
+
+The all-in-one image runs the backend, the frontend, the database and every
+background worker inside a single container, sized for one photographer plus
+guests browsing. It has no Redis, its SQLite database allows one writer at a
+time, and it contains no ML container for face detection to talk to.
+
+Turning face detection on there would add a second image-processing pipeline
+competing with thumbnail and preview generation for the same CPU and memory.
+The result would not be a clear error — it would be a slow install that looks
+broken: uploads crawling, thumbnails lagging, and a people bar that never
+fills in. Refusing up front is more honest than letting you discover that.
+
+If you want people detection, run the standard multi-container deployment.
+Everything else about your galleries works identically.
 
 ## Turning it on
 
@@ -79,11 +104,11 @@ PicPeak deliberately errs toward *splitting* rather than *merging*: a duplicate 
 
 Under the global face settings:
 
-- **Match threshold** (default `0.50`) — how similar two faces must be to count as the same person. Higher means stricter: fewer wrong merges, more duplicate entries. Lower means the reverse. After changing it, run **Re-group people**.
+- **Match threshold** (default `0.60`) — how similar two faces must be to count as the same person. Higher means stricter: fewer wrong merges, more duplicate entries. Lower means the reverse. After changing it, run **Re-group people**.
 - **Minimum photos before a person appears** (default `3`) — keeps one-off bystanders out of the people row.
 - **Quality floor** — faces that are too small, too blurry or too uncertain are still recorded for "who is in this photo", but do not create a person of their own.
 
-The default threshold was measured on the standard LFW benchmark run through PicPeak's own pipeline: 1.0% wrong merges and 8.2% duplicate entries. Your galleries are not LFW, which is exactly why it is a setting.
+The default was measured twice, and the second measurement overruled the first. The standard LFW benchmark run through PicPeak's own pipeline suggests around 0.50 — but on a real gallery that setting merged different people into the same entry in three of six cases. Pairwise accuracy does not predict grouping quality: once one wrong photo joins a person, it drags that person's profile toward the mistake and attracts more. At 0.60 the same gallery produced exactly the right number of people with no mix-ups. Your galleries are not that gallery either, which is why it is a setting.
 
 ## Privacy and data handling
 
@@ -112,6 +137,8 @@ PicPeak deliberately does **not** ship the InsightFace models that many comparab
 
 **The People card doesn't appear on my event.**
 The global feature switch is off — Settings → Features → People in galleries.
+If that switch is greyed out, you are running the all-in-one image, where this
+feature is unavailable (see above).
 
 **Photos never finish scanning.**
 The sidecar probably isn't reachable. Check `docker compose ps` shows `picpeak-ml` healthy, and that `FACE_ML_TOKEN` is identical for both the backend and the sidecar. Photos stay queued and resume by themselves once it is back — an outage never needs a manual re-scan.
