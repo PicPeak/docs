@@ -1,0 +1,137 @@
+import { Steps, Callout, Tabs } from 'nextra/components'
+
+# Single-Container Install
+
+The all-in-one image runs PicPeak as **one container and one Node process**, with SQLite as the database. No compose file, no separate PostgreSQL, no Redis, no nginx in front. It is the shortest path from nothing to a working gallery, and it is meant for home servers, NAS boxes, and single photographers or small studios.
+
+```bash
+docker run -d --name picpeak -p 3000:3000 \
+  -v picpeak-data:/app/data \
+  -v picpeak-storage:/app/storage \
+  -e JWT_SECRET="$(openssl rand -base64 48)" \
+  ghcr.io/picpeak/picpeak/aio:stable
+```
+
+Open **http://localhost:3000/admin** and follow the setup wizard.
+
+<Callout type="warning">
+Set `JWT_SECRET` to a value you keep. Every session is signed with it, so if it changes — including on a container recreate that regenerates it — everyone is logged out. Store it somewhere durable before you go to production.
+</Callout>
+
+## Is this the right install for you?
+
+<Callout>
+Choosing between this and the compose stack is mostly a question of how many people write at once, not how many photos you have.
+</Callout>
+
+**Use the single container when** you are one photographer or a small studio, you want one thing to run and back up, or you are installing on a NAS where compose is awkward.
+
+**Use the [compose stack](/deployment/docker) when** several staff upload at the same time, you already run PostgreSQL, or you need horizontal scaling. SQLite allows exactly one writer at a time; concurrent uploads queue rather than run in parallel.
+
+You are not locked in. Take a `.picpeak` backup from the single container and restore it into a full PostgreSQL stack later — see [Backup & Restore](/guides/backup-restore). That direction (SQLite → PostgreSQL) is the supported upgrade path.
+
+## First login
+
+<Steps>
+
+### Start the container
+
+Use the `docker run` above. The first boot creates the database and applies all migrations, which takes a few seconds longer than later starts.
+
+### Read the setup token
+
+```bash
+docker exec picpeak cat /app/data/SETUP_TOKEN
+```
+
+The file is written `0600` and is the source of truth. The token is also printed to the container logs on first start (`docker logs picpeak`), but logs rotate — the file does not, until setup completes and consumes it.
+
+<Callout type="info">
+The wizard's on-screen hint shows a `docker compose exec backend …` command. That is the compose stack's path; in a single-container install use the `docker exec picpeak …` form above.
+</Callout>
+
+### Create your admin account
+
+Open **http://localhost:3000/admin**, paste the token, and create the account. The password must be at least 8 characters with an upper-case letter, a lower-case letter and a number — and it also has to survive a strength check, so avoid anything close to a common password.
+
+</Steps>
+
+Continue with [Your First Gallery](/getting-started/first-gallery).
+
+## What lives where
+
+Two volumes hold everything that must survive a container replacement:
+
+| Path | Contents |
+|---|---|
+| `/app/data` | `photo_sharing.db` (plus `-wal`/`-shm`) and `SETUP_TOKEN` |
+| `/app/storage` | Uploaded originals, thumbnails, and archives |
+| `/app/logs` | Application logs — mount a third volume if you want these to persist |
+
+Recreating the container against the same volumes preserves everything: the admin account, all galleries, and the applied-migration history. Nothing is re-detected as a fresh install.
+
+## Configuration
+
+Only `JWT_SECRET` is required. Everything else has a working default, and the rest of the app is configured from the admin UI rather than the environment.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `JWT_SECRET` | — | **Required.** Signs sessions. Keep it stable. |
+| `BRAND_TITLE` | `PicPeak` | Browser tab title and social link previews |
+| `BRAND_DESCRIPTION` | `Photo gallery shared with PicPeak.` | Meta description for link previews |
+| `PORT` | `3000` | Listening port inside the container |
+| `DATABASE_CLIENT` | `sqlite3` | Set to `pg` to use an external PostgreSQL |
+
+Branding, SMTP, storage, and expiry rules are all set in **Admin → Settings** after first login.
+
+<Callout>
+`BRAND_TITLE` and `BRAND_DESCRIPTION` are rendered into the page at container start, so changing them means restarting the container — no rebuild needed.
+</Callout>
+
+## Using an external PostgreSQL
+
+The same image talks to a real PostgreSQL if you would rather not use SQLite. Point it at the server and switch the engine:
+
+```bash
+docker run -d --name picpeak -p 3000:3000 \
+  -v picpeak-storage:/app/storage \
+  -e JWT_SECRET="$(openssl rand -base64 48)" \
+  -e DATABASE_CLIENT=pg \
+  -e DB_HOST=postgres.example.internal \
+  -e DB_PORT=5432 \
+  -e DB_USER=picpeak \
+  -e DB_PASSWORD=… \
+  -e DB_NAME=picpeak \
+  ghcr.io/picpeak/picpeak/aio:stable
+```
+
+The container waits for the database to accept connections before starting, and logs which engine it resolved. If both a populated SQLite file and a populated PostgreSQL are present it refuses to start rather than guessing.
+
+## HTTPS
+
+The image serves plain HTTP and does not terminate TLS. For anything reachable from the internet, put a reverse proxy in front — see [Reverse Proxy](/deployment/reverse-proxy) and [SSL Certificates](/deployment/ssl). On a home network reached only over LAN or a VPN, plain HTTP is usually acceptable.
+
+## NAS installs
+
+Synology and QNAP can both run this from their container UI: create the container from `ghcr.io/picpeak/picpeak/aio:stable`, map port `3000`, add the two volumes, and set `JWT_SECRET`.
+
+<Callout type="warning">
+Do not point the storage volume at an SMB or CIFS share. The container adjusts ownership on its storage directory at boot, which over SMB can hang startup indefinitely and leave the container unhealthy. Use a native share (Btrfs/ext4 on the NAS itself) for `/app/storage`.
+</Callout>
+
+## Updating
+
+```bash
+docker pull ghcr.io/picpeak/picpeak/aio:stable
+docker rm -f picpeak
+# re-run the same `docker run` command
+```
+
+Migrations run automatically on start. Back up first — see [Backup & Restore](/guides/backup-restore). Tags follow the same channels as the other images: `stable` for releases, `main` for the beta channel. See [Release Channels](/deployment/release-channels).
+
+## Limits
+
+- **One SQLite writer at a time.** Simultaneous uploads queue instead of running in parallel. Use PostgreSQL if several people upload at once.
+- **No bundled TLS.** Put a reverse proxy in front for internet-facing installs.
+- **No horizontal scaling.** One container is the deployment model; scale by moving to the compose stack.
+- **Logs are not persisted by default.** Mount `/app/logs` if you want them to survive a container replacement.
