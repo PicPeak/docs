@@ -1,0 +1,150 @@
+import { Callout } from 'nextra/components'
+
+# People in Galleries (Face Recognition)
+
+PicPeak can group each gallery's photos by the people in them. A guest opens the gallery, sees a row of faces, taps their own, and gets just their photos — with a single button to download them.
+
+It runs **entirely on your own server**, in a separate optional container. Nothing is sent to any external service, and no model is downloaded at runtime.
+
+<Callout type="warning">
+  **Detected faces are personal data.** In the EU they are a *special category* under Art. 9 GDPR. You are the controller for your galleries: you need a lawful basis for the people in your photos before switching this on. PicPeak provides the switch — it cannot provide the consent.
+</Callout>
+
+<Callout type="error">
+  **Not available on the all-in-one image.** If you run PicPeak as the single
+  `picpeak-aio` container, face recognition cannot be switched on — the toggle
+  in Settings → Features is disabled and explains why. Use the standard
+  multi-container deployment if you want this feature.
+</Callout>
+
+## What you need
+
+This feature needs one extra container, `picpeak-ml`. It is not part of the default deployment — if you don't run it, nothing about your install changes.
+
+```bash
+# In your .env
+FACE_ML_TOKEN=<generate with: openssl rand -hex 32>
+```
+
+```bash
+docker compose --profile faces up -d
+```
+
+That's it. `FACE_ML_URL` defaults to `http://picpeak-ml:8000` — the container's name on the compose network — so there is nothing else to configure unless you run the sidecar somewhere unusual.
+
+<Callout type="info">
+  `FACE_ML_TOKEN` is **required**. The sidecar refuses to start without one rather than serving anonymously, so an accidentally-published port can never become a free face-detection API for the internet.
+</Callout>
+
+The container is roughly 400–700 MB on disk and uses ~300–500 MB of RAM while working. It is stateless: no database, no volumes, no ports published to the host.
+
+## Why not on the all-in-one image
+
+This is a performance decision, not a licensing or packaging one.
+
+The all-in-one image runs the backend, the frontend, the database and every
+background worker inside a single container, sized for one photographer plus
+guests browsing. It has no Redis, its SQLite database allows one writer at a
+time, and it contains no ML container for face detection to talk to.
+
+Turning face detection on there would add a second image-processing pipeline
+competing with thumbnail and preview generation for the same CPU and memory.
+The result would not be a clear error — it would be a slow install that looks
+broken: uploads crawling, thumbnails lagging, and a people bar that never
+fills in. Refusing up front is more honest than letting you discover that.
+
+If you want people detection, run the standard multi-container deployment.
+Everything else about your galleries works identically.
+
+## Turning it on
+
+Two deliberate actions, and both default to off.
+
+1. **Settings → Features → People in galleries.** The global switch. While this is off, no face UI appears anywhere, no photo is scanned, and the backend never contacts the sidecar.
+2. **Per gallery: the People card** on the event page → **Detect people in this gallery**.
+
+Enabling it on a gallery that already has photos queues a background scan. The gallery stays usable throughout — the people row fills in as clusters form, rather than making anyone wait.
+
+### Show the people bar to guests
+
+A second per-gallery toggle, on by default once detection is enabled. Turn it **off** to keep the grouping as a private tool for yourself: you get the people view in the admin area, and guests see an unchanged gallery.
+
+## What guests see
+
+A row of circular face crops between the filters and the photo grid, ordered by how many photos each person appears in.
+
+- Tapping a face filters the gallery to that person, and a **Download these N** button appears.
+- Tapping a second face narrows to photos containing **both**, with a toggle to switch to **either**.
+- The face filter combines with everything else — category, search, liked/saved/rated, photos vs videos.
+- Guests can dismiss the row; that choice is remembered per gallery.
+
+People you have not named show a **photo count**, never an invented name like "Person 7".
+
+The guest-facing wording never says "face recognition" or "biometric" — it says *People in this gallery*, and a note in the "Show all" panel explains that detection happens inside the gallery and nothing is sent anywhere.
+
+<Callout type="info">
+  **Hidden photos stay hidden.** Counts and face thumbnails shown to a guest are computed only from photos that guest is allowed to see. If someone appears only in photos you have hidden, they do not appear in the guest's people row at all — and their thumbnail is never taken from a hidden photo.
+</Callout>
+
+## Managing people
+
+On the event's People card:
+
+- **Re-scan** — runs detection again over the gallery. Use after adding a lot of photos. This is the expensive one.
+- **Re-group people** — re-derives the groups from data already captured, without re-scanning. Cheap. Use this after changing the matching threshold.
+- **Delete all face data** — removes every detected face and person for the gallery. Photos are untouched. This cannot be undone.
+
+### When one person shows up twice
+
+Automatic grouping is not perfect. A long wedding day can produce "Anna in daylight" and "Anna at the party" as two entries, because the lighting differs more than the two sets of photos resemble each other. **Re-group people** often merges them once enough photos exist for each.
+
+PicPeak deliberately errs toward *splitting* rather than *merging*: a duplicate entry is a cosmetic annoyance, whereas a wrong merge would put a stranger's photos into someone's download.
+
+## Tuning
+
+Under the global face settings:
+
+- **Match threshold** (default `0.60`) — how similar two faces must be to count as the same person. Higher means stricter: fewer wrong merges, more duplicate entries. Lower means the reverse. After changing it, run **Re-group people**.
+- **Minimum photos before a person appears** (default `3`) — keeps one-off bystanders out of the people row.
+- **Quality floor** — faces that are too small, too blurry or too uncertain are still recorded for "who is in this photo", but do not create a person of their own.
+
+The default was measured twice, and the second measurement overruled the first. The standard LFW benchmark run through PicPeak's own pipeline suggests around 0.50 — but on a real gallery that setting merged different people into the same entry in three of six cases. Pairwise accuracy does not predict grouping quality: once one wrong photo joins a person, it drags that person's profile toward the mistake and attracts more. At 0.60 the same gallery produced exactly the right number of people with no mix-ups. Your galleries are not that gallery either, which is why it is a setting.
+
+## Privacy and data handling
+
+- **Off by default**, twice over — globally and per gallery.
+- **Nothing leaves your deployment.** The sidecar has no outbound network access, downloads nothing at runtime, and reports nothing home.
+- **Face data is never included in backups or in `.picpeak` exports.** It is derived data: after a restore, re-enable detection and the gallery is re-scanned. This is deliberate — a backup or an export handed to a client should not carry biometric data with it.
+- **Deleting a photo** deletes its face data. **Deleting a gallery** deletes all of it. **Archiving a gallery** purges it too.
+- Guests never see people you have marked as hidden or ignored.
+
+<Callout type="warning">
+  Because face data is excluded from backups, any **names you assign are also not backed up**. After restoring an install, the groups come back from a re-scan but the names do not. If you rely on names, keep your own note of them.
+</Callout>
+
+## Which models PicPeak uses
+
+Two small models, both under permissive licences so they can be shipped inside the image:
+
+| Purpose | Model | Licence |
+|---|---|---|
+| Finding faces | YuNet | MIT |
+| Recognising faces | FaceNet-512 | MIT |
+
+PicPeak deliberately does **not** ship the InsightFace models that many comparable tools use: their weights are licensed for non-commercial research only, and PicPeak's users run their businesses on it. Operators who have cleared that licence themselves can point the sidecar at other models.
+
+## Troubleshooting
+
+**The People card doesn't appear on my event.**
+The global feature switch is off — Settings → Features → People in galleries.
+If that switch is greyed out, you are running the all-in-one image, where this
+feature is unavailable (see above).
+
+**Photos never finish scanning.**
+The sidecar probably isn't reachable. Check `docker compose ps` shows `picpeak-ml` healthy, and that `FACE_ML_TOKEN` is identical for both the backend and the sidecar. Photos stay queued and resume by themselves once it is back — an outage never needs a manual re-scan.
+
+**Scanning is slow, or disk use jumped.**
+Detection works on a preview-sized copy of each photo. Galleries that never generated previews create them during the first scan, which costs CPU and disk once. Scanning is deliberately limited to one photo at a time so it does not compete with thumbnail generation; raise `FACE_PROCESSOR_CONCURRENCY` if your server has headroom.
+
+**Nobody is detected in obvious group shots.**
+Faces smaller than about 40 pixels are below the quality floor. Very wide crowd shots from the back of a room may genuinely fall under it.

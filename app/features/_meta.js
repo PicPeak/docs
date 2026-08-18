@@ -13,6 +13,7 @@ export default {
   'external-media': 'External Media',
   analytics: 'Analytics',
   'video-support': 'Video Support',
+  'face-recognition': 'People in Galleries',
   feedback: 'Feedback',
   'multi-admin': 'Multi-Admin',
   'admin-sso': 'Admin SSO (OIDC)',
