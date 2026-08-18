@@ -135,3 +135,4 @@ Migrations run automatically on start. Back up first — see [Backup & Restore](
 - **No bundled TLS.** Put a reverse proxy in front for internet-facing installs.
 - **No horizontal scaling.** One container is the deployment model; scale by moving to the compose stack.
 - **Logs are not persisted by default.** Mount `/app/logs` if you want them to survive a container replacement.
+- **No face recognition.** [People in Galleries](/features/face-recognition) needs a separate ML container this image does not include, and running detection alongside thumbnail generation in one container would slow everything down rather than fail cleanly. The toggle in Settings → Features is disabled here and says so. Use the compose stack if you want it.
