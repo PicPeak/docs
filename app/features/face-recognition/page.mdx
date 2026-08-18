@@ -11,10 +11,11 @@ It runs **entirely on your own server**, in a separate optional container. Nothi
 </Callout>
 
 <Callout type="error">
-  **Not available on the all-in-one image.** If you run PicPeak as the single
-  `picpeak-aio` container, face recognition cannot be switched on — the toggle
-  in Settings → Features is disabled and explains why. Use the standard
-  multi-container deployment if you want this feature.
+  **Not available on the [all-in-one image](/deployment/single-container).** If
+  you run PicPeak as the single `picpeak-aio` container, face recognition
+  cannot be switched on — the toggle in Settings → Features is disabled and
+  explains why. Use the standard multi-container deployment if you want this
+  feature.
 </Callout>
 
 ## What you need
@@ -54,7 +55,9 @@ broken: uploads crawling, thumbnails lagging, and a people bar that never
 fills in. Refusing up front is more honest than letting you discover that.
 
 If you want people detection, run the standard multi-container deployment.
-Everything else about your galleries works identically.
+Everything else about your galleries works identically — see
+[single-container](/deployment/single-container) for what that image does and
+does not include.
 
 ## Turning it on
 
