@@ -1,0 +1,148 @@
+# Lightroom Round-Trip
+
+Get the colour labels and star ratings your client set while proofing onto the
+matching RAW files in Lightroom Classic — then publish the finished edits back
+over the proofs, keeping every rating, comment and colour label the gallery
+already collected.
+
+This needs the [PicPeak plugin for Lightroom Classic](https://github.com/PicPeak/plugin-lightroom).
+
+## The workflow
+
+1. **Upload the unedited camera JPGs.** Straight off the card, keeping the
+   camera names (`IMG_1234.JPG`).
+2. **The client proofs.** They mark colour labels and stars in the gallery. You
+   can add your own marks in the admin photo view — those stay separate from
+   the client's.
+3. **Import the selections into Lightroom.** Choose the event and the folder
+   holding your RAWs, and bring in everything or only what was marked.
+4. **Edit and publish back.** Rename the files however you like. The finished
+   render replaces its proof in the gallery.
+
+Step 2 is optional. Importing *all* photos is a first-class choice, not a
+fallback — the plugin is useful purely as a "get these RAWs into a collection"
+tool.
+
+## Before you start
+
+Colour labels are **off by default** on new events, because a colour bar
+appearing unannounced mid-proofing would be a visible change to a live gallery.
+Turn them on per event in the feedback settings, or globally with
+`event_default_allow_color_labels` so new events inherit it.
+
+PicPeak uses Lightroom's own five colours — red, yellow, green, blue, purple —
+specifically so a client's pick needs no remapping on the way into your catalog.
+
+## Importing selections
+
+In Lightroom Classic: **Library → Plug-in Extras → Import selections from
+PicPeak…**
+
+| Setting | What it does |
+|---|---|
+| **Event** | Which gallery to read marks from |
+| **RAW folder** | Where your RAW files live. Subfolders optional |
+| **Import** | All photos, only marked ones, or only specific colours/ratings |
+| **Marks from** | Client picks, your own marks, or either |
+| **Apply** | Colour labels, star ratings, or both |
+| **If it differs** | What happens when the photo already has a value — see below |
+| **Collection** | Name for the collection the matches land in |
+
+Photos already in your catalog are marked in place. Anything not yet imported
+is added, if you leave that option ticked.
+
+### Merging, not overwriting
+
+Re-running an import, or importing onto photos you already triaged in
+Lightroom, must not silently destroy your work. Pick what happens when a photo
+already carries a **different** colour or rating:
+
+| Mode | Behaviour |
+|---|---|
+| **Fill empty only** *(default)* | Never touch a photo that already has a value |
+| **PicPeak wins** | Overwrite unconditionally |
+| **Lightroom wins** | Write only where Lightroom is empty |
+| **Highest priority wins** | Green → yellow → red → blue → purple wins; for stars, the higher count wins |
+
+Green ranks first because in a proofing workflow green means *first choice* —
+the pick that has to survive a disagreement. The same order breaks ties when
+several guests labelled one photo differently.
+
+Every run reports how many conflicts it saw, so a lossy setting is never
+silent. A colour label PicPeak doesn't know — one you defined yourself in
+Lightroom — is treated as lowest priority rather than discarded.
+
+## Publishing the edits back
+
+Edit as usual and re-publish. The render replaces its proof: the photo keeps
+its ID, the client's ratings and colour labels, its comments, and its position
+in the gallery. The share link stays valid.
+
+**Renaming is fine.** During the import, the plugin stamps the PicPeak photo ID
+onto the catalog photo. That ID travels with the photo, so the filename is free
+to change — it is the ID, not the name, that carries the edit home.
+
+## Multi-camera shoots
+
+Two bodies both produce `IMG_1234.JPG`, and PicPeak cannot tell them apart.
+Rename on ingest, **before uploading**, so the camera index becomes part of the
+number:
+
+```
+cam11234.jpg      ← camera 1, frame 1234
+cam21234.jpg      ← camera 2, frame 1234
+```
+
+Matching reads the **longest** trailing run of digits, so `11234` and `21234`
+stay distinct where a bare `1234` would collide. A separator is not needed —
+swallowing the camera index into the number is what makes the run unique.
+
+Keep the camera index single-digit (`cam1`–`cam9`). With a four-digit camera
+counter that gives a consistent five-digit run.
+
+### If you use the number fallback
+
+Matching normally uses the full filename. There is an optional *"Also match by
+trailing file number"* setting for RAWs that were renamed before proofing, and
+a matching `match_mode` on uploads for renders whose RAW never went through the
+import.
+
+If you rely on either, your delivery name has to keep the **whole** number:
+
+```
+Smith_Wedding_11234.jpg     ✅ keeps the full run
+Smith_Wedding_1234.jpg      ❌ truncated — both cameras collide again
+```
+
+Files that do share a number are skipped and reported, never guessed at. A
+colour label on the wrong photo is worse than a missing one, because nothing
+about it looks wrong afterwards.
+
+## Exporting without the plugin
+
+You don't need Lightroom to get selections out. The admin photo view exports
+filtered selections as:
+
+- **XMP sidecars** — `xmp:Label` and `xmp:Rating` per photo, read by Lightroom,
+  Bridge and Capture One. Note that Lightroom only reads a standalone `.xmp`
+  sidecar for RAW/DNG masters, and you have to trigger
+  *Metadata → Read Metadata from File* yourself.
+- **CSV / JSON** — every mark including the per-colour tallies.
+- **Plain text file lists** — for Capture One and other tools.
+
+Exports can carry either the client's verdict or your own marks.
+
+## Troubleshooting
+
+**Nothing matched.** Check that the RAW stems match the uploaded names —
+`IMG_1234.CR3` matches a proof uploaded as `IMG_1234.JPG`. If the RAWs were
+renamed after upload, enable the number fallback.
+
+**"N local files share the number".** Two RAWs have the same trailing digits.
+Use the camera-prefix scheme above, or match on full filenames instead.
+
+**Labels didn't change.** The default conflict mode never overwrites an
+existing value. Switch to *PicPeak wins* or *Highest priority wins*.
+
+**Colours are missing entirely.** Colour labels are probably disabled on that
+event — see [Before you start](#before-you-start).

@@ -24,6 +24,21 @@ curl -X POST "$API_URL/v1/events/$EVENT_ID/photos" \
   -F "category_id=ceremony"
 ```
 
+**Replacing an existing photo:** pass `replaces_photo_id` to overwrite a photo's
+file while keeping its identity — the ID, the client's ratings and colour
+labels, its comments and its position in the gallery all survive, and the share
+link stays valid. The ID must belong to the event in the URL.
+
+```bash
+curl -X POST "$API_URL/v1/events/$EVENT_ID/photos" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "photo=@/path/to/Smith_Wedding_11234.jpg" \
+  -F "replaces_photo_id=1234"
+```
+
+A replace answers with `{ "replaced": true, "photo": { ... } }` rather than the
+usual upload shape.
+
 **Constraints:**
 
 - File types: per `general_allowed_file_types` setting (default `jpg,jpeg,png,gif,webp`).
@@ -70,20 +85,70 @@ Resumable: re-uploading a chunk that already arrived is idempotent. Failed chunk
 
 ### List photos for an event
 
+Returns each photo with the proofing marks it carries — the client's colour
+labels and star ratings, plus your own admin marks. This is what the
+[Lightroom round-trip](/guides/lightroom-roundtrip) reads.
+
 ```bash
-curl "$API_URL/v1/events/$EVENT_ID/photos?limit=50&offset=0" \
+curl "$API_URL/v1/events/$EVENT_ID/photos?marked_only=true&mark_source=either" \
   -H "Authorization: Bearer $TOKEN"
 ```
+
+Requires the `read` scope and the `photos.view` permission, and is scoped to
+events the token's owner may see.
 
 Query parameters:
 
 | Param | Default | Notes |
 |---|---|---|
-| `limit` | `50` | Max 200. |
-| `offset` | `0` | For pagination. |
-| `category_id` | (omit for all) | Filter to a single category. |
-| `is_hidden` | (omit for all) | `true` / `false` |
-| `sort` | `upload_date_desc` | One of `upload_date_*`, `capture_date_*`, `filename_*`, `size_*`, `rating_*` (with `_asc` or `_desc`). |
+| `page` | `1` | |
+| `limit` | `50` | Max 100. |
+| `marked_only` | `false` | Only photos carrying a rating or colour label from `mark_source`. |
+| `mark_source` | `either` | `client`, `mine`, or `either`. Drives `marked_only` and the merged `color_label` / `rating` fields. |
+| `color_labels` | (omit for all) | Comma-separated client colours, e.g. `green,yellow`. |
+| `my_color_labels` | (omit for all) | Same, against the token owner's own marks. |
+| `min_rating` | (omit) | `0`–`5`, against the guest star average. |
+| `my_min_rating` | (omit) | `1`–`5`, against your own marks. |
+| `logic` | `AND` | `AND` or `OR` across the filters above. |
+
+**Response:**
+
+```json
+{
+  "photos": [
+    {
+      "id": 1234,
+      "filename": "wedding-smith_individual_1755892345.jpg",
+      "original_filename": "IMG_1234.JPG",
+      "source_filename": "IMG_1234.JPG",
+      "average_rating": 4.5,
+      "feedback_count": 2,
+      "color_labels": { "green": 2, "red": 1 },
+      "dominant_color_label": "green",
+      "my_rating": 5,
+      "my_color_label": "green",
+      "color_label": "green",
+      "rating": 5
+    }
+  ],
+  "pagination": { "page": 1, "limit": 50, "total": 480, "filtered": 62, "pages": 2 }
+}
+```
+
+Three fields are worth understanding before you build against this:
+
+- **`source_filename`** is the camera-original name, preserved even after a
+  photo has been replaced by an edited version. **Match on this**, not on
+  `original_filename` — the latter is overwritten by a replace.
+- **`color_labels`** holds the per-colour tallies across all guests;
+  `dominant_color_label` is most-labelled-wins with ties broken green first.
+- **`color_label`** and **`rating`** are the *merged* values for the requested
+  `mark_source` — one colour and one rating, ready to write into a catalog.
+  With `mark_source=either`, your own colour wins a tie and the rating takes the
+  higher of the two.
+
+`my_rating` and `my_color_label` are scoped to the token owner. Marks made by a
+different admin are deliberately not visible here.
 
 ### Get single photo metadata
 
