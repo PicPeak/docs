@@ -26,11 +26,17 @@ Output:
 [setup] No admin account yet — open /admin to finish setup. One-time setup token: q7Fh2K9x…
 ```
 
-**Option 3: From the token file** (written to your `data` volume)
+**Option 3: From the token file** (written to your data volume)
 
 ```bash
-cat data/SETUP_TOKEN
+# Compose stack
+docker compose exec backend cat data/SETUP_TOKEN
+
+# All-in-one image — different path
+docker exec picpeak cat /data/db/SETUP_TOKEN
 ```
+
+The two deployments keep this file in different places, and the all-in-one image is the one people search for in vain: it uses `/data/db/`, not `/app/data/`. If the host has no shell — a NAS container UI, typically — open the volume in a file manager and read `db/SETUP_TOKEN` directly, or skip the token entirely with the seeded-admin route below.
 
 ## Create your admin account
 
@@ -63,9 +69,16 @@ The setup token is **single-use** and stops working the moment the first admin e
 If `ADMIN_PASSWORD` (or `--admin-password`) was set, PicPeak creates the admin at migration time and writes the credentials to a file instead of showing the setup screen.
 
 ```bash
-# Read the generated credentials
+# Compose stack
 docker exec picpeak-backend cat data/ADMIN_CREDENTIALS.txt
+
+# All-in-one image
+docker exec picpeak cat /data/db/ADMIN_CREDENTIALS.txt
 ```
+
+<Callout type="info">
+On a NAS, where the container UI usually gives you no shell, this is the easier route: set `ADMIN_PASSWORD` before the first start and you never need to read a file at all. It takes effect only while no admin exists — see [Single-container install](/deployment/single-container#nas-installs).
+</Callout>
 
 Log in at `/admin` with the **email** (not the username) and that password; you'll be forced to change it on first login.
 

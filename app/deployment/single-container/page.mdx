@@ -6,16 +6,20 @@ The all-in-one image runs PicPeak as **one container and one Node process**, wit
 
 ```bash
 docker run -d --name picpeak -p 3000:3000 \
-  -v picpeak-data:/app/data \
-  -v picpeak-storage:/app/storage \
-  -e JWT_SECRET="$(openssl rand -base64 48)" \
-  ghcr.io/picpeak/picpeak/aio:stable
+  -v picpeak:/data \
+  ghcr.io/picpeak/picpeak/aio:main
 ```
 
 Open **http://localhost:3000/admin** and follow the setup wizard.
 
+One volume, no environment variables. Everything that has to survive lives under `/data`, and the JWT secret is generated on first start and kept there with the rest.
+
 <Callout type="warning">
-Set `JWT_SECRET` to a value you keep. Every session is signed with it, so if it changes — including on a container recreate that regenerates it — everyone is logged out. Store it somewhere durable before you go to production.
+Back up the volume, not just the database. The JWT secret sits in `/data/db/jwt.secret` and the built-in backup does **not** include it — it archives your photos and a database dump. Lose that file and every session and gallery link is invalidated, and an encrypted OIDC client secret can no longer be decrypted. A copy of the whole `/data` volume is what makes the install restorable.
+</Callout>
+
+<Callout type="info">
+The all-in-one image publishes **`:main` only** today. It landed after the current stable release, so `:stable` and `:latest` appear for this image once the build reaches the `stable` branch — until then `aio:stable` cannot be pulled at all.
 </Callout>
 
 ## Is this the right install for you?
@@ -41,13 +45,15 @@ Use the `docker run` above. The first boot creates the database and applies all 
 ### Read the setup token
 
 ```bash
-docker exec picpeak cat /app/data/SETUP_TOKEN
+docker exec picpeak cat /data/db/SETUP_TOKEN
 ```
 
 The file is written `0600` and is the source of truth. The token is also printed to the container logs on first start (`docker logs picpeak`), but logs rotate — the file does not, until setup completes and consumes it.
 
+**No shell on the host?** Open the volume in your NAS file manager and read `db/SETUP_TOKEN` — it is a plain text file. Note the `db/` subdirectory: the token sits beside the database, not at the root of the volume.
+
 <Callout type="info">
-The wizard's on-screen hint shows a `docker compose exec backend …` command. That is the compose stack's path; in a single-container install use the `docker exec picpeak …` form above.
+The wizard's on-screen hint shows a `docker compose exec backend …` command, and the compose stack keeps this file at `/app/data/SETUP_TOKEN`. Neither applies here — the all-in-one image uses `/data/db/`.
 </Callout>
 
 ### Create your admin account
@@ -60,23 +66,29 @@ Continue with [Your First Gallery](/getting-started/first-gallery).
 
 ## What lives where
 
-Two volumes hold everything that must survive a container replacement:
+**One volume**, `/data`, holds everything that must survive a container replacement. Mount that and there is nothing else to remember:
 
 | Path | Contents |
 |---|---|
-| `/app/data` | `photo_sharing.db` (plus `-wal`/`-shm`) and `SETUP_TOKEN` |
-| `/app/storage` | Uploaded originals, thumbnails, and archives |
-| `/app/logs` | Application logs — mount a third volume if you want these to persist |
+| `/data/db` | `picpeak.db` (plus `-wal`/`-shm`), `SETUP_TOKEN`, and `jwt.secret` |
+| `/data/storage` | Uploaded originals, thumbnails, previews, and archives |
+| `/data/logs` | Application logs — inside the volume, so they persist by default |
+| `/data/backup` | Output of the built-in backup |
 
-Recreating the container against the same volumes preserves everything: the admin account, all galleries, and the applied-migration history. Nothing is re-detected as a fresh install.
+Recreating the container against the same volume preserves everything: the admin account, all galleries, and the applied-migration history. Nothing is re-detected as a fresh install.
+
+<Callout type="warning">
+Do not mount volumes at `/app/data` or `/app/storage`. Older versions of this page documented that layout and it no longer matches the image: `/app/storage` is a symlink into `/data/storage`, and mounting over it splits your uploads across two locations while the volume that matters may not be persisted at all.
+</Callout>
 
 ## Configuration
 
-Only `JWT_SECRET` is required. Everything else has a working default, and the rest of the app is configured from the admin UI rather than the environment.
+Nothing is required. Everything has a working default, and the rest of the app is configured from the admin UI rather than the environment.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `JWT_SECRET` | — | **Required.** Signs sessions. Keep it stable. |
+| `JWT_SECRET` | generated on first start | Signs sessions. Generated into `/data/db/jwt.secret` and reused from there; set it explicitly only if you want to pin your own value. |
+| `ADMIN_PASSWORD` | — | Creates the admin on first boot instead of the setup token. See [NAS installs](#nas-installs). |
 | `BRAND_TITLE` | `PicPeak` | Browser tab title and social link previews |
 | `BRAND_DESCRIPTION` | `Photo gallery shared with PicPeak.` | Meta description for link previews |
 | `PORT` | `3000` | Listening port inside the container |
@@ -94,15 +106,14 @@ The same image talks to a real PostgreSQL if you would rather not use SQLite. Po
 
 ```bash
 docker run -d --name picpeak -p 3000:3000 \
-  -v picpeak-storage:/app/storage \
-  -e JWT_SECRET="$(openssl rand -base64 48)" \
+  -v picpeak:/data \
   -e DATABASE_CLIENT=pg \
   -e DB_HOST=postgres.example.internal \
   -e DB_PORT=5432 \
   -e DB_USER=picpeak \
   -e DB_PASSWORD=… \
   -e DB_NAME=picpeak \
-  ghcr.io/picpeak/picpeak/aio:stable
+  ghcr.io/picpeak/picpeak/aio:main
 ```
 
 The container waits for the database to accept connections before starting, and logs which engine it resolved. If both a populated SQLite file and a populated PostgreSQL are present it refuses to start rather than guessing.
@@ -111,18 +122,34 @@ The container waits for the database to accept connections before starting, and 
 
 The image serves plain HTTP and does not terminate TLS. For anything reachable from the internet, put a reverse proxy in front — see [Reverse Proxy](/deployment/reverse-proxy) and [SSL Certificates](/deployment/ssl). On a home network reached only over LAN or a VPN, plain HTTP is usually acceptable.
 
-## NAS installs
+## NAS installs [#nas-installs]
 
-Synology and QNAP can both run this from their container UI: create the container from `ghcr.io/picpeak/picpeak/aio:stable`, map port `3000`, add the two volumes, and set `JWT_SECRET`.
+Synology, QNAP and UGREEN can all run this from their container UI: create the container from `ghcr.io/picpeak/picpeak/aio:main`, map port `3000`, and mount **one** volume at `/data`. No environment variables are needed.
+
+### Getting in without a terminal
+
+Most NAS container UIs give you no shell, which makes `docker exec … cat /data/db/SETUP_TOKEN` awkward or impossible. Two ways round it:
+
+**Set the admin up front.** Add `ADMIN_PASSWORD` (and optionally `ADMIN_USERNAME` and `ADMIN_EMAIL`) in the container's environment before the first start. PicPeak then creates the admin during the first boot and skips the setup screen entirely — nothing to find, nothing to read.
+
+```
+ADMIN_USERNAME=admin
+ADMIN_EMAIL=you@example.com
+ADMIN_PASSWORD=a-password-you-choose
+```
+
+This only takes effect on the **very first** start, while no admin exists; setting it later does not change an existing password. Avoid `$` in the value, or escape it as `$$` — compose reads it as a variable otherwise. Log in, change the password in the admin UI, then remove the variable so it is not left sitting in the container config.
+
+**Or read the token with the file manager.** Browse to the volume you mounted at `/data` and open `db/SETUP_TOKEN` in a text viewer. The `db/` subdirectory is the part people miss.
 
 <Callout type="warning">
-Do not point the storage volume at an SMB or CIFS share. The container adjusts ownership on its storage directory at boot, which over SMB can hang startup indefinitely and leave the container unhealthy. Use a native share (Btrfs/ext4 on the NAS itself) for `/app/storage`.
+Do not point the volume at an SMB or CIFS share. The container adjusts ownership on its directories at boot, which over SMB can hang startup indefinitely and leave the container unhealthy. Use a native share (Btrfs/ext4 on the NAS itself) for `/data`.
 </Callout>
 
 ## Updating
 
 ```bash
-docker pull ghcr.io/picpeak/picpeak/aio:stable
+docker pull ghcr.io/picpeak/picpeak/aio:main
 docker rm -f picpeak
 # re-run the same `docker run` command
 ```
@@ -134,5 +161,4 @@ Migrations run automatically on start. Back up first — see [Backup & Restore](
 - **One SQLite writer at a time.** Simultaneous uploads queue instead of running in parallel. Use PostgreSQL if several people upload at once.
 - **No bundled TLS.** Put a reverse proxy in front for internet-facing installs.
 - **No horizontal scaling.** One container is the deployment model; scale by moving to the compose stack.
-- **Logs are not persisted by default.** Mount `/app/logs` if you want them to survive a container replacement.
 - **No face recognition.** [People in Galleries](/features/face-recognition) needs a separate ML container this image does not include, and running detection alongside thumbnail generation in one container would slow everything down rather than fail cleanly. The toggle in Settings → Features is disabled here and says so. Use the compose stack if you want it.
