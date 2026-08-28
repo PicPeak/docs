@@ -82,6 +82,26 @@ in the gallery. The share link stays valid.
 onto the catalog photo. That ID travels with the photo, so the filename is free
 to change — it is the ID, not the name, that carries the edit home.
 
+### If your gallery reads from a NAS or watched folder
+
+Galleries backed by external media serve their photos straight from the share
+rather than from PicPeak's own storage. When you publish an edit over one of
+those photos, the uploaded file becomes the one PicPeak serves, and that photo —
+only that photo — switches to PicPeak-managed storage.
+
+Worth knowing, because it changes where the delivered file lives:
+
+- **Your original on the share is never touched.** Nothing is moved, renamed or
+  deleted there.
+- **The edited version lives in PicPeak's storage**, so it is covered by
+  PicPeak's backups rather than by whatever backs up your NAS.
+- **Re-scanning the folder will not re-import the original.** The photo keeps
+  its link to the source file, so a later scan recognises it as already
+  imported instead of adding a duplicate alongside your edit.
+
+Everything else is unchanged: same ID, same ratings and colour labels, same
+comments, same position, same share link.
+
 ## Multi-camera shoots
 
 Two bodies both produce `IMG_1234.JPG`, and PicPeak cannot tell them apart.
