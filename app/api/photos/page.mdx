@@ -157,8 +157,8 @@ Three fields are worth understanding before you build against this:
   `dominant_color_label` is most-labelled-wins with ties broken green first.
 - **`color_label`** and **`rating`** are the *merged* values for the requested
   `mark_source` — one colour and one rating, ready to write into a catalog.
-  With `mark_source=either`, your own colour wins a tie and the rating takes the
-  higher of the two.
+  With `mark_source=either`, your own colour wins outright whenever you have set
+  one — not only on a tie — and the rating takes the higher of the two.
 
 `my_rating` and `my_color_label` are scoped to the token owner. Marks made by a
 different admin are deliberately not visible here.
