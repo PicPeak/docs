@@ -2,6 +2,7 @@ export default {
   index: 'Overview',
   'creating-events': 'Creating Events',
   'managing-photos': 'Managing Photos',
+  'lightroom-roundtrip': 'Lightroom Round-Trip',
   'event-types': 'Event Types',
   archiving: 'Archiving Events',
   'admin-settings': 'Admin Settings',

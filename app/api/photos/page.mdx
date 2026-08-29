@@ -1,136 +1,303 @@
 # Photos API
 
-The photos API covers everything you'd want to do with the photo collection of an event: upload, batch upload, download, list, hide, delete, reorder, and trigger metadata repairs.
+Photos are reachable through **two different APIs**, and picking the wrong one
+is the most common reason a request comes back `401`.
 
-For the OpenAPI spec see `/api/openapi.json` on your instance.
+| | Public API (`/api/v1`) | Admin API (`/api/admin`) |
+|---|---|---|
+| **Auth** | API token (`Authorization: Bearer pp_live_…`) | Admin session JWT |
+| **For** | Integrations, scripts, the Lightroom plugin | The admin UI |
+| **Photo endpoints** | Upload, replace, list-with-marks | Everything else on this page |
+
+The admin API is **JWT-only** — `adminAuth` verifies a signed session token, so
+an API token sent to an `/api/admin/…` route is rejected. There is currently no
+API-token equivalent for delete, hide, chunked upload or dimension repair; those
+are admin-UI operations.
+
+For the OpenAPI spec of the public API see `/api/openapi.json` on your instance.
 
 ## Authentication
 
+### Public API
+
 ```
-Authorization: Bearer <token>
+Authorization: Bearer pp_live_xxxxxxxx
 ```
 
-Token must have `photos.read` (for list/get) or `photos.write` (for upload/delete) scope. See [Authentication](/api/authentication) for scope details.
+Scopes are **hierarchical**: `admin` implies `write` implies `read`. On top of
+the scope, the token inherits its owner's RBAC permissions — so a read needs
+both the `read` scope and the `photos.view` permission. Create tokens in
+**Settings → API Tokens**. See [Authentication](/api/authentication).
 
-## Endpoints
+### Admin API
 
-### Upload (single batch, < 100 MB total)
+```
+Authorization: Bearer <admin JWT from POST /api/auth/admin/login>
+```
+
+The JWT expires after 24 hours. Permissions are named per route below
+(`photos.upload`, `photos.edit`, `photos.delete`, `photos.view`,
+`photos.download`), and every event-scoped route additionally checks that the
+caller owns the event.
+
+## Public API endpoints
+
+### Upload a photo
+
+One image per request, in a multipart field named `photo` (singular).
 
 ```bash
-curl -X POST "$API_URL/v1/events/$EVENT_ID/photos" \
+curl -X POST "$BASE_URL/api/v1/events/$EVENT_ID/photos" \
   -H "Authorization: Bearer $TOKEN" \
-  -F "photos=@/path/to/DSC_2031.jpg" \
-  -F "photos=@/path/to/DSC_2032.jpg" \
-  -F "category_id=ceremony"
+  -F "photo=@/path/to/IMG_1234.JPG" \
+  -F "category_id=12"
+```
+
+Needs the `write` scope and the `photos.upload` permission.
+
+**Replacing an existing photo:** pass `replaces_photo_id` to overwrite a photo's
+file while keeping its identity — the ID, the client's ratings and colour
+labels, its comments and its position in the gallery all survive, and the share
+link stays valid. The ID must belong to the event in the URL.
+
+```bash
+curl -X POST "$BASE_URL/api/v1/events/$EVENT_ID/photos" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "photo=@/path/to/Smith_Wedding_11234.jpg" \
+  -F "replaces_photo_id=1234"
 ```
 
 **Constraints:**
 
-- File types: per `general_allowed_file_types` setting (default `jpg,jpeg,png,gif,webp`).
-- Max size per file: per `general_max_file_size_mb` (default 50).
-- Max files per batch: per `general_max_files_per_upload` (default 500, hard cap 2000).
-- Per-event `photo_cap` is enforced — uploads that would exceed the cap return 400.
+- Images only — the endpoint rejects any non-`image/*` MIME type. Video goes
+  through the admin chunked upload.
+- Max 100 MB per file.
+- `category_id` is optional and must belong to this event or be global;
+  anything else returns `400`.
 
-**Response:**
+**Response** (`201`):
 
 ```json
 {
-  "uploaded": [
-    { "id": 1234, "filename": "DSC_2031.jpg", "thumbnail_url": "/thumbnails/wedding-...", "size": 4523894, "captured_at": "2026-05-12T15:23:11Z" },
-    { "id": 1235, "filename": "DSC_2032.jpg", "thumbnail_url": "/thumbnails/wedding-...", "size": 4123456, "captured_at": "2026-05-12T15:23:14Z" }
-  ],
-  "skipped": []
+  "id": 1234,
+  "filename": "1755892345_a1b2c3d4.jpg",
+  "path": "wedding-smith/1755892345_a1b2c3d4.jpg",
+  "thumbnail_path": "thumb_1755892345_a1b2c3d4.jpg",
+  "size_bytes": 4523894,
+  "category_id": 12
 }
 ```
 
-### Chunked upload (large files / batches)
+A replace answers `200` with a different shape:
 
-For individual files over 100 MB (typical for video) or large batches, use the chunked upload flow:
-
-```bash
-# 1. Initialise
-curl -X POST "$API_URL/v1/events/$EVENT_ID/uploads" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{ "filename": "video.mp4", "size": 1234567890, "mime_type": "video/mp4" }'
-# → returns { upload_id, chunk_size }
-
-# 2. Upload chunks (parallel-safe)
-for i in $(seq 0 N); do
-  curl -X PUT "$API_URL/v1/uploads/$UPLOAD_ID/chunks/$i" \
-    -H "Authorization: Bearer $TOKEN" \
-    --data-binary @chunk-$i.bin
-done
-
-# 3. Complete
-curl -X POST "$API_URL/v1/uploads/$UPLOAD_ID/complete" \
-  -H "Authorization: Bearer $TOKEN"
+```json
+{ "replaced": true, "photo": { "id": 1234, "filename": "...", "original_filename": "...", "source_filename": "IMG_1234.JPG", "previous_filename": "..." } }
 ```
 
-Resumable: re-uploading a chunk that already arrived is idempotent. Failed chunks can be retried individually.
+Each upload fires a `photo.uploaded` webhook.
 
 ### List photos for an event
 
+Returns each photo with the proofing marks it carries — the client's colour
+labels and star ratings, plus your own admin marks. This is what the
+[Lightroom round-trip](/guides/lightroom-roundtrip) reads.
+
 ```bash
-curl "$API_URL/v1/events/$EVENT_ID/photos?limit=50&offset=0" \
+curl "$BASE_URL/api/v1/events/$EVENT_ID/photos?marked_only=true&mark_source=either" \
   -H "Authorization: Bearer $TOKEN"
 ```
+
+Requires the `read` scope and the `photos.view` permission, and is scoped to
+events the token's owner may see.
 
 Query parameters:
 
 | Param | Default | Notes |
 |---|---|---|
-| `limit` | `50` | Max 200. |
-| `offset` | `0` | For pagination. |
-| `category_id` | (omit for all) | Filter to a single category. |
-| `is_hidden` | (omit for all) | `true` / `false` |
-| `sort` | `upload_date_desc` | One of `upload_date_*`, `capture_date_*`, `filename_*`, `size_*`, `rating_*` (with `_asc` or `_desc`). |
+| `page` | `1` | |
+| `limit` | `50` | Max 100. |
+| `marked_only` | `false` | Only photos carrying a rating or colour label from `mark_source`. |
+| `mark_source` | `either` | `client`, `mine`, or `either`. Drives `marked_only` and the merged `color_label` / `rating` fields. |
+| `color_labels` | (omit for all) | Comma-separated client colours, e.g. `green,yellow`. |
+| `my_color_labels` | (omit for all) | Same, against the token owner's own marks. |
+| `min_rating` | (omit) | `0`–`5`, against the guest star average. |
+| `my_min_rating` | (omit) | `1`–`5`, against your own marks. |
+| `logic` | `AND` | `AND` or `OR` across the filters above. |
+
+**Response:**
+
+```json
+{
+  "photos": [
+    {
+      "id": 1234,
+      "filename": "wedding-smith_individual_1755892345.jpg",
+      "original_filename": "IMG_1234.JPG",
+      "source_filename": "IMG_1234.JPG",
+      "average_rating": 4.5,
+      "feedback_count": 2,
+      "color_labels": { "green": 2, "red": 1 },
+      "dominant_color_label": "green",
+      "my_rating": 5,
+      "my_color_label": "green",
+      "color_label": "green",
+      "rating": 5
+    }
+  ],
+  "pagination": { "page": 1, "limit": 50, "total": 480, "filtered": 62, "pages": 2 }
+}
+```
+
+Three fields are worth understanding before you build against this:
+
+- **`source_filename`** is the camera-original name, preserved even after a
+  photo has been replaced by an edited version. **Match on this**, not on
+  `original_filename` — the latter is overwritten by a replace.
+- **`color_labels`** holds the per-colour tallies across all guests;
+  `dominant_color_label` is most-labelled-wins with ties broken green first.
+- **`color_label`** and **`rating`** are the *merged* values for the requested
+  `mark_source` — one colour and one rating, ready to write into a catalog.
+  With `mark_source=either`, your own colour wins a tie and the rating takes the
+  higher of the two.
+
+`my_rating` and `my_color_label` are scoped to the token owner. Marks made by a
+different admin are deliberately not visible here.
+
+## Admin API endpoints
+
+Everything below needs an **admin JWT**, not an API token, and is mounted under
+`/api/admin/photos`.
+
+### Chunked upload (large files / batches)
+
+For individual files over the normal upload limit (typical for video), use the
+chunked flow. Every step is scoped to the event, and the permission is
+`photos.upload` (`photos.view` for status, `photos.delete` to abort):
+
+```bash
+# 1. Initialise
+curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/init" \
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{ "filename": "video.mp4", "fileSize": 1234567890, "mimeType": "video/mp4" }'
+
+# 2. Send each chunk
+curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID/chunk/0" \
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  --data-binary @chunk0
+
+# 3. Finish
+curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID/complete" \
+  -H "Authorization: Bearer $ADMIN_JWT"
+```
+
+Progress and cleanup:
+
+```bash
+curl    "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID/status" -H "Authorization: Bearer $ADMIN_JWT"
+curl -X DELETE "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID" -H "Authorization: Bearer $ADMIN_JWT"
+```
+
+### List photos in the admin grid
+
+```bash
+curl "$BASE_URL/api/admin/photos/$EVENT_ID/photos?min_rating=4&color_label=green" \
+  -H "Authorization: Bearer $ADMIN_JWT"
+```
+
+Permission: `photos.view`. This is the grid's own endpoint, with the filters the
+admin UI exposes.
+
+| Param | Notes |
+|---|---|
+| `category_id` | A numeric category id, or `individual` / `collage` / `uncategorized`. |
+| `type` | Legacy type filter, kept for backwards compatibility. |
+| `search` | Substring match on filename. |
+| `has_likes`, `has_favorites`, `has_comments` | `true` to require each. |
+| `min_rating` | Guest star average. |
+| `color_label` | A single client colour. |
+| `logic` | `AND` (default) or `OR` across the feedback filters. |
+| `sort` / `order` | `date` (default), plus `asc` / `desc`. |
+
+For the mark-aware, API-token-friendly version, use the public
+[list endpoint](#list-photos-for-an-event) above instead.
 
 ### Get single photo metadata
 
 ```bash
-curl "$API_URL/v1/photos/$PHOTO_ID" \
-  -H "Authorization: Bearer $TOKEN"
+curl "$BASE_URL/api/admin/photos/$EVENT_ID/photo/$PHOTO_ID" \
+  -H "Authorization: Bearer $ADMIN_JWT"
 ```
 
-Returns full metadata including width/height, EXIF capture date, feedback aggregates (likes, average rating, comment count), and download counts.
+Permission: `photos.view`. Note the singular `photo` in the path — the plural
+`photos` is the list route above.
 
 ### Hide / unhide a photo
 
 ```bash
-curl -X PATCH "$API_URL/v1/photos/$PHOTO_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{ "is_hidden": true }'
+curl -X PATCH "$BASE_URL/api/admin/photos/$EVENT_ID/photos/$PHOTO_ID" \
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{ "visibility": "hidden" }'
 ```
 
-Hidden photos are not shown to guests but remain in the database and admin grid. Useful for client-access review.
+Permission: `photos.edit`. Visibility is a **string** — `visible` or `hidden`,
+not a boolean. Any other value is ignored rather than rejected.
+
+The same route sets the category via `category_id`, which accepts a numeric
+category id, `individual` / `collage`, or `null` to clear it. Setting it by hand
+also clears the "automatically categorised" flag, so a later *undo automatic
+categories* will not wipe your choice.
+
+Hidden photos stay in the database and the admin grid but are not shown to
+guests.
 
 ### Delete
 
 ```bash
-curl -X DELETE "$API_URL/v1/photos/$PHOTO_ID" \
-  -H "Authorization: Bearer $TOKEN"
+curl -X DELETE "$BASE_URL/api/admin/photos/$EVENT_ID/photos/$PHOTO_ID" \
+  -H "Authorization: Bearer $ADMIN_JWT"
 ```
 
-Hard delete: removes the photo file, thumbnail, hero variant (if any), and the database row. Fires `photo.deleted` webhook.
+Permission: `photos.delete`. Removes the file, its derivatives and the database
+row.
 
 ### Bulk delete
 
 ```bash
-curl -X POST "$API_URL/v1/photos/bulk-delete" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{ "photo_ids": [1234, 1235, 1236] }'
+curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/photos/bulk-delete" \
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{ "photoIds": [1234, 1235, 1236] }'
 ```
 
-Returns `{ deleted: 3, failed: 0 }`. Fires one `photo.deleted` webhook per photo.
+Permission: `photos.delete`. The body key is `photoIds`, camelCase. Ids outside
+the event in the URL are ignored, so this cannot reach another gallery's photos.
 
 ### Repair dimensions
 
 ```bash
-curl -X POST "$API_URL/v1/photos/repair-dimensions" \
-  -H "Authorization: Bearer $TOKEN"
+curl -X POST "$BASE_URL/api/admin/photos/repair-dimensions" \
+  -H "Authorization: Bearer $ADMIN_JWT"
 ```
 
-Scans every `photos` row with null `width`/`height` and re-extracts from the file. Returns `{ scanned, repaired, failed }`. See [System Status](/guides/admin-settings/status) for when to run this.
+Permission: `photos.edit`. **Instance-wide, not per event** — it scans every
+`photos` row with a null `width` or `height` (skipping videos) and re-extracts
+from the file.
+
+Returns immediately with `{ message, count }` and continues in the background;
+`409` if a repair is already running. Poll it:
+
+```bash
+curl "$BASE_URL/api/admin/photos/repair-dimensions/status" \
+  -H "Authorization: Bearer $ADMIN_JWT"
+```
+
+```json
+{ "total": 4820, "withDimensions": 4795, "withoutDimensions": 25, "isRunning": true, "lastResult": null }
+```
+
+See [System Status](/guides/admin-settings/status) for when to run this.
 
 ## Photo + thumbnail serving
 
@@ -146,7 +313,8 @@ These should be routed through your reverse proxy with appropriate cache headers
 
 ## Video specifics
 
-Videos use the same upload + delete endpoints. Additional considerations:
+Video goes through the **admin** upload and chunked-upload endpoints. The public
+`/api/v1` upload accepts images only and rejects any other MIME type.
 
 - Formats: MP4, WebM, MOV, AVI.
 - Max size: 10 GB by default (cap at the proxy level too — see [Video Support](/features/video-support)).
