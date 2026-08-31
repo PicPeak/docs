@@ -4,6 +4,10 @@ import { Tabs, Callout } from 'nextra/components'
 
 For production deployments, place PicPeak behind a reverse proxy for SSL termination and routing.
 
+<Callout type="info">
+The routing below applies to the **multi-container Compose stack**, where the frontend and backend are separate services. The [all-in-one image](/deployment/single-container) serves everything from one port, so a proxy in front of it needs a single rule pointing at port `3000` — see [Example: NAS at Home](/deployment/nas-example) for a worked setup with Nginx Proxy Manager.
+</Callout>
+
 ## Routing schema
 
 | Path | Service | Port | Description |

@@ -41,6 +41,12 @@ certificatesResolvers:
         entryPoint: web
 ```
 
+## Nginx Proxy Manager (home servers and NAS)
+
+If you would rather click than edit config files — common on a NAS — [Nginx Proxy Manager](https://nginxproxymanager.com/) wraps Nginx and Let's Encrypt in a web UI and issues certificates via the HTTP-01 challenge. It needs port **80** reachable from the internet, at issue time and at every renewal.
+
+[Example: NAS at Home](/deployment/nas-example) walks through it end to end, including the DynDNS record and router port forwarding that a home connection needs first.
+
 ## Security recommendations
 
 - Always redirect HTTP to HTTPS.
