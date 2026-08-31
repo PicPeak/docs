@@ -1,0 +1,242 @@
+import { Steps, Callout } from 'nextra/components'
+
+# Example: PicPeak on a NAS at Home
+
+A worked example of a real install rather than a reference page: PicPeak running on a **UGREEN NAS** behind a **FRITZ!Box**, reachable from the internet on your own domain with a Let's Encrypt certificate. The screenshots come from an actual setup and are masked where they showed a domain, an IP or a device name.
+
+Nothing here is UGREEN- or AVM-specific in substance. Synology, QNAP, TrueNAS and any router that can do DynDNS and port forwarding follow the same four steps — only the menus differ.
+
+**What you end up with**
+
+```
+Internet
+   │   gallery.example.com → home IP, kept current by DynDNS
+   ▼
+FRITZ!Box              80 → NAS:7080,  443 → NAS:7443
+   ▼
+Nginx Proxy Manager    terminates TLS, holds the certificate
+   ▼   http://picpeak:3000
+PicPeak (all-in-one)   one container, SQLite, one volume
+```
+
+Two containers, deployed together as **one Docker Compose project** on the NAS. Four things to set up:
+
+1. A DynDNS record, so your domain follows your changing home IP address.
+2. Port forwarding for **80** and **443** on the router.
+3. Nginx Proxy Manager, for TLS termination and the certificate.
+4. The Compose project itself, in the UGREEN Docker app.
+
+<Callout type="warning">
+This puts a service on your home connection on the public internet. Before you start, be clear that you want that: use a strong admin password, keep the image updated, and never forward the Nginx Proxy Manager admin port (81) through the router. If you only need access from inside your own network or over a VPN, skip all of this and use the plain [Single-Container Install](/deployment/single-container) over HTTP.
+</Callout>
+
+## 1. DynDNS
+
+Home connections get a new public IP address every so often, so a fixed DNS record pointing at today's IP stops working tomorrow. DynDNS closes that gap: the router reports its current address to the DNS provider after every reconnect.
+
+This example uses a **Strato** domain with Strato's DynDNS service, driven by the FRITZ!Box. In `Internet → Freigaben → DynDNS`, tick **DynDns aktiv** and enter the update URL, domain, username and password your provider gave you.
+
+<img src="/images/nas-example/dyndns.png" alt="FRITZ!Box DynDNS configuration under Internet → Freigaben" style={{ borderRadius: '8px', marginTop: '1rem', marginBottom: '1rem', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }} />
+
+The exact update URL and credential format differ per provider and change over time, so take them from the source rather than from here:
+
+- [Strato — DynDNS setup](https://www.strato.de/faq/hosting/so-richten-sie-dyndns-fuer-ihre-domain-ein/)
+- [AVM — Setting up dynamic DNS in the FRITZ!Box](https://en.avm.de/service/knowledge-base/dok/FRITZ-Box-6690-Cable/30_Setting-up-dynamic-DNS-in-the-FRITZ-Box/)
+
+Use a subdomain such as `gallery.example.com` rather than the apex domain, so the rest of your domain stays free for other things.
+
+**Check it before moving on.** From outside your network (mobile data works), `gallery.example.com` must resolve to your current home IP. If it does not, nothing in the following steps can work, and Let's Encrypt validation in step 3 will fail with a confusing error.
+
+## 2. Port forwarding
+
+<Callout type="warning">
+**The NAS web UI already owns 80 and 443.** On UGREEN they are taken by the system interface, and a container that tries to bind them simply fails to start. This is the single most common way this setup goes wrong, and the error does not point at the cause.
+
+The fix is to run Nginx Proxy Manager on **spare** ports — `7080` and `7443` — and let the router do the translation. The internet still talks to 80 and 443; only the hop from the router to the NAS uses the high ports.
+</Callout>
+
+Two ports need to reach the NAS from the internet. The external port is fixed by what browsers and Let's Encrypt expect; the internal one is yours to choose:
+
+| External | → NAS | Why |
+|---|---|---|
+| **80** | `7080` | Let's Encrypt HTTP-01 validation, plus the redirect to HTTPS. Required — the certificate cannot be issued without it, and it is needed again at every renewal. |
+| **443** | `7443` | The actual HTTPS traffic. |
+
+In `Internet → Freigaben → Portfreigaben`, add the NAS as a device and create one sharing per port. Pick **Andere Anwendung** rather than the `HTTP-Server` / `HTTPS-Server` presets — the presets force the internal port to match the external one, which is exactly what you cannot use here. Set `Port extern gewünscht` to 80 (then 443) and `Port an Gerät` to 7080 (then 7443).
+
+The overview then lists the NAS with **80** and **443** under `Port extern vergeben` — that column shows what the internet sees, not the internal target. The `Freigaben` column carries each entry's label, so it reads `HTTP-Server` / `HTTPS-Server` for the presets and whatever name you type for an **Andere Anwendung** entry:
+
+<img src="/images/nas-example/portforwarding.png" alt="FRITZ!Box port forwarding overview listing the NAS with external ports 80 and 443" style={{ borderRadius: '8px', marginTop: '1rem', marginBottom: '1rem', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }} />
+
+<Callout type="info">
+If your NAS leaves 80 and 443 free, you can skip the translation: bind Nginx Proxy Manager to `80:80` and `443:443` and use the `HTTP-Server` / `HTTPS-Server` presets. Everything else on this page is unchanged. Check first — it is quicker than debugging a container that will not start.
+</Callout>
+
+Give the NAS a **fixed IP address** in the router's DHCP settings while you are here. A port forward points at an address, and a NAS that picks up a different one after a reboot silently takes the whole setup offline.
+
+Port forwarding is router-specific, so follow the vendor documentation for anything that is not a FRITZ!Box:
+
+- [AVM — Setting up port sharing in the FRITZ!Box](https://en.avm.de/service/knowledge-base/dok/FRITZ-Box-6690-Cable/34_Setting-up-port-sharing-in-the-FRITZ-Box/)
+- [PortForward.com — guides by router model](https://portforward.com/router.htm)
+
+<Callout type="warning">
+Forward **only** those two entries. Do not forward the Nginx Proxy Manager admin UI (`7081`), the NAS web interface, SSH, or the PicPeak container port (3000). Everything the internet needs goes through the proxy on 443.
+</Callout>
+
+## 3. Deploy the Compose project
+
+Both containers are deployed together, so this comes before configuring the proxy — Nginx Proxy Manager has to exist before you can log into it.
+
+<Steps>
+
+### Create the project
+
+In the UGREEN **Docker** app, go to `Projekt → Erstellen`. Give the project a name, pick a storage path on a native NAS volume, and paste the Compose configuration.
+
+<img src="/images/nas-example/create-project.png" alt="UGREEN Docker app, Projekt erstellen form with name, storage path and Compose configuration" style={{ borderRadius: '8px', marginTop: '1rem', marginBottom: '1rem', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }} />
+
+### Paste the Compose file
+
+```yaml
+services:
+  picpeak:
+    image: ghcr.io/picpeak/picpeak/aio:main
+    container_name: picpeak
+    restart: unless-stopped
+    volumes:
+      - /volume1/docker/PicPeak/data:/data
+    networks:
+      - proxy
+    environment:
+      COOKIE_SECURE: auto
+      FRONTEND_URL: "https://gallery.example.com"
+
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: npm
+    restart: unless-stopped
+    ports:
+      - "7080:80"   # ACME challenge + HTTPS redirect
+      - "7443:443"  # HTTPS
+      - "7081:81"   # Admin UI — LAN only, never forward
+    volumes:
+      - /volume1/docker/PicPeak/nginx/data:/data
+      - /volume1/docker/PicPeak/nginx/le:/etc/letsencrypt
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    name: proxy
+```
+
+Replace `gallery.example.com` with your own domain and `/volume1/...` with the paths on your NAS.
+
+The `7080`/`7443`/`7081` mappings on the left of each colon are the NAS-side ports the router forwards to. The `80`/`443`/`81` on the right are inside the container and never change.
+
+Three more details worth understanding rather than copying:
+
+- **`aio:main`** is the all-in-one image on the beta channel. The all-in-one image publishes `:main` (and the equivalent `:beta`) only — there is no `:stable` tag for it yet, so this is the tag to use. See [Release Channels](/deployment/release-channels).
+- **`COOKIE_SECURE: auto`** lets the same instance serve public HTTPS *and* direct LAN HTTP with correctly-flagged session cookies. Without it you get one or the other. See [Reverse Proxy → Mixed HTTPS + LAN HTTP access](/deployment/reverse-proxy#mixed-https--lan-http-access).
+- **`FRONTEND_URL`** is the public address PicPeak puts into gallery links and emails. Set it to the HTTPS domain, not the LAN IP, or the links you send clients point somewhere they cannot reach.
+
+<Callout type="info">
+`FRONTEND_URL` is optional. Leave it out and PicPeak uses the **Site URL** captured by the setup wizard, which records the address your browser was on when you completed setup — correct if you finish setup on `https://gallery.example.com`, wrong if you finish it on the LAN IP. Setting it here removes that ordering trap.
+
+The trade-off: an explicit `FRONTEND_URL` *pins* the address. The Site URL field in **Admin → Settings → General** becomes read-only and says so, because an env var silently overriding a setting is worse than a locked field. To manage the address from the UI instead, drop the variable and restart.
+</Callout>
+
+PicPeak is deliberately **not** given a `ports:` mapping. It is reachable by Nginx Proxy Manager over the shared `proxy` network and by nothing else, which means the only way in from outside is through TLS on 443.
+
+<Callout type="warning">
+Keep the storage path on a **native** NAS volume (Btrfs/ext4). Do not point it at an SMB or CIFS share — the container adjusts ownership on its directories at boot, which over SMB can hang startup indefinitely.
+</Callout>
+
+### Deploy and check
+
+Leave **Nach der Erstellung sofort ausführen** ticked and deploy. The project should report both containers running.
+
+<img src="/images/nas-example/compose.png" alt="The deployed picpeak project in the UGREEN Docker app showing its Compose configuration" style={{ borderRadius: '8px', marginTop: '1rem', marginBottom: '1rem', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }} />
+
+</Steps>
+
+<Callout type="warning">
+The screenshot above is the original install and differs from the Compose file printed here in three places. Use the file above.
+
+- It sets **`PUBLIC_URL`**, which PicPeak does not read anywhere. The correct variable is **`FRONTEND_URL`**.
+- It publishes `3000:3000` on the PicPeak service. That exposes the app on the LAN unencrypted and is not needed — Nginx Proxy Manager reaches it over the shared `proxy` network.
+- It mounts `/storage` and `/db` separately. One volume at `/data` covers both and is the documented layout.
+</Callout>
+
+## 4. Nginx Proxy Manager and the certificate
+
+Open the admin UI at `http://<nas-ip>:7081` from inside your network. The default login is `admin@example.com` / `changeme`; it forces a password change on first use. Do this before going any further — the container is running and those credentials are public.
+
+<Steps>
+
+### Add the proxy host
+
+Under `Hosts → Proxy Hosts → Add Proxy Host`, point the domain at PicPeak:
+
+| Field | Value |
+|---|---|
+| Domain Names | `gallery.example.com` |
+| Scheme | `http` |
+| Forward Hostname / IP | `picpeak` — the container name |
+| Forward Port | `3000` |
+| Access List | Publicly Accessible |
+
+Use the **container name**, not the NAS LAN IP. Both containers sit on the shared `proxy` network, so Docker resolves `picpeak` for you. A LAN IP only works if PicPeak publishes port 3000 on the host — which the Compose file above deliberately does not do, and which is why the screenshot below shows an IP where you should type `picpeak`.
+
+<img src="/images/nas-example/npm-host.png" alt="Nginx Proxy Manager proxy host details, forwarding the domain to PicPeak on port 3000" style={{ borderRadius: '8px', marginTop: '1rem', marginBottom: '1rem', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }} />
+
+The all-in-one image serves the API, the SPA and the protected media from **one** port, so there is nothing to split. The per-path routing table in [Reverse Proxy](/deployment/reverse-proxy) applies to the multi-container Compose stack, not here.
+
+<Callout type="info">
+Turn **Websockets Support** on if you use [Live Slideshow](/features/live-slideshow). Raise the upload limit too — Nginx Proxy Manager defaults to a small `client_max_body_size`, which rejects large video uploads with a `413`. Add `client_max_body_size 10G;` under the host's **Advanced** tab.
+</Callout>
+
+### Request the certificate
+
+On the **SSL** tab, choose **Request a new SSL Certificate**, agree to the Let's Encrypt terms, and enable **Force SSL** and **HSTS Enabled**.
+
+<img src="/images/nas-example/npm-ssl.png" alt="Nginx Proxy Manager SSL tab with Force SSL and HSTS enabled" style={{ borderRadius: '8px', marginTop: '1rem', marginBottom: '1rem', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }} />
+
+Nginx Proxy Manager runs an **HTTP-01** challenge: Let's Encrypt calls `http://gallery.example.com/.well-known/acme-challenge/…` on port 80 and must reach this container. This is why port 80 is forwarded, and why it must stay forwarded — renewal repeats the same challenge roughly every 60 days.
+
+### Verify
+
+The proxy host should show **Let's Encrypt** under SSL and a green **Online** status.
+
+<img src="/images/nas-example/npm-overview.png" alt="Nginx Proxy Manager proxy host list showing the gallery domain online with a Let's Encrypt certificate" style={{ borderRadius: '8px', marginTop: '1rem', marginBottom: '1rem', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }} />
+
+Open `https://gallery.example.com/admin` **from outside your network** — mobile data, not Wi-Fi. Many routers do not loop a public domain back to an internal host, so testing from inside can fail on a setup that is perfectly fine from the internet.
+
+</Steps>
+
+## First login
+
+The all-in-one image prints a one-time setup token on first start. Without a shell on the NAS, read it with the file manager: browse to the folder you mounted at `/data` and open **`db/SETUP_TOKEN`** in a text viewer. The `db/` subdirectory is the part people miss.
+
+Alternatively, set `ADMIN_PASSWORD` in the Compose environment *before* the first start and skip the token entirely. Both routes are covered in [Single-Container Install → NAS installs](/deployment/single-container#nas-installs).
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| Nginx Proxy Manager will not start | It is trying to bind 80 or 443, which the NAS web UI already owns. Use `7080`/`7443` and forward external 80/443 to them. |
+| Certificate request fails | External port 80 is not reaching the container on `7080`, or DynDNS has not caught up with the current IP. Check the domain resolves correctly from outside first. |
+| Works on Wi-Fi, not on mobile data | Port forwarding, DynDNS, or the NAS changed its LAN IP. Give it a static lease. |
+| Works on mobile data, not on Wi-Fi | Your router does not support NAT loopback. Not a PicPeak problem — use the LAN IP from inside, or set up split DNS. |
+| Gallery links point at `localhost` or a LAN IP | `FRONTEND_URL` is missing or wrong. |
+| Login works on HTTPS but not on the LAN IP | `COOKIE_SECURE: auto` is missing. |
+| `413` on upload | Nginx Proxy Manager's body size limit. Add `client_max_body_size 10G;` under the host's Advanced tab. |
+| Container unhealthy, startup hangs | The `/data` volume is on an SMB/CIFS share. Move it to a native volume. |
+
+## Keeping it updated
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Or use the UGREEN Docker app's rebuild action on the project. Migrations run automatically on start — take a backup first, and back up the whole `/data` volume rather than only the database, because the JWT secret at `/data/db/jwt.secret` is not part of the built-in backup. See [Backup & Restore](/guides/backup-restore) and [Single-Container Install](/deployment/single-container).

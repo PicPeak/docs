@@ -126,6 +126,8 @@ The image serves plain HTTP and does not terminate TLS. For anything reachable f
 
 Synology, QNAP and UGREEN can all run this from their container UI: create the container from `ghcr.io/picpeak/picpeak/aio:main`, map port `3000`, and mount **one** volume at `/data`. No environment variables are needed.
 
+For the full version of this — a UGREEN NAS reachable from the internet on its own domain with a Let's Encrypt certificate, including DynDNS and router port forwarding — see [Example: NAS at Home](/deployment/nas-example).
+
 ### Getting in without a terminal
 
 Most NAS container UIs give you no shell, which makes `docker exec … cat /data/db/SETUP_TOKEN` awkward or impossible. Two ways round it:
