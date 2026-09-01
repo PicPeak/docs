@@ -6,6 +6,10 @@ A worked example of a real install rather than a reference page: PicPeak running
 
 Nothing here is UGREEN- or AVM-specific in substance. Synology, QNAP, TrueNAS and any router that can do DynDNS and port forwarding follow the same four steps — only the menus differ.
 
+<Callout>
+**How long this takes.** The setup described here took us about **two hours** end to end. If DynDNS, port forwarding and Docker Compose are all familiar, expect **30 to 60 minutes**. If any of it is new, plan for the full two hours rather than starting half an hour before you need the gallery — it is four separate systems that each have to be right, and the errors when one is not are rarely obvious.
+</Callout>
+
 **What you end up with**
 
 ```
@@ -216,9 +220,67 @@ Open `https://gallery.example.com/admin` **from outside your network** — mobil
 
 ## First login
 
-The all-in-one image prints a one-time setup token on first start. Without a shell on the NAS, read it with the file manager: browse to the folder you mounted at `/data` and open **`db/SETUP_TOKEN`** in a text viewer. The `db/` subdirectory is the part people miss.
+PicPeak creates no admin account for you. On first start it writes a one-time **setup token**, and `/admin` will not let anyone past until that token has been used to create the first account. So the one question to answer is: how do you read a file inside a container on a NAS with no terminal?
 
-Alternatively, set `ADMIN_PASSWORD` in the Compose environment *before* the first start and skip the token entirely. Both routes are covered in [Single-Container Install → NAS installs](/deployment/single-container#nas-installs).
+Four ways, easiest first.
+
+### 1. The mounted folder, with the NAS file manager
+
+This is what we used, and it is the one to try first. You already mapped a folder on the NAS to `/data` in step 4 — so the token is sitting in that folder, reachable from the UGREEN file manager like any other file. Open:
+
+```
+<the folder you mapped to /data>/db/SETUP_TOKEN
+```
+
+in a text viewer. **The `db/` subdirectory is the part people miss** — the file is not at the top of the volume.
+
+### 2. The container log
+
+In the UGREEN Docker app, open the project and look at the log of the PicPeak container. The first-run banner is printed there:
+
+```
+================================================================
+  PicPeak first-run setup — no admin account yet.
+  Open:                  https://gallery.example.com/admin
+  Setup token saved to:  /data/db/SETUP_TOKEN
+  (read it there — deliberately not printed)
+================================================================
+```
+
+<Callout type="warning">
+The log tells you **where** the token is, not what it is. That is on purpose: `docker logs` is readable by anyone who can reach the Docker UI and is not rotated away after use, so printing a live first-admin credential there would leave it lying around indefinitely. The one exception is when the token file could not be written at all — then the token itself appears in the log, because the alternative is being locked out.
+</Callout>
+
+Still worth opening: it confirms the exact path on your install, which settles the `db/` question above without guessing.
+
+### 3. SSH — only if the first two failed
+
+Possible, but the most work, and it opens something you then have to close again:
+
+1. Enable SSH in the UGREEN system settings.
+2. Log in and run `docker exec <container> cat /data/db/SETUP_TOKEN`, which needs you to find the container name first.
+3. **Disable SSH again afterwards.**
+
+Three steps and a loose end, for a file you can open in the file manager. Reach for it only when something is wrong with the first two.
+
+### 4. Decide it up front, and skip the token
+
+If you would rather not hunt for anything, set the admin in the Compose environment **before** the first start:
+
+```yaml
+environment:
+  ADMIN_USERNAME: admin
+  ADMIN_EMAIL: you@example.com
+  ADMIN_PASSWORD: a-password-you-choose
+```
+
+PicPeak then creates the account during first boot and never issues a token. Three caveats:
+
+- It only applies on the **very first** start, while no admin exists. Setting it later does not change an existing password.
+- Avoid `$` in the value, or escape it as `$$` — Compose reads it as a variable otherwise.
+- Log in, change the password in the admin UI, then **remove the variable**, so it is not left sitting in the container configuration.
+
+Both the token and the environment-variable route are also covered in [Single-Container Install → NAS installs](/deployment/single-container#nas-installs).
 
 ## Troubleshooting
 
