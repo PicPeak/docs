@@ -13,10 +13,20 @@ PicPeak supports uploading and displaying videos alongside photos in event galle
 | MOV | `.mov` |
 | AVI | `.avi` |
 
+## Enabling video
+
+Video is **off by default**: the [Allowed File Types](/guides/admin-settings/general#allowed-file-types) list ships as `jpg,jpeg,png,webp`. Add the video extensions you want to accept, for example:
+
+```
+jpg,jpeg,png,webp,mp4,mov,webm
+```
+
+That single list governs the admin upload screen, the admin chunked-upload API and guest uploads. Until the extensions are added, the upload screen hides video files in its picker and the chunked API answers `400 File type not allowed` — the MIME type a request declares does not override the list.
+
 ## Upload limits
 
-- Maximum file size: **10 GB per video file**
-- Chunked upload support for files over 100 MB (resumable uploads)
+- Per-file cap: **Max Video Size (MB)** in General settings (default 500 MB), separate from the photo cap. Raise it, and the reverse-proxy body limit below, for long recordings.
+- Large files go through the admin chunked-upload API (10 MB chunks, resumable per chunk) — see [Photos API](/api/photos#chunked-upload-large-files).
 
 ## Thumbnail generation
 

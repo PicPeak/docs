@@ -1,3 +1,5 @@
+import { Callout } from 'nextra/components'
+
 # Photos API
 
 Photos are reachable through **two different APIs**, and picking the wrong one
@@ -168,27 +170,31 @@ different admin are deliberately not visible here.
 Everything below needs an **admin JWT**, not an API token, and is mounted under
 `/api/admin/photos`.
 
-### Chunked upload (large files / batches)
+### Chunked upload (large files)
 
 For individual files over the normal upload limit (typical for video), use the
 chunked flow. Every step is scoped to the event, and the permission is
 `photos.upload` (`photos.view` for status, `photos.delete` to abort):
 
 ```bash
-# 1. Initialise
+# 1. Initialise — the extension of `filename` selects the file type
 curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/init" \
   -H "Authorization: Bearer $ADMIN_JWT" \
   -H "Content-Type: application/json" \
-  -d '{ "filename": "video.mp4", "fileSize": 1234567890, "mimeType": "video/mp4" }'
+  -d '{ "filename": "video.mp4", "fileSize": 1234567890, "totalChunks": 118 }'
+# → { "uploadId": "…", "chunkSize": 10485760, "expectedChunks": 118 }
 
-# 2. Send each chunk
+# 2. Send each chunk — raw bytes, 10 MB each, any order
 curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID/chunk/0" \
   -H "Authorization: Bearer $ADMIN_JWT" \
+  -H "Content-Type: application/octet-stream" \
   --data-binary @chunk0
 
-# 3. Finish
+# 3. Finish — merges the chunks and runs the normal photo pipeline
 curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID/complete" \
-  -H "Authorization: Bearer $ADMIN_JWT"
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{ "category_id": null }'
 ```
 
 Progress and cleanup:
@@ -197,6 +203,30 @@ Progress and cleanup:
 curl    "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID/status" -H "Authorization: Bearer $ADMIN_JWT"
 curl -X DELETE "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID" -H "Authorization: Bearer $ADMIN_JWT"
 ```
+
+Re-sending a chunk index replaces the earlier copy, so a failed chunk can be
+retried on its own.
+
+#### File type rule
+
+The file type is **derived from the filename extension**, and that extension
+must be on the [Allowed File Types](/guides/admin-settings/general#allowed-file-types)
+list — the same rule the multipart upload path enforces. The `mimeType` field
+older clients sent in the init body is **ignored**: PicPeak no longer stores
+or serves a client-declared MIME type (a file that decoded as an image but was
+declared `text/html` used to be served as HTML on the app origin).
+
+Checks run in this order at `init`:
+
+1. `fileSize` against **Max File Size** / **Max Video Size** → `400 File too large. Maximum size is N MB per file.`
+2. extension against Allowed File Types → `400 File type not allowed`
+
+<Callout type="warning">
+The default Allowed File Types list is `jpg,jpeg,png,webp`. On that default a
+chunked upload of `video.mp4` is refused with `File type not allowed` — add
+the video extensions you want (for example `mp4,mov,webm`) in General settings
+before uploading video through this API. See [Video Support](/features/video-support).
+</Callout>
 
 ### List photos in the admin grid
 
@@ -301,24 +331,37 @@ See [System Status](/guides/admin-settings/status) for when to run this.
 
 ## Photo + thumbnail serving
 
-Original photos and thumbnails are served via separate authenticated endpoints (not part of the v1 API itself):
+Originals and thumbnails are served only through the authenticated gallery
+API, which applies the per-photo rules (download permission, per-category
+download opt-out, watermarking, resolution cap, reveal windows, hidden
+photos, customer-assignment re-check):
 
 | Path | Auth | Notes |
 |---|---|---|
-| `/photos/{slug}/{filename}` | gallery or admin token | Full-size photo. Cached 1 day at the proxy layer. |
-| `/thumbnails/{slug}/{filename}` | gallery or admin token | Cached 7 days at the proxy layer. |
-| `/api/gallery/{slug}/photo/{id}` | gallery or admin token | Streams the protected variant when protection level is `enhanced`+. |
+| `/api/gallery/{slug}/photo/{id}` | gallery or admin token | Full-size photo, or the protected/watermarked variant when the event calls for it. |
+| `/api/gallery/{slug}/thumbnail/{id}` | gallery or admin token | Thumbnail. |
+| `/api/gallery/{slug}/download/{id}` | gallery or admin token | Download with `Content-Disposition`; honours the download settings. |
 
-These should be routed through your reverse proxy with appropriate cache headers — see [Reverse Proxy](/deployment/reverse-proxy).
+The response `Content-Type` is always resolved from the file extension
+(images) or a validated `video/*` value (videos), never from a stored,
+client-supplied MIME string.
+
+<Callout type="info">
+The legacy static mounts `/photos/{slug}/{filename}` and
+`/thumbnails/{slug}/{filename}` have been removed. They bypassed every
+per-photo rule above; the nginx locations that proxied them now return 404.
+Nothing in the shipped frontend or the email templates used them, but a
+custom integration that built those URLs must switch to the gallery API.
+</Callout>
 
 ## Video specifics
 
 Video goes through the **admin** upload and chunked-upload endpoints. The public
 `/api/v1` upload accepts images only and rejects any other MIME type.
 
-- Formats: MP4, WebM, MOV, AVI.
-- Max size: 10 GB by default (cap at the proxy level too — see [Video Support](/features/video-support)).
-- Files over 100 MB **must** use chunked upload.
+- Formats: MP4 (`.mp4`, `.m4v`), WebM, MOV, AVI — but only the extensions listed in **Allowed File Types** are accepted, and the default list contains none of them.
+- Per-file cap: **Max Video Size (MB)** in [General settings](/guides/admin-settings/general), separate from the photo cap (cap at the proxy level too — see [Video Support](/features/video-support)).
+- Files above the multipart limit go through the chunked flow above.
 - A thumbnail is auto-extracted from the 1-second mark via FFmpeg.
 
 ## Webhook events

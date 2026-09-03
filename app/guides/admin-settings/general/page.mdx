@@ -12,7 +12,27 @@ The **General** tab covers your instance's identity, upload limits, language, an
 | **Default Expiration (days)** | `30` | Pre-fills the expiration field on the Create Event form. Range: 1–365. |
 | **Max File Size (MB)** | `50` | Per-photo upload cap. Range: 1–500. Larger files are rejected before disk write. |
 | **Max Files per Upload** | `500` | Per-batch cap. Range: 1–2000. Hard-capped at the `MAX_ALLOWED_FILES_PER_UPLOAD` build constant — UI value can be lower but never higher. |
-| **Allowed File Types** | `jpg,jpeg,png,gif,webp` | Comma-separated extensions. Server validates against MIME plus extension. Add `mp4,mov` here when video uploads are enabled. |
+| **Max Video Size (MB)** | `500` | Per-video upload cap, separate from the photo cap so photos can keep a smaller limit. |
+| **Allowed File Types** | `jpg,jpeg,png,webp` | Comma-separated extensions. One list for every upload path: the admin upload screen, the admin chunked-upload API, guest uploads and the v1 API. Videos are off by default — add `mp4,mov,webm` (and `m4v`, `avi` if needed) to accept them. See [Allowed file types](#allowed-file-types) below. |
+
+## Allowed file types
+
+The list is matched on the **file extension**, which selects the MIME type
+PicPeak stores and later serves. Extensions outside this table are ignored
+even if you add them:
+
+| Extension | Type |
+|---|---|
+| `jpg`, `jpeg`, `png`, `webp`, `gif` | image |
+| `heic`, `heif` | image (iPhone) |
+| `dng` | camera RAW — the embedded preview is used for thumbnails |
+| `mp4`, `m4v`, `webm`, `mov`, `avi` | video |
+
+Where it is enforced:
+
+- **Admin upload screen** — the file picker's `accept` filter and the client-side check are built from this list, so disallowed files never leave the browser.
+- **Admin chunked-upload API** (`/api/admin/photos/:eventId/chunked-upload/init`) — the extension of `filename` must be on the list; the `mimeType` a client declares is ignored. On the default list a chunked `video.mp4` is refused with `400 File type not allowed`. See [Photos API](/api/photos#chunked-upload-large-files).
+- **Guest uploads** and the **v1 API** (images only) — MIME + magic-byte validation against the same list.
 
 ## Feature Toggles
 
