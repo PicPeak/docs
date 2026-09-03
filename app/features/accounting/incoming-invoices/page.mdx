@@ -119,6 +119,24 @@ The booking spawns a line item on a **new draft invoice** for that customer (or 
 
 The document is NOT removed from the inbox — it stays `categorized` so you can prove which supplier bill drove which customer-facing line item.
 
+### Attaching the supplier's proof
+
+The client's invoice email can carry the stored supplier document as a **separate** attachment, so the client sees the bill behind the recharge without it being merged into your invoice PDF — invoice immutability holds either way.
+
+It is off by default globally, can be overridden per customer, and the individual files are selectable in the send dialog. The attached filename follows a configurable template with `{INVOICE}`, `{SUPPLIER}`, `{YEAR}`, `{MONTH}` and `{SEQ}` tokens.
+
+If a proof is missing at the moment you issue, the send is **not** blocked: the invoice goes out and the failure is recorded against the document so you can see what happened rather than discovering a silent omission later.
+
+### Re-bills & passthrough panel
+
+**CRM → Customer** carries a panel grouping that customer's re-bills into **Open**, **Sent** and **Paid**. The status is derived from the linked invoice's own lifecycle rather than stored twice, so it cannot drift out of sync with the invoice.
+
+Cancelling an invoice releases the supplier costs it covered back to **Open**, so a Storno never strands a cost as permanently billed.
+
+### Combining hours and re-bills
+
+A cross-add dialog rolls open hours and open re-bills into a single invoice, reachable from either side. The two stay as distinct, contiguous groups of line items and are never merged into shared lines, so the client can still see what was time and what was a passed-through cost.
+
 ## Paying the supplier
 
 The cost is your payable until you settle it with the supplier. Mark a document **Supplier paid** in the detail view:

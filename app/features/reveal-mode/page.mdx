@@ -1,0 +1,105 @@
+import { Callout } from 'nextra/components'
+
+# Reveal Mode
+
+Reveal mode keeps a published gallery's photos hidden from guests until you decide they can see them — manually, or at a time you schedule. The link works, the password works, and guests can still upload their own photos. They just do not see yours yet.
+
+The intended use is the party: guests upload their phone shots during the evening, and your edit lands the following week in one moment rather than trickling in.
+
+<Callout type="info">
+Available on the **beta** channel. See [Release Channels](/deployment/release-channels).
+</Callout>
+
+## Turning it on
+
+Open the event, then the Information card, and tick **Reveal mode (hide gallery until reveal)**.
+
+<Callout type="warning">
+The option only appears when **guest uploads are enabled** for that event, and it is cleared if you later turn guest uploads off. Reveal mode was built around the upload-during-the-event flow, so a gallery with no upload channel cannot use it. If you only want to withhold a gallery entirely, use [draft mode](/features/draft-mode) instead.
+</Callout>
+
+**Scheduled reveal (optional)** sets the moment it opens by itself. Leave it empty to reveal by hand.
+
+Reveal mode is off by default, and there is no setting for it on the create-event form — publish the event first, then enable it.
+
+## What guests see before the reveal
+
+The gallery link and the password page behave exactly as normal. Once past the password, instead of photos they get a waiting screen: "The photos are still a surprise", with the scheduled time if you set one, and the upload button if you invited them to contribute.
+
+Nothing leaks. The gallery returns no photos and no categories, so counts, category names and thumbnails are all absent rather than merely hidden in the interface.
+
+The following are all blocked while hidden, each with a clear refusal rather than an empty result: viewing or downloading a photo, thumbnails and previews, download-all and selected downloads, feedback of every kind, the people bar, view tracking and stats, and the older image routes. Social previews are suppressed too, so pasting the link into a chat does not reveal a cover photo.
+
+## Revealing
+
+Either press **Reveal now** on the event's overview, or let the scheduled time arrive. The check is made per request against the scheduled time, so the reveal is exact even if the background job is running late.
+
+A guest with the page already open does not need to do anything: the gallery refetches at the scheduled moment and polls every minute after that.
+
+<Callout type="info">
+Revealing does **not** send an email. It fires a `gallery.revealed` workflow trigger, so if you want guests notified, wire that up in Workflows.
+</Callout>
+
+## Who can see through it
+
+Four kinds of access bypass reveal mode: your own admin preview, slideshow links, client PIN access, and customer-portal logins. Guest uploads stay open for everyone regardless.
+
+## Draft, reveal or expiry?
+
+| You want | Use |
+|---|---|
+| Nobody can reach the gallery at all, while you prepare it | [Draft mode](/features/draft-mode) — the link does not resolve |
+| Guests can arrive, log in and upload, but not see your photos yet | **Reveal mode** |
+| The gallery should stop working after a date | Expiration — see [Gallery Management](/features/gallery-management) |
+
+---
+
+# Download Resolutions
+
+Separately from reveal mode, you can cap the size of the files guests download — hand out web-sized images by default and keep full-resolution files for the people who paid for them.
+
+<Callout type="info">
+Available on the **beta** channel.
+</Callout>
+
+## Global settings
+
+**Settings → Download resolutions.**
+
+| Setting | Default | Meaning |
+|---|---|---|
+| **Standard resolution** | Original (full size) | What every gallery hands out unless it overrides. |
+| **Let guests choose a download size** | off | Adds a size picker to bulk downloads. Choices are never larger than the standard. |
+| **Offer "Original" in the picker** | off | Off deliberately: if you lowered the standard, you usually do not want full-resolution files handed out anyway. |
+| **Available sizes** | Large 3000×2000, Medium 1500×1000, Small 800×600 | Editable list of label plus width and height. |
+
+Sizes are an upper bound. Aspect ratio is preserved and photos are never enlarged, so a smaller original comes back untouched.
+
+## Per gallery
+
+The event's Overview tab has a **Download resolution** card that overrides the site-wide settings for that gallery alone. Each option can be left on **Inherit**, which follows Settings. The card shows what the gallery currently hands out.
+
+## What guests experience
+
+With the picker off, the cap is silent: guests press download and get the size you chose.
+
+With it on, bulk downloads open a **Choose a download size** dialog listing each preset with its pixel bound, then prepare the archive on demand. The picker appears for Download All and for a selection — never for a single photo, which always uses the standard.
+
+## How it combines with other controls
+
+Downloads are gated in this order: the event's **allow downloads** setting, then the [per-category download permission](/features/photo-categories), then the resolution cap. Watermarks are applied after resizing, so a watermark stays proportionate on a smaller file.
+
+Videos, HEIC and HEIF files are never resized. Changing the standard resolution invalidates cached archives, including those of galleries that inherit it.
+
+Capped files are re-encoded, so they carry no EXIF metadata and have orientation baked in. Files that already fit inside the box are returned byte-identical, metadata included. Archives built through the picker are named with the chosen size, ordinary downloads keep your usual filename rules.
+
+<Callout type="warning">
+**The cap controls download size; it is not a guarantee that originals never leave the server.** Two routes still serve stored originals: the gallery's photo display route under basic protection, and a legacy secure-download link that the current interface no longer uses but which remains reachable. If full-resolution files must never be obtainable, pair the cap with [watermarking and a higher protection level](/features/photo-protection) rather than relying on it alone.
+</Callout>
+
+The presigned "Download All" option does not lift the cap — it serves the same archive built at the standard resolution. It does bypass watermarking, which is why it requires watermarks to be off.
+
+## Related
+
+- [Photo Protection](/features/photo-protection) — watermarks and protection levels.
+- [Photo Categories & Folders](/features/photo-categories) — per-category download permissions.

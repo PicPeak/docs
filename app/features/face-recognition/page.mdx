@@ -103,6 +103,18 @@ Automatic grouping is not perfect. A long wedding day can produce "Anna in dayli
 
 PicPeak deliberately errs toward *splitting* rather than *merging*: a duplicate entry is a cosmetic annoyance, whereas a wrong merge would put a stranger's photos into someone's download.
 
+## Seeing a face in its photo
+
+In **Manage people**, each detected face has **See this person in their photo**, which opens the original photo with the detected face outlined, and arrows to walk that person's other appearances without leaving the modal. Who somebody was standing next to is usually what settles whether two similar faces are the same person.
+
+A photo with no stored dimensions cannot be outlined and says so.
+
+## Decisions that survive a re-scan
+
+When you reject a merge suggestion with **Not the same**, or split a person out, that decision sticks across re-clustering and full re-scans. It is remembered against the faces themselves rather than their database rows, so regenerating people does not quietly merge them back.
+
+The separation lapses only if the two groups drift far enough apart to no longer be recognised, or if you deliberately merge those two people later, which clears it.
+
 ## Tuning
 
 Under the global face settings:
