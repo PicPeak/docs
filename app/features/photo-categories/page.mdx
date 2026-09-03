@@ -1,0 +1,124 @@
+import { Callout } from 'nextra/components'
+
+# Photo Categories & Folders
+
+Categories group the photos inside one event — "Ceremony", "Reception", "Portraits". By default a category is a **filter**: every photo stays in the one big grid and picking a category narrows it down. A category can instead be turned into a **folder**, which takes its photos out of the grid and puts them behind a tile the guest clicks into.
+
+A photo belongs to at most one category. Photos with no category are "uncategorized" and always stay in the main grid.
+
+## Where categories live
+
+| | Global categories | Event-specific categories |
+|---|---|---|
+| Managed in | **Settings → Categories** | the event's **Categories** tab |
+| Available to | every event | that one event |
+| Shown in the event tab as | marked **Shared** | plain |
+
+Global categories save re-typing the same names for every wedding. Event-specific ones cover the parts that only exist for that job.
+
+Which controls you get depends on the kind:
+
+| Control | Global | Event-specific |
+|---|---|---|
+| Rename, delete | Settings only | event tab |
+| Cover photo | ✅ per event | ✅ |
+| Order within a gallery | ✅ per event | ✅ |
+| Folder toggle | ❌ | ✅ |
+| Per-category downloads | ❌ | ✅ |
+
+A global category can therefore have a different cover photo and a different position in every gallery it appears in, but folder and download behaviour is a property of event-specific categories only.
+
+## Filters vs folders
+
+<Callout type="info">
+Folders are available on the **beta** channel (v3.117.0-beta.0 and later). See [Release Channels](/deployment/release-channels).
+</Callout>
+
+Each event-specific category carries a folder toggle, shown as a folder icon next to its name in the event's Categories tab.
+
+**Filter** (the default, and what every category did before folders existed):
+
+- Photos stay in the main grid alongside everything else.
+- The category appears as a chip in the guest filter bar, with its photo count.
+- Guests scroll one continuous gallery and narrow it when they want to.
+
+**Folder**:
+
+- Photos leave the main grid entirely. They are only visible after the guest opens the folder.
+- The gallery shows a tile for the folder, with its cover photo and photo count.
+- Opening a folder puts `?folder=<slug>` in the address bar, so a folder is linkable and the browser back button leaves it.
+- Inside a folder the guest gets a "back to gallery" control and a **Download folder** button, subject to the event's download rules.
+- Folders do not appear as filter chips — a folder is a place, not a filter.
+
+Folders are one level deep. There are no folders inside folders.
+
+<Callout type="warning">
+**A folder is organisation, not access control.** Its photos are hidden from the main grid, but they are still delivered to the browser in the same gallery response, so a determined guest can reach them. To genuinely withhold photos use [hidden photos or a reveal window](/features/gallery-management), not a folder.
+</Callout>
+
+### Which one should I use?
+
+- **Filter** when guests plausibly want to see everything, and the category is just a way to jump around. Most weddings.
+- **Folder** when a set is a separate thing that would clutter the main gallery — "Raw selects", "Group shots", a second shooter's set, or the parts most guests will skip.
+
+## Cover photos
+
+Any category can carry a cover photo, set from **Set Cover Photo** in the event's Categories tab. It is used as the folder tile image and wherever the category is presented as a card.
+
+If a category has no cover photo the event's own hero photo is used instead.
+
+## Per-category downloads
+
+<Callout type="info">
+Available on stable.
+</Callout>
+
+Each event-specific category has a download toggle. Turning it off means photos in that category cannot be downloaded even when the event allows downloads — the permission is the event's setting **and** the category's, so a category can only ever be more restrictive than its event.
+
+Attempting the download anyway returns `403 Downloads are disabled for this category`. Uncategorized photos follow the event setting alone.
+
+This is a real server-side check, unlike the folder toggle above.
+
+## Order
+
+<Callout type="info">
+Category ordering is available on the **beta** channel. See [Release Channels](/deployment/release-channels).
+</Callout>
+
+Categories have a default order set once in **Settings → Categories**, using the up/down arrows. Every gallery follows it.
+
+Any single gallery can override that order from its own Categories tab under **Gallery order**. Once you do, the tab shows that the gallery uses a custom order, and **Reset to default** puts it back to following the global list.
+
+Ordering drives the filter chips, the folder tiles, and anywhere else categories are listed for guests.
+
+## What guests see
+
+The gallery response carries the categories that actually have photos, each with its name, slug, cover photo, download permission, and whether it is a folder. Counts are derived from the photos themselves, so an empty category never shows up as a chip or a tile.
+
+Before a [reveal window](/features/gallery-management) opens, the gallery returns no photos and no categories at all, so a folder tile cannot leak the fact that "Ceremony" has 340 photos ahead of the reveal.
+
+Bulk downloads of a folder are capped at 500 photos per request, the same cap that applies to selected-photo downloads. The button tells the guest when it is about to hand back the first 500 of a larger folder.
+
+## Admin API
+
+All category endpoints live under `/api/admin/categories` and need an admin session. Reads require the `settings.view` permission, writes require `settings.edit`.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/global` | global categories, in the global default order |
+| GET | `/event/:eventId` | the categories available to one event |
+| POST | `/` | create; `is_global: false` plus `event_id` makes it event-specific |
+| PUT | `/:id` | `name`, `hero_photo_id`, `allow_downloads`, `is_folder` |
+| PUT | `/:id/hero` | set or clear the cover photo |
+| DELETE | `/:id` | delete a category; its photos become uncategorized |
+| POST | `/reorder` | per-event order override |
+| DELETE | `/reorder/:eventId` | drop the override, follow the global order again |
+| POST | `/reorder-global` | set the global default order |
+
+Photos are assigned with `category_id`, either at upload time or by moving them later — see [Managing Photos](/guides/managing-photos) and the [Photos API](/api/photos).
+
+## Related
+
+- [Gallery Management](/features/gallery-management) — events, passwords, expiration, hidden photos.
+- [Gallery Interface](/features/gallery-interface) — what the guest view looks like.
+- [Managing Photos](/guides/managing-photos) — uploading and assigning photos.
