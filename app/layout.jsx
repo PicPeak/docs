@@ -42,7 +42,7 @@ export default async function RootLayout({ children }) {
         <Layout
           navbar={navbar}
           pageMap={await getPageMap()}
-          docsRepositoryBase="https://github.com/PicPeak/picpeak"
+          docsRepositoryBase="https://github.com/PicPeak/docs/tree/main"
           footer={footer}
           sidebar={{ defaultMenuCollapseLevel: 1 }}
         >
