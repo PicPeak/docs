@@ -1,37 +1,101 @@
+import { Callout } from 'nextra/components'
+
 # Feedback
 
-PicPeak allows gallery guests to interact with photos through likes, ratings, and comments.
+Guests can react to photos in six ways: likes, favourites, star ratings, comments, emoji reactions, and colour labels. Each type is switched on per gallery, and new galleries inherit defaults you set once.
 
-## Features
+## Feedback types
 
-### Likes
+### Likes and favourites
 
-Guests can like individual photos. Like counts are visible to other guests and tracked in the admin analytics dashboard.
+A guest can like a photo and, separately, mark it as a favourite. Both are counted per guest, and you can cap how many of each one guest may set.
 
-### Ratings
+### Star ratings
 
-Photos can receive star ratings from guests. Aggregated ratings help photographers identify the most popular shots.
+One to five stars per guest per photo. A guest clears their rating by clicking the star they already gave, which removes it rather than storing a zero — so the photo's average and count recalculate, and it can drop back out of any "rated" filter.
 
 ### Comments
 
-Guests can leave comments on individual photos. Comments are visible to other guests and can be moderated by administrators.
+Free text per photo. Comments can be moderated before guests see them, and you can require a name and email first.
 
-## Admin moderation
+### Emoji reactions
 
-All feedback is accessible from the admin panel:
+<Callout type="info">Beta channel. See [Release Channels](/deployment/release-channels).</Callout>
 
-- View all comments, likes, and ratings per event.
-- Delete inappropriate comments.
-- Filter photos by feedback metrics (most liked, highest rated, most commented).
+Five fixed emoji: ❤️ 😂 😍 👏 🎉. The set is not configurable.
 
-## Filtering and export
+Each guest gets **one reaction per photo**. Clicking a different emoji switches theirs over, clicking the same one removes it. Guests see the tallies only if you have "Show feedback to guests" on.
 
-Photographers can filter gallery contents by feedback data:
+Reactions appear in the admin feedback list, on the guests table, in the activity feed, and in feedback exports. There is no reaction filter in the admin photo grid.
 
-- Sort by number of likes, average rating, or comment count.
-- Export filtered selections as ZIP.
-- Generate Capture One or Lightroom-compatible file lists for professional post-processing workflows.
+Enabled per event as **Emoji Reactions**; on by default for new galleries.
 
-## Configuration
+### Colour labels
 
-Feedback features can be enabled or disabled per event from the event settings in the admin panel.
+<Callout type="info">Beta channel. See [Release Channels](/deployment/release-channels).</Callout>
+
+Red, yellow, green, blue and purple — Lightroom's set, chosen deliberately so a client's picks travel back into your catalogue. See [Lightroom round-trip](/guides/lightroom-roundtrip).
+
+This is the proofing tool: instead of "I like this one", the client marks a verdict. One colour per guest per photo, changeable, and clearing is the same click again.
+
+Two keyboard schemes in the lightbox, set per event:
+
+| Scheme | Keys |
+|---|---|
+| **Colors only** | `1` green (first choice), `2` yellow (second choice), `3` red (rejected) |
+| **Lightroom** | `1`–`5` set the star rating, `6`–`9` set red / yellow / green / blue |
+
+Pressing the same key again clears, and `0` always clears.
+
+Guests filter by colour with chips above the grid. In the admin grid each photo shows a dot for its dominant colour — the one most guests chose, with ties broken in the order green, yellow, red, blue, purple.
+
+Enabled per event as **Color Labels**; **off by default**, unlike the other types.
+
+<Callout type="info">
+Admins have their own private marks, separate from the client's. When you export XMP you choose which set to write out: **Client selections** or **Your marks**.
+</Callout>
+
+## Who the feedback belongs to
+
+<Callout type="info">Beta channel. The `shared` mode below is beta-only.</Callout>
+
+Each gallery picks one identity mode, which decides how PicPeak attributes feedback:
+
+| Mode | What it means |
+|---|---|
+| **Simple feedback** | Anonymous and device-based. Everyone using the same device shares one set of selections. |
+| **Per-guest selections** | Each visitor enters a name first. You get per-person tracking and admin insight into who picked what. |
+| **One shared colour tag** | One colour per photo that everyone sees and anyone can change. Likes, ratings, comments and reactions stay per-visitor. |
+
+Pick **simple** for a casual gallery on one household device, **per-guest** when you need to know who chose what, and **shared** when a couple or an agency needs to agree a single verdict per photo rather than each person having their own.
+
+<Callout type="warning">
+Shared colour tags have no author, so the admin view cannot show who set one. Switching modes is non-destructive: existing per-visitor colour labels are kept but hidden while shared mode is on, and come back if you switch away.
+</Callout>
+
+## Filtering
+
+**Guests** get a feedback filter with Liked, Favorited, Rated and Commented. Several can be active at once and they combine as **OR** — a photo matching any selected chip shows. Colour-label chips are a separate group that narrows the result further, as does the people filter.
+
+Sorting offers date, date taken, name, size and rating, with ascending and descending as a separate control.
+
+**Admins** get a richer panel on the photo grid: has likes, has favourites, has comments, a rating threshold, colour labels, and your own marks — plus an explicit **Combine with** switch to run them as AND (the default) or OR.
+
+## Admin moderation and review
+
+From the admin panel you can read every comment, like, rating and reaction per event, delete comments, see totals per type, and review activity as it comes in.
+
+## Export
+
+Filtered selections export as a ZIP, or as file lists and XMP sidecars for Lightroom and Capture One. Exports carry ratings, colour labels and reactions, and the CSV includes both the client's colour label and your own.
+
+## Settings
+
+Per event, under the event's feedback settings: the master **Enable feedback** switch, the identity mode, which of the six types are on, the lightbox keyboard scheme, per-guest caps for likes and favourites, and privacy options — require name and email, moderate comments, show feedback to guests, and rate limiting.
+
+Globally, under **Settings → Events**, you set what new galleries start with. Ratings, likes, favourites, comments and reactions default on; colour labels default off. Changing a global default does not touch galleries that already exist.
+
+## Related
+
+- [Lightroom round-trip](/guides/lightroom-roundtrip) — getting client picks into your catalogue and finished edits back.
+- [Gallery Interface](/features/gallery-interface) — where guests meet these controls.

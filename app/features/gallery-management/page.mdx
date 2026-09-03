@@ -14,10 +14,28 @@ From the admin dashboard, create a new event by providing:
 - **Event name** --- displayed as the gallery title.
 - **Event date** --- the date of the event.
 - **Customer name and email** --- used for email notifications.
-- **Password** --- optional; when set, guests must enter it to view the gallery.
+- **Password** --- optional; when set, guests must enter it to view the gallery. The Information card can also **hide the logo on the password page** for a single event.
 - **Expiration** --- number of days until the gallery expires (default: 30 days).
 
 Each event receives a unique slug and a shareable gallery link.
+
+## Publishing
+
+When you publish, the dialog offers **Send the gallery email now**, ticked by default. Unticking it publishes quietly: the gallery goes live and nothing is sent — no gallery email, no customer notice, no WhatsApp message. Use it when you want the link live before the client hears about it, or when you will tell them yourself.
+
+Afterwards, **Send gallery email** on the event page sends the link whenever you are ready. You confirm the password first if the gallery has one. Re-sending to a gallery you already notified is allowed; drafts, expired and inactive events are not.
+
+## Previewing as a guest
+
+**View Gallery** on the event page opens the gallery the way guests see it, skipping the password even on protected galleries and working for drafts. It relies on your admin session, so the URL is useless to anyone who is not signed in as an admin.
+
+The preview does not create a guest session and stays out of your statistics: it is not counted in access logs, download counts, per-photo views, or the notification bell.
+
+## QR codes and printed cards
+
+The event's Share link card carries a QR code for the gallery, with a live preview and four downloads: **PNG**, **SVG**, **Table card (A6)** and **Poster (A4)**.
+
+The PDFs contain the event name, the QR code, a caption ("Scan to view & share your photos") and the share URL, and follow your admin interface language — they are available in English, German, Spanish, French, Dutch, Portuguese, Russian and Slovenian. No logo or branding is applied to them.
 
 ## Categories
 

@@ -1,0 +1,114 @@
+import { Callout } from 'nextra/components'
+
+# PicTransfer
+
+PicTransfer is the "just send them the files" tool. You bundle original files — photos picked from any of your events, plus anything you upload from your computer — into one transfer, and the recipient gets a link that downloads the lot. Optionally the same transfer opens a second, separate link the client can use to send files back to you.
+
+It is not a gallery. There are no thumbnails, no password page, no feedback, no watermarks. It is a delivery pipe for originals.
+
+<Callout type="info">
+Available on the **beta** channel and **off by default**. See [Release Channels](/deployment/release-channels).
+</Callout>
+
+## Turning it on
+
+**Settings → Features → PicTransfer.** The flag is off on a fresh install, and while it is off the admin area, the sidebar entry and both public links all return "not found" rather than an error — nothing is reachable.
+
+No new permission was added. PicTransfer reuses the event permissions you already manage:
+
+| Action | Permission |
+|---|---|
+| See the transfers list and open one | `events.view` |
+| Create, edit, delete a transfer, upload files to it | `events.edit` |
+| "Download all" from the admin side | `photos.download` |
+
+Admins who are not super-admins see only their own transfers, and can only pick photos from events they own.
+
+## Creating a transfer
+
+**PicTransfer** in the admin sidebar, then **New transfer**.
+
+| Field | Notes |
+|---|---|
+| **Title** | Shown to the recipient, and used as the ZIP filename. |
+| **Message (optional)** | Free text shown on the download page. |
+| **Link active for (days)** | Defaults to 14. |
+| **Max downloads (0 = unlimited)** | The link stops working once the cap is hit. |
+| **Also give the client an upload link** | Opens the return channel described below. |
+| **Files** | **Select images from other events** opens a picker you can browse event by event — one transfer can span several events. **Upload your own files** takes anything from your computer. |
+| **Delivery** | **Share a link** hands you the URL to send yourself, or **Send by email** collects recipient addresses and mails them the link. |
+
+Uploads from your own computer are capped at 50 files per request and 50 MB per file by default.
+
+The ZIP is built as the recipient downloads it, so there is no wait while a large transfer is packed. A transfer drawn from a single event produces a flat ZIP; one spanning several events is foldered by event name.
+
+## What the recipient sees
+
+The download link looks like `https://your-site/transfer/<64-character token>`.
+
+The page lists **filenames and sizes only**. No thumbnails and no image URLs are exposed, so nothing can be scraped from the page without downloading it. The recipient can take the whole ZIP or individual files.
+
+Three end states have their own screens: the link expired, the download cap was reached, or the link is unknown.
+
+<Callout type="warning">
+**There is no password.** The token in the URL is the entire secret, so treat the link like a password: anyone who has it can download the files. Send it over a channel you trust, set a download cap when the transfer is sensitive, and keep the active window short.
+</Callout>
+
+Downloads are logged. Each one records a timestamp and the caller's IP, and the transfer shows a running download count.
+
+## Getting files back from the client
+
+Tick the upload option when creating the transfer, or hit **Enable upload link** afterwards. You then get a **six-character code** and a matching link at `https://your-site/transfer-upload/<code>`. The code is meant to be readable over the phone, so it avoids the characters people confuse: no `0`, `O`, `1`, `I` or `L`.
+
+The client drags files onto the page. Up to 25 files per upload, the same 50 MB per-file cap, and only these types are accepted: JPEG, PNG, WebP, GIF, TIFF, PDF and ZIP.
+
+Their files appear in the transfer's **Client upload** section, where you download them individually.
+
+<Callout type="warning">
+A six-character code is much weaker than the download token. It is protected by rate limits and a per-IP lockout rather than by length, so enable the upload channel when you need it and leave it off when you do not.
+</Callout>
+
+## Expiry, retention and deletion
+
+A transfer runs on a two-stage clock:
+
+1. **Expiry.** At the end of its active window the link stops working. An hourly job disables it and emails your admins once to say so. You can put it back with **Re-activate**, which gives it another 14 days and restarts the retention clock.
+2. **Deletion.** A grace period after expiry — 7 days by default — the transfer's own files are deleted for real: the files you uploaded to it, the files the client uploaded, and the transfer record itself.
+
+<Callout type="info">
+**Photos in your events are never touched.** A transfer only ever references them, so expiring, deleting or cleaning up a transfer cannot remove a photo from its gallery. The reverse is not true: deleting a photo from its event removes it from any transfer that included it.
+</Callout>
+
+Turning the feature flag off immediately kills every existing recipient link, including active ones.
+
+## Emails
+
+| Template | Goes to | When |
+|---|---|---|
+| `transfer_ready` | the recipients you listed | on creation, when delivery is **Send by email** |
+| `transfer_link_expired` | every active admin | once, when a transfer expires |
+
+Both are editable under **Settings → Email → Templates** like any other template. Recipient delivery is best-effort: a mail that fails to send does not fail the transfer, and the recipient list is recorded either way, so check your email queue if someone says the link never arrived.
+
+## Defaults you can change
+
+These live in the database and are settable through the settings API, but have **no editor in the admin UI** today. The per-transfer fields in the create form are the intended way to control expiry and download caps.
+
+| Setting | Default |
+|---|---|
+| `transfer_default_expiry_days` | 14 |
+| `transfer_default_grace_days` | 7 |
+| `transfer_default_max_downloads` | 0 (unlimited) |
+| `transfer_max_upload_size_mb` | 50 |
+| `transfer_upload_allowed_mime` | JPEG, PNG, WebP, GIF, TIFF, PDF, ZIP |
+
+## Good to know
+
+- Transfer files are stored outside the publicly served upload directories, so they are only reachable through the token routes.
+- A source photo that has gone missing from disk is skipped silently while the ZIP streams, rather than failing the whole download.
+- Both public routes are rate limited per IP: 60 page views and 20 downloads per minute on the download side, 30 and 10 on the upload side.
+
+## Related
+
+- [Gallery Management](/features/gallery-management) — for sharing a gallery rather than a file drop.
+- [Customer Accounts](/features/customer-accounts) — for recurring clients who should log in and see every gallery assigned to them.

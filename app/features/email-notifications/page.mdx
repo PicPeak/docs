@@ -37,6 +37,25 @@ SMTP_USER=apikey
 SMTP_PASS=your-sendgrid-api-key
 ```
 
+## Webhook transport instead of SMTP
+
+PicPeak can hand every outgoing message to a webhook rather than sending it itself, which suits an n8n / Make / self-hosted relay setup.
+
+It is configured in the environment, not in the admin interface:
+
+| Variable | Required | Notes |
+|---|---|---|
+| `EMAIL_WEBHOOK_URL` | yes | `https://` only. Setting it switches the transport on. |
+| `EMAIL_WEBHOOK_SECRET` | yes | Without it the transport stays off and logs why. |
+| `EMAIL_FROM` | yes | A webhook-only install has no SMTP row to take the sender from. |
+| `EMAIL_WEBHOOK_ALLOW_PRIVATE_URLS` | no | Needed to target a private or container address, which is otherwise refused. |
+
+Each message is POSTed as JSON with `from`, `to`, `cc`, `subject`, `html`, `text` and `attachments`, where every attachment carries its filename, content type and base64 content. The raw body is signed with HMAC-SHA256 in the `X-PicPeak-Signature` header, the same scheme as [gallery webhooks](/features/webhooks), so verify it the same way. Custom headers are not configurable.
+
+Requests time out after 15 seconds, and any non-2xx response or transport error leaves the message in the queue to be retried. Attachments above 10 MB fail rather than being truncated. **Send test email** works and reports webhook-specific errors instead of SMTP advice.
+
+Per-account SMTP hosts configured under Settings → Mail accounts keep sending over their own SMTP.
+
 ## Multilingual templates
 
 Email templates support multiple languages. PicPeak includes English and German templates out of the box. The template language is selected based on event or system settings.

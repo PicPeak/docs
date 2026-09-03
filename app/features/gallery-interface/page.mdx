@@ -35,7 +35,9 @@ Opening any photo opens the lightbox — full-screen viewer with navigation, zoo
 **Zoom:**
 - Pinch-to-zoom on touch devices (2-finger gesture)
 - Click or use the +/- buttons on desktop
-- Zoom range: 1× to 3×
+- Mouse wheel over the photo zooms toward the cursor, no modifier key needed. Trackpad two-finger scroll works the same way. Videos are excluded.
+- **Double-click the photo** — or the "Fit to screen" button beside the zoom controls — snaps straight back to 100% and re-centres, rather than clicking out step by step.
+- Zoom range: 1× to 3×, with the current percentage shown in the lightbox
 
 **Toolbar (bottom):**
 - Photo counter (`3 / 12`)
@@ -48,6 +50,22 @@ Opening any photo opens the lightbox — full-screen viewer with navigation, zoo
 **iOS:**
 - Toolbar respects `env(safe-area-inset-bottom)` so buttons sit above the home indicator.
 - Close button respects `env(safe-area-inset-top)` so it stays clear of the notch / dynamic island.
+
+## Info banner
+
+A short message can sit at the top of the gallery, above the photos — arrival instructions, a print-ordering deadline, a thank-you.
+
+Set the site-wide default under **Settings → Branding → Gallery Info Banner**. Each event's Information card can then choose **Inherit global default**, **Custom override for this event**, or **Off (hide for this event)**.
+
+Markdown is supported for bold, italic, links, lists and headings. HTML is stripped. Guests cannot dismiss it, and an empty default renders nothing at all.
+
+This is separate from the promotional banner, which sits near the footer.
+
+## Image sizes
+
+Previews and grid thumbnails are generated in several sizes, and the browser picks one based on the viewport, the screen's pixel density and the photo's orientation. A phone no longer pulls a full-size preview for every swipe. Where the browser reports a slow connection or data saver, PicPeak drops a tier further.
+
+None of this is configurable and there is nothing to switch on. Worth knowing for storage planning: each size that gets requested is cached on disk alongside the original, so preview storage grows beyond the originals themselves.
 
 ## Feedback
 

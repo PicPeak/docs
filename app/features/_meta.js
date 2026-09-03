@@ -3,6 +3,8 @@ export default {
   'gallery-management': 'Gallery Management',
   'gallery-interface': 'Gallery Interface (Guest View)',
   'photo-categories': 'Photo Categories & Folders',
+  'reveal-mode': 'Reveal Mode & Download Sizes',
+  pictransfer: 'PicTransfer',
   'live-slideshow': 'Live Slideshow',
   'draft-mode': 'Draft Mode',
   'themes-branding': 'Themes & Branding',

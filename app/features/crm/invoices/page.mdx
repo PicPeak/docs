@@ -149,6 +149,16 @@ The code is **snapshotted onto the invoice** (migration 130): `vat_code_snapshot
 
 When the Accounting module is off, the editor falls back to the legacy single-rate input (`vat_rate` on the invoice) and the code column is empty in any export.
 
+## VAT / free-text note
+
+**Settings → CRM → Invoices → VAT / free-text note on invoices** prints one free-text line directly under the VAT row on every invoice PDF. Leave it empty to hide it.
+
+Nothing about it is jurisdiction-specific — you type the exact wording you need, whether that is the Austrian Kleinunternehmer clause, the German § 19 equivalent, a reverse-charge note, or something else. The totals block grows to fit, so a long note cannot collide with the figures.
+
+<Callout type="warning">
+Confirm the exact wording with your tax advisor. PicPeak prints what you type and does not check it against any jurisdiction's rules.
+</Callout>
+
 ## Per-customer feature override
 
 `customer_accounts.feature_bills` toggle on the customer detail page hides the bills tab for that customer when off. Gating is master AND per-customer — see [Customer accounts → Per-customer CRM toggles](/features/customer-accounts#per-customer-crm-toggles).
