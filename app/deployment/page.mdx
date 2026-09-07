@@ -17,7 +17,8 @@ The `picpeak-backend` container runs a single Node process that hosts the HTTP A
 | Worker | Trigger | What it does |
 |---|---|---|
 | **Storage backend** (`initStorage`) | Startup | Validates `STORAGE_BACKEND` config; HEADs the bucket / `stat`s the directory. Refuses to boot on misconfig. |
-| **File watcher** (chokidar) | Startup; local mode only | Auto-imports any photo dropped into `events/active/<slug>/`. Disabled when `STORAGE_BACKEND=s3`. |
+| **Managed file watcher** (chokidar) | Startup; local mode only | Auto-imports any photo dropped into `events/active/<slug>/`. Disabled when `STORAGE_BACKEND=s3`. |
+| **External-folder watcher** | Startup; opt-in per event | Imports new files from a reference event’s folder after they settle, with a 15-minute fallback scan. Keeps gallery records when source files disappear. Works with local or S3 storage; see [External Media](/features/external-media#watch-a-folder-for-new-files). |
 | **S3 auto-importer** | Startup; opt-in via `STORAGE_AUTO_IMPORT=true` | Polls every active event's S3 prefix on a slow cadence (default 5 min). Imports objects seen for two consecutive polls. See [Storage Backends](./features/storage-backends). |
 | **Email queue processor** | Every 60s | Sends queued notifications (event creation, expiration warnings, archive complete). |
 | **Expiration checker** | Every hour (cron) | Marks galleries inactive past their `expires_at`, then archives them. Fires `event.expired` then `event.archived` webhooks. |

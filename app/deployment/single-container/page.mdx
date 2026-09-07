@@ -100,6 +100,10 @@ Branding, SMTP, storage, and expiry rules are all set in **Admin → Settings** 
 `BRAND_TITLE` and `BRAND_DESCRIPTION` are rendered into the page at container start, so changing them means restarting the container — no rebuild needed.
 </Callout>
 
+## External photo libraries
+
+The AIO container can import from a separate read-only library mount and automatically watch selected event folders. Keep `/data` for PicPeak's own data, mount the library at `/external-media`, and set `EXTERNAL_MEDIA_ROOT=/external-media`. The same setup works through a NAS container UI. See [External Media → All-in-one and NAS container UIs](/features/external-media#all-in-one-and-nas-container-uis) for configuration and the per-event opt-in.
+
 ## Using an external PostgreSQL
 
 The same image talks to a real PostgreSQL if you would rather not use SQLite. Point it at the server and switch the engine:

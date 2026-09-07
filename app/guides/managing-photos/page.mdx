@@ -46,7 +46,7 @@ Generate Capture One or Lightroom-compatible file lists from filtered selections
 
 ## Adding photos via file system
 
-If you prefer to copy photos directly to the server instead of uploading through the admin UI, PicPeak has a built-in file watcher that detects new files.
+For managed galleries using local storage, PicPeak has a built-in file watcher that detects photos copied directly into the event's storage folder.
 
 import { Callout } from 'nextra/components'
 
@@ -70,6 +70,10 @@ The file watcher will automatically:
 Supported formats: `.jpg`, `.jpeg`, `.png`, `.webp`
 
 When files are deleted from the folder, the file watcher removes the corresponding database records.
+
+### Watching an external library
+
+For photos kept on a NAS or in an existing library, use **Reference external folder** and the per-event **Watch folder for new files** checkbox. The external watcher imports new photos without copying originals. Removing a source file keeps the gallery record, and photos deliberately deleted in PicPeak stay excluded from later automatic scans. See [External Media → Watch a folder](/features/external-media#watch-a-folder-for-new-files) for setup, supported formats, permissions and network-share polling.
 
 ## Storage
 

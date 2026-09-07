@@ -2,44 +2,129 @@ import { Callout } from 'nextra/components'
 
 # External Media (Reference Mode)
 
-Reference mode lets PicPeak browse and import photos from a read-only external folder without copying the original files.
+Reference mode lets PicPeak import photos from an existing folder, such as a studio library or NAS share, without copying the originals into PicPeak's storage. You can import a batch manually or let an event watch its folder for new photos.
 
-## How it works
-
-Point PicPeak at an existing directory on the host filesystem using the `EXTERNAL_MEDIA_ROOT` environment variable. PicPeak indexes the folder structure and generates thumbnails on demand, but the original files stay in place.
+PicPeak stores references to the originals and generates thumbnails for the gallery. The original files stay in place and must remain readable by the backend. Back up the source library separately.
 
 ## Configuration
 
-Set the external media root in your `.env`:
+`EXTERNAL_MEDIA_ROOT` is the library path **as seen by the backend process**. In Docker, this is the container path, not the host path. The folder picker only browses within that root.
 
-```env
-EXTERNAL_MEDIA_ROOT=/path/to/your/photo-library
-```
+### Docker Compose
 
-In Docker, mount the directory into the container:
+Add an override such as `docker-compose.external-media.yml` to your existing stack:
 
 ```yaml
-# docker-compose.yml or docker-compose.override.yml
 services:
   backend:
+    environment:
+      EXTERNAL_MEDIA_ROOT: /external-media
     volumes:
-      - /path/to/your/photo-library:/app/storage/external-media:ro
+      - /path/to/your/photo-library:/external-media:ro
 ```
 
+Replace the host path on the left with your library. Apply the override with the same base Compose file you normally use; for the production stack:
+
+```bash
+docker compose -f docker-compose.production.yml -f docker-compose.external-media.yml up -d backend
+```
+
+Keep including the override when you recreate or update the stack. See [Docker Configuration](/deployment/docker).
+
+### All-in-one and NAS container UIs
+
+On the [all-in-one image](/deployment/single-container), add the same read-only library mount and environment variable to the existing container configuration:
+
+```bash
+# Additional options for your docker run command
+-e EXTERNAL_MEDIA_ROOT=/external-media \
+-v /path/to/your/photo-library:/external-media:ro
+```
+
+In a NAS container UI, add `/external-media` as the container-side volume path, enable read-only access for that mount, and set `EXTERNAL_MEDIA_ROOT` to `/external-media`. Keep the existing `/data` volume for PicPeak's database, thumbnails and other managed data. The external library is a separate mount.
+
 <Callout>
-Mount the volume as read-only (`:ro`) to prevent PicPeak from modifying your original files.
+The backend's runtime user needs read access to files and permission to traverse the library directories. Mounting the library read-only (`:ro`) lets PicPeak import references while preventing it from modifying your originals. For a native installation, set `EXTERNAL_MEDIA_ROOT` to the library's path on that host.
 </Callout>
 
-## Importing photos
+Reference folders remain local filesystem paths even when `STORAGE_BACKEND=s3`. A mounted NAS library can therefore be watched on an S3-backed installation too; this is separate from the [S3 prefix walker](/features/storage-backends#s3-auto-import-drop-folder-workflow).
 
-From the admin panel, browse the external media library and select photos to import into an event. PicPeak creates references to the original files and generates optimized thumbnails for the gallery.
+## Importing photos manually
 
-## Use cases
+1. Create or open an event and edit its information.
+2. Set **Source Mode** to **Reference external folder**, choose an **External Folder**, and save.
+3. Open the event's **Photos** tab and select **Import from External Folder**.
+4. Confirm the folder and choose **Import from selected folder**.
 
-- Large existing photo libraries that you do not want to duplicate.
-- Network-attached storage (NAS) where originals are managed by other software.
-- Shared drives in a studio environment.
+The import includes subfolders and accepts `.jpg`, `.jpeg`, `.png` and `.webp` files. Hidden files and folders are skipped. Files already imported into the event are skipped on later passes; the existing duplicate-name rules also apply, so use distinct filenames within each photo type.
 
-## Folder structure
+Wait until your copy has finished before starting a manual import. Automatic watching adds the settling checks described below.
 
-PicPeak respects the folder hierarchy of the external directory. Subfolders appear as navigable sections in the import interface.
+## Watch a folder for new files
+
+<Callout type="info">
+Automatic external-folder watching requires a build that includes [PicPeak PR #1345](https://github.com/PicPeak/picpeak/pull/1345). Earlier builds support the manual import above but do not have the watch checkbox.
+</Callout>
+
+Watching is **off for each event by default**. To enable it:
+
+1. Edit the event's information and select **Reference external folder** under **Source Mode**.
+2. Choose the folder you want this event to follow.
+3. Enable **Watch folder for new files**, beneath the folder picker, and save.
+
+<img src="/images/external-media/watch-checkbox.png" alt="Event edit form showing reference-folder source mode, the folder picker and Watch folder for new files enabled" width="452" height="418" style={{ maxWidth: '100%', height: 'auto', marginTop: '1rem', marginBottom: '1rem' }} />
+
+The saved view shows **Folder is watched — new files are imported automatically.**
+
+<img src="/images/external-media/watched-status.png" alt="Event information showing the external folder and Folder is watched status" width="520" height="96" style={{ maxWidth: '100%', height: 'auto', marginTop: '1rem', marginBottom: '1rem' }} />
+
+You need permission to edit the event (`events.edit`) and upload photos (`photos.upload`) to enable watching or change the folder while watching remains enabled. The screenshots show an admin with those permissions. Without upload permission, an unchecked watch box is disabled; an event editor can still turn watching off or edit unrelated event details. See [Roles & Permissions](/features/multi-admin).
+
+### When new photos appear
+
+- **After enabling or restarting:** the backend checks which events should be watched about once a minute. When it starts watching a folder, it immediately begins an import pass for files already there.
+- **After copying new files:** filesystem notifications trigger a scan after a 10-second quiet period by default. Files must also settle for 5 seconds; automatic passes defer files that were recently modified or are still changing and retry them later. A large batch or slow share takes longer than these delays alone.
+- **If the share sends no notifications:** a full scan runs every 15 minutes by default. This catches files copied to NFS/SMB shares by another machine. For more frequent detection, enable [polling](#nas-shares-and-polling).
+
+Each pass checks the selected folder and its subfolders, imports new photos and generates thumbnails. If face recognition is enabled, new imports enter the face-processing queue. The gallery does not need to be open for this to happen.
+
+The manual import remains available while watching is on. Only one import for an event runs at a time, including across backend replicas; if another pass is busy, wait for it to finish before using the button again.
+
+### Deletions and stopping the watcher
+
+Removing a file from the source folder **does not remove its gallery record**. This prevents a disconnected mount or folder reorganisation from silently deleting gallery entries. A missing original may still be unavailable for viewing or download; restore the file or mount, or deliberately remove the photo in PicPeak.
+
+Photos deliberately deleted **in PicPeak** are excluded from subsequent automatic imports for that event and source path, even if the file is still on the share. A manual **Import from selected folder** can bring those photos back; it clears the exclusion for files it imports. Turning watching off and on does not reset those exclusions.
+
+To stop watching an event, clear **Watch folder for new files** and save. Existing photos remain in the gallery. Switching to **Managed** source mode clears the watch setting; archived or inactive events are not watched.
+
+For photos replaced through Lightroom or PicPeak, later scans preserve the replacement rather than adding the referenced original again. See [Lightroom round-trip → External media](/guides/lightroom-roundtrip#if-your-gallery-reads-from-a-nas-or-watched-folder).
+
+## NAS shares and polling
+
+Start with the defaults. The 15-minute fallback scan works even when a NAS does not forward filesystem notifications. If you need new files detected sooner on such a share, set:
+
+```env
+EXTERNAL_MEDIA_WATCH_POLLING=true
+EXTERNAL_MEDIA_WATCH_POLL_INTERVAL_MS=5000
+```
+
+Polling checks file metadata repeatedly and creates more work for large libraries or slow shares. Enable watching only for events still receiving photos. Keep the fallback scan enabled unless you have verified that your mount reliably detects new files.
+
+The updated bundled Compose files forward the standard watcher settings from `.env`. In a custom Compose file, put them in the backend service's `environment` block (or an explicitly loaded `env_file`); a project `.env` alone is not automatically passed into a container. For AIO, set the variables on the PicPeak container. Recreate the container after changing environment settings; changing the per-event checkbox only needs a save.
+
+For all options and defaults, see [Environment Variables → External-folder watching](/deployment/environment-variables#external-folder-watching).
+
+## Troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| The checkbox is missing | Use a build containing PR #1345, edit the event and select **Reference external folder**. |
+| The unchecked checkbox is disabled | The role needs `photos.upload` as well as event-edit permission. |
+| The folder picker is empty or the directory cannot be read | Check the host-to-container mount, the container-side `EXTERNAL_MEDIA_ROOT`, and the backend user's read/traverse permissions. |
+| “Folder is watched” is shown, but no photos arrive | That line reflects the saved setting, not a live health check. Confirm the event is active and not archived, the mount is readable, and the global `EXTERNAL_MEDIA_WATCH` is not `false`. Allow for the one-minute configuration check, file settling and, on a share without notifications, the fallback scan. |
+| New files arrive only every 15 minutes | The share probably does not provide notifications for remote writes. Enable polling if that delay is too long. |
+| One file never appears | Check the supported extension, duplicate filename, whether the copy is still changing, and whether the photo was deliberately deleted in PicPeak. Use manual import only if you intend to restore excluded photos. |
+| The manual import reports that another import is running | A background pass or another admin holds the event's import slot. Try again after it finishes. |
+
+Look for `[externalMediaWatcher]` in the backend logs. Missing folders are retried during the periodic configuration check. Successful automatic passes that add photos also appear in the activity log as `external-media-watcher`; scans with no new photos do not add activity entries.
