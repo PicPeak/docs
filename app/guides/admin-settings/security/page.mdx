@@ -57,6 +57,26 @@ Optional. When enabled, Google reCAPTCHA v3 is rendered on the admin login form 
 
 The score threshold is hard-coded at 0.5 in the backend; below that the login is rejected with a generic "could not verify" error.
 
+## Gallery passwords
+
+Gallery passwords and client PINs are stored as bcrypt hashes, so PicPeak cannot show you a password later. When a client loses it, the only way out has been **Reset gallery password**, which invalidates what the client already has.
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Keep gallery passwords recoverable** | off | Stores an encrypted copy of each gallery password and client PIN next to the hash. |
+
+While it is on:
+
+- **Create**, **Publish**, **Edit**, **Reset gallery password** and the v1 API keep the copy in sync with the hash. Turning a gallery's password requirement off deletes its copy.
+- The event page shows **Show password** with copy buttons for the gallery password and, if client access is on, the client PIN. Every reveal is written to the activity log as `gallery_password_viewed`.
+- **Resend creation email** sends the stored password instead of the "set at creation" placeholder, so the client receives what already works.
+
+Switching it off deletes every stored copy. Only passwords set while it is on are kept, so an existing gallery shows "No stored password" until its password is reset once.
+
+The copy is AES-256-GCM encrypted with a key derived from `GALLERY_PASSWORD_ENCRYPTION_KEY`, or from `JWT_SECRET` when that variable is not set. Anyone with the database **and** the server configuration, or with admin access to the event, can read the passwords. Changing the key makes the stored copies unreadable; switch the setting off and on again to start over. Login and hash verification never touch the copy.
+
+This is available on the beta channel from the build that ships PicPeak/picpeak#1271's fix. On earlier builds the sent-mail archive under Messages still shows gallery passwords in clear text; from the same build on they are masked there.
+
 ## Where the cache lives
 
 Login middleware caches the security config in process memory for performance. Saving in this tab calls `resetSecurityConfigCache()` so changes take effect on the next request without a restart.
