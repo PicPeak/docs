@@ -77,6 +77,64 @@ The copy is AES-256-GCM encrypted with a key derived from `GALLERY_PASSWORD_ENCR
 
 This is available on the beta channel from the build that ships PicPeak/picpeak#1271's fix. On earlier builds the sent-mail archive under Messages still shows gallery passwords in clear text; from the same build on they are masked there.
 
+## API rate limiting
+
+Independent of the login rules above, PicPeak limits how many API requests a single client IP may make. It exists to blunt scraping and credential stuffing, and it is worth knowing about because when it triggers it does **not** look like a limit: an affected visitor sees a gallery that stops loading, with no error anywhere they can see.
+
+The **API rate limiting** card on this tab shows the values in force — the defaults below apply until you save something else — and saves with the tab's **Save Security Settings** button. Beta builds from PicPeak/picpeak#1338 onward have the card; older builds have only the API described under [Changing the limits without the card](#changing-the-limits-without-the-card).
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Enable the API rate limiter** | on | Master toggle. |
+| **Window (minutes)** | `15` | Sliding window per client IP. 1–60. |
+| **Max requests per window** | `300` | Budget for everything under `/api/` that is not exempt (see below). Exceeding it returns `429 Too Many Requests` with a `Retry-After` header for the rest of the window. 10–10000. |
+| **Failed logins per window** | `5` | Separate, much smaller budget for admin login and gallery password verification. Only *failed* attempts count. 1–100. |
+| **Do not count authenticated requests** | on | Requests carrying a valid **admin** session do not count. Since `v3.127.0-beta.0`, a verified gallery viewer's own image requests (thumbnail, preview, hero, photo) do not count either. |
+| **Count public endpoints only** | off | When on, only `/api/public/*` and `/api/gallery/*` are counted. |
+
+Saving applies at once: the limiter's settings cache is cleared and the limiters are rebuilt with the new window, which also resets the current counters.
+
+<Callout type="warning">
+**The unit is the IP address — not the person, and not the gallery.** A photographer's mental model is "one client, one gallery"; the budget applies to neither. Several people often share one address: a household, an office, a venue's Wi-Fi and a mobile carrier's NAT all present as a single IP, so a team of four reviewing a gallery from the same office draws on one budget of 300. Before `v3.127.0-beta.0` every thumbnail counted, and a 546-photo grid exhausted the budget for a single viewer mid-scroll — the tiles that came back `429` rendered blank, and a refresh hit the limit again with the photo list. Since that version image requests of a verified viewer are exempt; a full gallery session then costs a few dozen counted requests, not hundreds.
+</Callout>
+
+### What counts and what does not
+
+Counted: every request to `/api/` from a client without an admin session, including the gallery photo list, gallery info, password verification, feedback and downloads. Not counted: `/health`, the transfer upload endpoints (which have their own per-minute limits), admin sessions, and — from `v3.127.0-beta.0` — image requests carrying a valid gallery token for that gallery.
+
+These are the general limits. The **per-image** limits on the [Image Security](/guides/admin-settings/image-security#rate-limiting) tab (requests per minute / 5 minutes / hour) are a separate mechanism for the secure-image routes and feed the suspicious-activity counter.
+
+### Behind a reverse proxy
+
+The limiter keys on the client IP Express reports. Behind a proxy that is only correct when the proxy forwards `X-Forwarded-For` and PicPeak trusts that proxy. The default `TRUST_PROXY` (`loopback, linklocal, uniquelocal`) covers Docker networks and private-network proxies; a proxy with a public address needs an explicit `TRUST_PROXY` entry, otherwise **every visitor shares the proxy's single budget**. See [Reverse Proxy → Client IP](/deployment/reverse-proxy#client-ip-rate-limiting-and-trust_proxy).
+
+### Recognising a hit
+
+The backend logs every rejected request as a warning:
+
+```
+Rate limit exceeded   ip=… path=/api/gallery/<slug>/thumbnail/123 method=GET
+```
+
+```bash
+docker compose logs backend | grep -c "Rate limit exceeded"
+```
+
+A non-zero count while a visitor reports missing images is the limiter. On builds before `v3.127.0-beta.0` the browser shows nothing: a `429` is a completed request, not a failed one, so it does not appear in the console, and the gallery rendered the missing tile as an empty box.
+
+### Changing the limits without the card
+
+On builds before the card existed, the same six settings can be written through the admin API:
+
+```bash
+curl -X PUT "$PICPEAK_URL/api/admin/settings/security/rate-limit" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"rate_limit_enabled":true,"rate_limit_window_minutes":15,"rate_limit_max_requests":1000,
+       "rate_limit_auth_max_requests":5,"rate_limit_skip_authenticated":true,"rate_limit_public_endpoints_only":false}'
+```
+
+All six fields are required by that route. On builds before PicPeak/picpeak#1338 a changed **window** only takes effect after a backend restart (the other values apply within a minute); from that build on the route rebuilds the limiters and everything applies at once. If you would rather edit the database, the keys are the same six names in `app_settings`, JSON-encoded values.
+
 ## Where the cache lives
 
 Login middleware caches the security config in process memory for performance. Saving in this tab calls `resetSecurityConfigCache()` so changes take effect on the next request without a restart.
