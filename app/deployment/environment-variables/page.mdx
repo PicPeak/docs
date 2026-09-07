@@ -15,6 +15,7 @@ Avoid `$` characters in passwords. Docker Compose interprets `$` as variable sub
 | `NODE_ENV` | No | `production` | Environment mode |
 | `JWT_SECRET` | **Yes** | --- | Authentication secret. Generate with `openssl rand -base64 64` |
 | `TZ` | No | `UTC` | Timezone |
+| `TRUST_PROXY` | No | `loopback, linklocal, uniquelocal` | Which upstream proxies PicPeak trusts for `X-Forwarded-For` / `X-Forwarded-Proto`. Accepts any Express `trust proxy` value: a number of hops, `loopback`, `linklocal`, `uniquelocal`, a CIDR, a comma list, or `true`. The default covers Docker networks and private-network proxies. A proxy with a public address needs an explicit entry, otherwise per-IP features such as the [API rate limiter](/guides/admin-settings/security#api-rate-limiting) see the proxy's address for every visitor. |
 
 ## Authentication cookies
 
