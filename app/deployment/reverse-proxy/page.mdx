@@ -155,6 +155,21 @@ Caddy automatically provisions and renews SSL certificates via Let's Encrypt.
 </Tabs.Tab>
 </Tabs>
 
+## Client IP, rate limiting and `TRUST_PROXY`
+
+PicPeak keys its [API rate limiter](/guides/admin-settings/security#api-rate-limiting) and its login lockout on the client IP. Behind a proxy the backend only sees the real client address when two things hold: the proxy forwards `X-Forwarded-For` (all configurations above do), and PicPeak trusts that proxy.
+
+Express' `trust proxy` is preset to `loopback, linklocal, uniquelocal`, which covers proxies on Docker networks and private ranges. If your proxy reaches the backend from a **public** address — a separate proxy host, a cloud load balancer, a tunnel — add it via `TRUST_PROXY`:
+
+```bash
+# .env — a CIDR, a comma list, a hop count, or `true` behind a fully controlled chain
+TRUST_PROXY=loopback, linklocal, uniquelocal, 203.0.113.0/24
+```
+
+Without it every visitor presents as the proxy's address, shares one rate-limit budget of 300 requests per 15 minutes, and a busy gallery can start returning `429` for everyone at once. Do not set `TRUST_PROXY=true` unless every hop in front of PicPeak is yours: a trusted-all setting lets any client spoof its address through `X-Forwarded-For`.
+
+See [Environment Variables → Core](/deployment/environment-variables#core).
+
 ## Mixed HTTPS + LAN HTTP access
 
 Some self-hosted setups want two working entry points to the same PicPeak instance:
