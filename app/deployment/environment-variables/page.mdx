@@ -122,7 +122,25 @@ COOKIE_SECURE=auto
 | `APP_STORAGE` | No | `./storage` | Host path for storage |
 | `APP_DATA` | No | `./data` | Host path for application data |
 | `LOGS` | No | `./logs` | Host path for logs |
-| `EXTERNAL_MEDIA_ROOT` | No | `/app/storage/external-media` | Path to external photo library |
+| `EXTERNAL_MEDIA_ROOT` | No | Auto-detected or set by Compose | Library path visible to the backend process. In Docker, set this to the container-side path of the read-only mount; see [External Media configuration](/features/external-media#configuration). |
+
+## External-folder watching
+
+Available in builds containing [PicPeak PR #1345](https://github.com/PicPeak/picpeak/pull/1345). These settings control automatic imports for reference-mode events. Each event must also opt in using **Watch folder for new files**; the global default does not enable watching for every event. See [External Media](/features/external-media#watch-a-folder-for-new-files) for setup, permissions and deletion behaviour.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `EXTERNAL_MEDIA_WATCH` | No | `true` | Global service switch. Set `false` to stop automatic external imports for all events; saved per-event watch settings remain unchanged. |
+| `EXTERNAL_MEDIA_WATCH_POLLING` | No | `false` | Use repeated filesystem metadata checks instead of notifications. Useful for NFS/SMB shares that do not report writes from other machines. |
+| `EXTERNAL_MEDIA_WATCH_POLL_INTERVAL_MS` | No | `5000` | File polling interval when polling is enabled (5 seconds). |
+| `EXTERNAL_MEDIA_WATCH_SWEEP_INTERVAL_MS` | No | `900000` | Full scan of watched folders every 15 minutes as a fallback. `0` disables this scan. |
+| `EXTERNAL_MEDIA_WATCH_DEBOUNCE_MS` | No | `10000` | Quiet period after the last detected new file before starting an import (10 seconds). |
+| `EXTERNAL_MEDIA_WATCH_STABILITY_MS` | No | `5000` | Settling interval for new files (5 seconds). Automatic passes defer recently modified or changing files and retry later. |
+| `EXTERNAL_MEDIA_WATCH_RECONCILE_INTERVAL_MS` | No | `60000` | Advanced: how often the backend re-reads event watch settings (1 minute). Add this explicitly to Compose's backend `environment` block if overriding it. |
+
+All interval values are in milliseconds. The updated bundled Compose files forward the first six options from `.env`; they do not forward `EXTERNAL_MEDIA_WATCH_RECONCILE_INTERVAL_MS`. Custom Compose definitions must pass the desired variables through `environment` or `env_file`. On AIO, set them on the PicPeak container. Recreate the container after changes; for a native process, restart the backend with the new environment.
+
+The watcher uses the local `EXTERNAL_MEDIA_ROOT` with both local and S3 storage backends. These settings do not configure the managed-storage file watcher or the S3 prefix walker.
 
 ## Docker user mapping
 
