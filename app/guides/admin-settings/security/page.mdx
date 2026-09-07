@@ -75,7 +75,7 @@ The **API rate limiting** card on this tab shows the values in force — the def
 Saving applies at once: the limiter's settings cache is cleared and the limiters are rebuilt with the new window, which also resets the current counters.
 
 <Callout type="warning">
-**The unit is the IP address, and several people often share one.** A household, an office, a venue's Wi-Fi and a mobile carrier's NAT all present as a single IP, so a team of four reviewing a gallery from the same office draws on one budget of 300. Before `v3.127.0-beta.0` every thumbnail counted, and a 546-photo grid exhausted the budget for a single viewer mid-scroll — the tiles that came back `429` rendered blank, and a refresh hit the limit again with the photo list. Since that version image requests of a verified viewer are exempt; a full gallery session then costs a few dozen counted requests, not hundreds.
+**The unit is the IP address — not the person, and not the gallery.** A photographer's mental model is "one client, one gallery"; the budget applies to neither. Several people often share one address: a household, an office, a venue's Wi-Fi and a mobile carrier's NAT all present as a single IP, so a team of four reviewing a gallery from the same office draws on one budget of 300. Before `v3.127.0-beta.0` every thumbnail counted, and a 546-photo grid exhausted the budget for a single viewer mid-scroll — the tiles that came back `429` rendered blank, and a refresh hit the limit again with the photo list. Since that version image requests of a verified viewer are exempt; a full gallery session then costs a few dozen counted requests, not hundreds.
 </Callout>
 
 ### What counts and what does not
