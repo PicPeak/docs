@@ -1,0 +1,93 @@
+import { Callout } from 'nextra/components'
+
+# Repository and Image Move (June 2026)
+
+PicPeak moved from the maintainer's personal GitHub account to its own organization in June 2026. The software did not change. What changed is where the code lives and, more importantly, where the Docker images are pulled from.
+
+| | Before | After |
+|---|---|---|
+| Repository URL | `github.com/the-luap/picpeak` | `github.com/PicPeak/picpeak` |
+| Docker images | `ghcr.io/the-luap/picpeak/{backend,frontend}` | `ghcr.io/picpeak/picpeak/{backend,frontend}` |
+| Active development branch | `beta` | `main` |
+| Stable channel branch | `main` | `stable` |
+
+<Callout type="warning">
+The repository URL redirects. The image paths do **not**. If your `docker-compose.yml` still pulls from `ghcr.io/the-luap/...`, you are on a retired path and will not receive updates.
+</Callout>
+
+## Symptoms
+
+You are affected if you see one of these.
+
+**Updates never arrive.** PicPeak keeps announcing that a new version is available, `docker compose pull` succeeds, and after `docker compose up -d` you are on the same version as before. The old path still serves, but its tags stopped moving on 27 May 2026, so every pull returns the same image. Nothing reports an error.
+
+Check the image you are running:
+
+```bash
+docker image inspect ghcr.io/the-luap/picpeak/backend:latest \
+  --format '{{.Created}} {{index .Config.Labels "org.opencontainers.image.version"}}'
+```
+
+A `Created` date of `2026-05-27`, or a version of `main` rather than a `v3.x.y` tag, means you are pulling the retired path.
+
+**Pull fails on the old path.** Depending on registry state you may instead get a hard failure:
+
+```
+Error response from daemon: Head "https://ghcr.io/v2/the-luap/picpeak/backend/manifests/stable": denied
+```
+
+or a `404 Not Found` / `manifest unknown` for the same URL. Same cause, same fix.
+
+**`unauthorized` on the new path.** In the first days after the move the new packages were accidentally published as private, so pulls failed with:
+
+```
+Error Head "https://ghcr.io/v2/picpeak/picpeak/backend/manifests/main": unauthorized
+```
+
+Both packages have been public since 30 June 2026. If you still see this, the usual cause is a stale registry login on the Docker host: run `docker logout ghcr.io` and pull again. Anonymous pulls are all the images need.
+
+## The fix
+
+Edit the two `image:` lines in your `docker-compose.yml`:
+
+```diff
+-    image: ghcr.io/the-luap/picpeak/backend:${PICPEAK_CHANNEL:-stable}
++    image: ghcr.io/picpeak/picpeak/backend:${PICPEAK_CHANNEL:-stable}
+-    image: ghcr.io/the-luap/picpeak/frontend:${PICPEAK_CHANNEL:-stable}
++    image: ghcr.io/picpeak/picpeak/frontend:${PICPEAK_CHANNEL:-stable}
+```
+
+Then:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+That is the whole migration. No data migration, no configuration changes, no database changes. Your volumes, `.env`, and database are untouched.
+
+If you run the [single-container image](/deployment/single-container), the path is `ghcr.io/picpeak/picpeak/aio`; it was only ever published under the new organization, so an existing single-container install is not affected.
+
+## What keeps working without changes
+
+GitHub redirects the old repository URL indefinitely:
+
+- Browser links to `github.com/the-luap/picpeak/...` (issues, pull requests, files)
+- `git clone` and `git fetch` against the old URL
+- GitHub API calls to `api.github.com/repos/the-luap/picpeak/...`
+
+Updating these to `PicPeak/picpeak` is tidy but not required.
+
+## For contributors
+
+The branches were renamed to the usual convention: `main` is active development, `stable` is the curated production channel.
+
+- Feature and bugfix pull requests target `main`.
+- A fix that must reach current stable users gets a separate, small pull request against `stable`.
+- Forks created before the move should be re-based on `main`; the old instruction to fork from `beta` no longer applies.
+
+See [Release Channels](/deployment/release-channels) for how the branches map to Docker tags.
+
+## Still stuck?
+
+Open an issue at [github.com/PicPeak/picpeak/issues](https://github.com/PicPeak/picpeak/issues) with the exact error and the command that produced it. The original announcement with the discussion from the migration window is [issue 690](https://github.com/PicPeak/picpeak/issues/690).
