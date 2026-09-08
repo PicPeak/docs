@@ -60,3 +60,9 @@ The middleware validates that the token type matches the endpoint requirements.
 ## Token expiration
 
 Admin tokens expire after 24 hours. Log in again to get a fresh token.
+
+## Logout and revocation
+
+In builds containing [PicPeak PR #1359](https://github.com/PicPeak/picpeak/pull/1359), admin, gallery and customer logout also handle signed JWTs without an `exp` claim: their revocation records are retained permanently and are not removed by expiry cleanup.
+
+If revocation cannot be persisted, logout returns **HTTP 500** while still clearing the authentication cookies. Cookie removal alone does not confirm server-side revocation; a copy of the token may remain usable. API clients should check the response status and report the failure, and operators should check backend logs and database availability.
