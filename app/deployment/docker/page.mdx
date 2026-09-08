@@ -107,6 +107,10 @@ docker compose down
 docker compose up -d
 ```
 
+### Stopping and restarting
+
+In builds containing [PicPeak PR #1359](https://github.com/PicPeak/picpeak/pull/1359), photo and face workers interrupt idle polling and retry waits immediately on shutdown. Database operations and photo processing already in flight drain within the backend's shutdown deadline; reaching that deadline forces an exit, so active jobs are not guaranteed to finish. The existing [`SHUTDOWN_TIMEOUT_MS`](/deployment/environment-variables#core) setting defaults to `8000` (8 seconds). If you increase it, also set Docker Compose's `stop_grace_period` longer than the backend deadline so Docker does not kill the container first.
+
 ## Database migrations
 
 Migrations run automatically on container startup via the backend's `wait-for-db.sh` (which calls `npm run migrate:safe` once Postgres is reachable). Manually triggering them is rarely needed.
@@ -122,6 +126,8 @@ docker exec picpeak-backend npm run migrate:safe
 ```
 
 `migrate:safe` is idempotent — it skips any migrations already recorded in `knex_migrations` and prints a summary.
+
+**Revocation migration ([PR #1359](https://github.com/PicPeak/picpeak/pull/1359)):** `211_revocations_without_expiry.js` makes `revoked_tokens.expires_at` nullable while preserving existing records. A `NULL` expiry means permanent revocation. Rolling this migration back is refused while any permanent records exist. Do not delete those records to force a rollback: that could make revoked tokens usable again.
 
 ## Resource requirements
 
