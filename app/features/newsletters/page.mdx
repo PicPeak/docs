@@ -1,0 +1,74 @@
+import { Callout } from 'nextra/components'
+
+# Newsletter Campaigns
+
+Send one composed message to a rule-selected slice of your customer list — a
+season announcement, a price change, a "book now" nudge — without leaving PicPeak.
+
+Available on **stable from v3.47.0**, and on beta before that.
+
+<Callout type="info">
+Behind the **`newsletters`** feature flag, **off by default**. Switch it on in
+Settings → Features.
+</Callout>
+
+## How it works
+
+A campaign is a body plus a recipient rule. It is **not** a second mail sender:
+queueing a campaign writes ordinary rows into the same `email_queue` that gallery
+invitations use, so retry, the rendered-HTML record, `sent_at`, error messages and
+the System Health queue view all behave exactly as they do for transactional mail.
+
+The body is sanitized before it is stored — raw HTML is never persisted — and each
+campaign keeps its own per-recipient record of who it actually reached. That
+record is deliberately separate from the mail queue, because queue rows are pruned
+and "who did this reach" has to outlive them.
+
+## Permissions
+
+Two permissions, split on purpose:
+
+| Permission | Grants |
+|---|---|
+| `newsletters.view` | See campaigns and their results. |
+| `newsletters.send` | Queue a campaign. |
+
+`send` is separate from `view` because a mass send is the one action a careless or
+compromised account cannot take back. Both are granted to `super_admin` and the
+`admin` role by default; see [Multi-Admin](/features/multi-admin) for the role
+editor.
+
+## Opt-out
+
+Every customer has a marketing opt-out. It is checked **twice** — when the
+campaign is queued, and again at send time — so someone who unsubscribes after a
+campaign is queued is still skipped.
+
+Unsubscribe links are public and keep working regardless of the feature flag: mail
+that has already gone out must not acquire a dead link because the flag was
+switched off. The unsubscribe page renders identically for an unknown token, a
+valid one and an already-unsubscribed customer, so it cannot be used to probe
+whether an address is on your list.
+
+**Transactional mail ignores the opt-out entirely.** Gallery invitations, password
+resets and expiry warnings still go out.
+
+## Before your first large send
+
+<Callout type="warning">
+From 50 resolved recipients the composer warns you, and the warning is worth
+reading. Spam filtering reacts to a domain's volume and reputation, not to how
+slowly you send. Several hundred near-identical mails from a domain that normally
+emits only gallery notifications is precisely the shape that gets junked — and the
+reputation damage hits your **transactional** mail too, so gallery invitations
+start landing in spam.
+</Callout>
+
+Practical points:
+
+- Have SPF, DKIM and DMARC in place on the sending domain first. See
+  [Email Notifications](/features/email-notifications).
+- Split a first campaign rather than sending the whole list at once.
+- The email queue is global, not per-campaign: gallery invitations and password
+  resets queue **behind** your campaign. The composer shows the real duration at
+  the chosen rate — read it before confirming.

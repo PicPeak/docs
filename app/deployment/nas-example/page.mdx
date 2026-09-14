@@ -140,7 +140,7 @@ The `7080`/`7443`/`7081` mappings on the left of each colon are the NAS-side por
 
 Three more details worth understanding rather than copying:
 
-- **`aio:main`** is the all-in-one image on the beta channel. The all-in-one image publishes `:main` (and the equivalent `:beta`) only — there is no `:stable` tag for it yet, so this is the tag to use. See [Release Channels](/deployment/release-channels).
+- **`aio:main`** is the all-in-one image on the beta channel. From v3.47.0 the all-in-one image also publishes `:stable` and `:latest` alongside `:main` / `:beta`, so on a stable install use `aio:stable`. See [Release Channels](/deployment/release-channels).
 - **`COOKIE_SECURE: auto`** lets the same instance serve public HTTPS *and* direct LAN HTTP with correctly-flagged session cookies. Without it you get one or the other. See [Reverse Proxy → Mixed HTTPS + LAN HTTP access](/deployment/reverse-proxy#mixed-https--lan-http-access).
 - **`FRONTEND_URL`** is the public address PicPeak puts into gallery links and emails. Set it to the HTTPS domain, not the LAN IP, or the links you send clients point somewhere they cannot reach.
 

@@ -1,0 +1,76 @@
+import { Callout } from 'nextra/components'
+
+# Anonymous Usage Reporting
+
+PicPeak can report, anonymously and only if you switch it on, which features this
+installation uses. It exists so development effort goes where the features are
+actually used instead of where the loudest issue thread is.
+
+Available on **stable from v3.47.0**, and on beta before that.
+
+<Callout type="info">
+**Off by default, on every install.** The state row is created `disabled`, and
+nothing is collected, stored or sent until an administrator opts in. Upgrading
+does not opt you in.
+</Callout>
+
+## What you will see after upgrading
+
+Existing installations are asked once. On the first admin login after the update
+a single prompt offers the opt-in; whichever way you answer, the marker is set and
+you are not asked again. New installations get the same question as a step in the
+[first-run wizard](/getting-started/simple-install) instead, so neither path asks
+twice.
+
+If you dismiss the prompt without deciding, reporting stays off. The decision
+remains reachable later from the dashboard banner and from **Settings → Usage**.
+
+## What is collected
+
+Two things, and nothing else:
+
+| | |
+|---|---|
+| **Feature flags** | 87 booleans from a fixed catalog — is CRM on, is face recognition on, is SMTP configured, is OIDC configured, and so on. The catalog is shipped in the image (`backend/src/usage/features.v5.json`) and is readable before you consent. |
+| **Two counts** | The number of gallery records and the number of non-video photo records on the installation. One total each, for the whole install. |
+
+What is **not** collected: no gallery, event, customer, guest or photo names; no
+email addresses; no file contents; no URLs, IP addresses or hostnames; no
+per-gallery breakdown; no route or click log. The capability signals are derived
+from a fixed allowlist of keys, not from request logging.
+
+The wire format is versioned and consent is versioned with it. A new schema
+version cannot widen what is sent under a consent you already gave — it asks
+again.
+
+## Where it goes
+
+The default collector is `https://usage.picpeak.app`. It is a deployment choice,
+not part of the wire contract: set `USAGE_COLLECTOR_URL` to point at your own
+collector, and the admin UI links to whatever you configured.
+
+Reports are signed with an installation key generated locally on opt-in. The
+identity is the key — there is no account, and nothing about you is registered
+remotely.
+
+## Withdrawing
+
+Opting out is a deletion, not a pause. The installation identity, the signing key,
+any pending report payload and any collector credential are removed locally; the
+local audit receipts that remain are bounded and deliberately retain none of
+those. Re-opting in generates a new identity, unconnected to the old one.
+
+## The public portal
+
+Whatever is reported is published back: the portal at the configured collector
+shows the aggregate picture the reports produce. From v3.47.0 the admin UI opens
+it already signed in, with the credential never appearing in a served URL.
+
+## Operator checklist
+
+- It is opt-in. Doing nothing is a valid, permanent answer.
+- If you administer galleries in the EU, note that this collects nothing about
+  data subjects — only feature toggles and two counts — so it is separate from the
+  consent questions that [face recognition](/features/face-recognition) raises.
+- Self-hosting the collector (`USAGE_COLLECTOR_URL`) keeps the reports inside your
+  own infrastructure.
