@@ -1,0 +1,88 @@
+import { Callout } from 'nextra/components'
+
+# Upgrading
+
+## The routine upgrade
+
+```bash
+docker compose -f docker-compose.production.yml pull
+docker compose -f docker-compose.production.yml up -d
+```
+
+Database migrations run automatically on start, and the backend refuses to serve
+against a half-migrated database rather than starting in a broken state. On the
+[all-in-one image](/deployment/single-container) the same applies — re-run your
+`docker run` command with the new image.
+
+<Callout type="warning">
+**Back up first, every time.** See [Backup & Restore](/guides/backup-restore).
+Some migrations repair data rather than only adding columns, and those cannot be
+undone by pulling the old image back — the schema change is reversible, the data
+correction is not.
+</Callout>
+
+Which image tag you land on depends on `PICPEAK_CHANNEL` — see
+[Release Channels](/deployment/release-channels).
+
+## Release-specific notes
+
+Only releases that need something from you are listed here. If a version is not
+mentioned, the routine upgrade above is all it needs.
+
+### v3.46.x → v3.132.1
+
+This release promotes roughly two months of beta work onto the stable channel at
+once, so it carries more change than a normal stable patch.
+
+<Callout type="error">
+**One-way.** Migration `186` deletes duplicate external-photo rows and `187`
+rewrites stored external paths with no record of the previous base — both
+irreversible by design. Once an instance is on v3.132.1 it cannot be moved back
+to a v3.46.x image. Take a backup you have actually tested restoring.
+</Callout>
+
+Two visible side effects on first boot, both verified against a real v3.46.13
+database:
+
+- **Every lightbox preview regenerates.** Migration `188` clears all stored
+  preview keys, so each photo re-renders its preview the first time it is
+  viewed. Nothing is lost, but on a large library expect a noticeable CPU spike
+  — and S3 egress, if your originals live there — spread over the first hours of
+  use rather than a one-off cost during the upgrade itself.
+- **A fixed pixel height on gallery tiles is rewritten.** Migration `181`
+  replaces any `.photo-card img { height: <N>px }` with `height: 100%`,
+  including a rule you wrote yourself in
+  [Custom CSS](/guides/custom-css). All seven layouts size the card and expect
+  the image to fill it, so a pixel height there detached the image from its
+  tile. If you set one deliberately, your tiles will change.
+
+Nothing is switched on for you. Face recognition, PicTransfer, newsletters, CRM,
+accounting, contracts, quotes and projects all stay off by default, existing
+permission grants are projected forward so no account loses capability, and the
+optional `picpeak-ml` sidecar is not started unless you ask for it
+(`docker compose --profile faces up -d`).
+
+One thing you will be asked: [anonymous usage
+reporting](/features/usage-reporting) is off by default, but an existing install
+gets a single opt-in prompt on the first admin login after the update. Declining
+is a permanent answer.
+
+<Callout type="info">
+**Why the version jumped from 3.46.13 to 3.132.1.** Stable and beta count
+releases independently — beta bumps on every merge, stable only on a promotion —
+so the numbers drift far apart for identical code. A promotion now pins stable to
+beta's current base version. The jump is the two channels meeting, not 85
+releases of change — stable v3.132.1 carries the same work as beta v3.132.1-beta.0.
+</Callout>
+
+## If an upgrade goes wrong
+
+- **The backend will not start.** Check its logs first
+  (`docker compose logs backend`); a failed migration names itself and leaves the
+  database untouched rather than half-applied.
+- **Galleries load but images are missing.** Usually the
+  [API rate limiter](/guides/admin-settings/security#api-rate-limiting) rather
+  than the upgrade — a `429` is a completed request, so the browser console shows
+  nothing.
+- **You need to go back.** Restore the backup. Pulling the previous image is not
+  enough on a release whose notes above say it is one-way.

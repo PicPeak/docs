@@ -8,5 +8,6 @@ export default {
   ssl: 'SSL Certificates',
   'nas-example': 'Example: NAS at Home',
   'release-channels': 'Release Channels',
+  upgrading: 'Upgrading',
   'repository-move': 'Repository and Image Move (2026)',
 }
