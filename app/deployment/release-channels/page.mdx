@@ -45,9 +45,11 @@ channel and from which version its subject is available; when a page names only 
 `-beta.0` version, that feature is beta-only until the next stable promotion.
 
 <Callout type="warning">
-Stable promotions are one-way. Several migrations are irreversible by design, so
-you cannot move an instance back from v3.132.0 to a v3.46.x image. Take a backup
-before upgrading --- see [Backup & Restore](/guides/backup-restore).
+Stable promotions are one-way: several migrations are irreversible by design, so
+you cannot move an instance back from v3.132.0 to a v3.46.x image. Read
+[Upgrading](/deployment/upgrading#v346x--v31320) before you pull it --- that
+release also regenerates every gallery preview and rewrites fixed pixel heights
+in custom CSS.
 </Callout>
 
 ## Configuring your channel
