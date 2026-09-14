@@ -19,16 +19,16 @@ PicPeak offers two release channels for different needs.
 ## What is on each channel
 
 Stable and beta are the same codebase at different distances from the edit. Beta
-releases continuously; stable is promoted from it in batches, and **v3.132.0 is such
+releases continuously; stable is promoted from it in batches, and **v3.132.1 is such
 a promotion** --- it carries everything beta had accumulated since v3.46, so the
 features that used to be listed here as beta-only are now on stable:
 
 <Callout type="info">
-**Why stable jumped from 3.46.13 to 3.132.0.** The two channels count releases
+**Why stable jumped from 3.46.13 to 3.132.1.** The two channels count releases
 independently: beta bumps on every merge, stable only on a promotion. Left alone
 the numbers drift far apart for identical code, so a promotion now sets stable to
 beta's current base version. The jump is the two lines meeting, not 85 releases of
-change --- stable v3.132.0 and beta v3.132.0-beta.0 are the same tree.
+change --- stable v3.132.1 and beta v3.132.1-beta.0 are the same tree.
 </Callout>
 
 - **[PicTransfer](/features/pictransfer)** --- cross-event file transfers with token-protected download links. Feature-flagged off by default.
@@ -46,8 +46,8 @@ channel and from which version its subject is available; when a page names only 
 
 <Callout type="warning">
 Stable promotions are one-way: several migrations are irreversible by design, so
-you cannot move an instance back from v3.132.0 to a v3.46.x image. Read
-[Upgrading](/deployment/upgrading#v346x--v31320) before you pull it --- that
+you cannot move an instance back from v3.132.1 to a v3.46.x image. Read
+[Upgrading](/deployment/upgrading#v346x--v31321) before you pull it --- that
 release also regenerates every gallery preview and rewrites fixed pixel heights
 in custom CSS.
 </Callout>

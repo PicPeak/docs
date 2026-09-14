@@ -29,7 +29,7 @@ Which image tag you land on depends on `PICPEAK_CHANNEL` — see
 Only releases that need something from you are listed here. If a version is not
 mentioned, the routine upgrade above is all it needs.
 
-### v3.46.x → v3.132.0
+### v3.46.x → v3.132.1
 
 This release promotes roughly two months of beta work onto the stable channel at
 once, so it carries more change than a normal stable patch.
@@ -37,7 +37,7 @@ once, so it carries more change than a normal stable patch.
 <Callout type="error">
 **One-way.** Migration `186` deletes duplicate external-photo rows and `187`
 rewrites stored external paths with no record of the previous base — both
-irreversible by design. Once an instance is on v3.132.0 it cannot be moved back
+irreversible by design. Once an instance is on v3.132.1 it cannot be moved back
 to a v3.46.x image. Take a backup you have actually tested restoring.
 </Callout>
 
@@ -68,11 +68,11 @@ gets a single opt-in prompt on the first admin login after the update. Declining
 is a permanent answer.
 
 <Callout type="info">
-**Why the version jumped from 3.46.13 to 3.132.0.** Stable and beta count
+**Why the version jumped from 3.46.13 to 3.132.1.** Stable and beta count
 releases independently — beta bumps on every merge, stable only on a promotion —
 so the numbers drift far apart for identical code. A promotion now pins stable to
-beta's current base version. The jump is the two lines meeting, not 85 releases
-of change: stable v3.132.0 and beta v3.132.0-beta.0 are the same tree.
+beta's current base version. The jump is the two channels meeting, not 85
+releases of change — stable v3.132.1 carries the same work as beta v3.132.1-beta.0.
 </Callout>
 
 ## If an upgrade goes wrong
