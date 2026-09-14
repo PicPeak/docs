@@ -75,13 +75,13 @@ Switching it off deletes every stored copy. Only passwords set while it is on ar
 
 The copy is AES-256-GCM encrypted with a key derived from `GALLERY_PASSWORD_ENCRYPTION_KEY`, or from `JWT_SECRET` when that variable is not set. Anyone with the database **and** the server configuration, or with admin access to the event, can read the passwords. Changing the key makes the stored copies unreadable; switch the setting off and on again to start over. Login and hash verification never touch the copy.
 
-This is available on stable from v3.47.0, and on beta from the build that ships PicPeak/picpeak#1271's fix. On earlier builds the sent-mail archive under Messages still shows gallery passwords in clear text; from those builds on they are masked there.
+This is available on stable from v3.132.0, and on beta from the build that ships PicPeak/picpeak#1271's fix. On earlier builds the sent-mail archive under Messages still shows gallery passwords in clear text; from those builds on they are masked there.
 
 ## API rate limiting
 
 Independent of the login rules above, PicPeak limits how many API requests a single client IP may make. It exists to blunt scraping and credential stuffing, and it is worth knowing about because when it triggers it does **not** look like a limit: an affected visitor sees a gallery that stops loading, with no error anywhere they can see.
 
-The **API rate limiting** card on this tab shows the values in force — the defaults below apply until you save something else — and saves with the tab's **Save Security Settings** button. Stable builds from v3.47.0 and beta builds from PicPeak/picpeak#1338 onward have the card; older builds have only the API described under [Changing the limits without the card](#changing-the-limits-without-the-card).
+The **API rate limiting** card on this tab shows the values in force — the defaults below apply until you save something else — and saves with the tab's **Save Security Settings** button. Stable builds from v3.132.0 and beta builds from PicPeak/picpeak#1338 onward have the card; older builds have only the API described under [Changing the limits without the card](#changing-the-limits-without-the-card).
 
 | Setting | Default | What it does |
 |---|---|---|
