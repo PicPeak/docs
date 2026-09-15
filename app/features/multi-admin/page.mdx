@@ -65,6 +65,28 @@ Reading and writing are deliberately asymmetric. Viewing one of these screens ne
 
 The site URL is protected per field rather than per page: saving the General settings screen without altering the site URL works fine, and only an actual change to it requires `settings.domains`.
 
+## Events you do not own
+
+In builds containing [PicPeak PR #1483](https://github.com/PicPeak/picpeak/pull/1483):
+
+- **Super Admin** and the built-in **Admin** role see every event in the list and on the event page. On an event the account does not own, the share link, client link and share token are withheld, and the Share link card says that only the owner can share it.
+- **Every other role** (Editor, Viewer, Team Photographer, Solo Photographer and custom roles) sees its own events plus events without an owner. Another owner's event answers "not found". The archive list, the dashboard totals and upload status follow the same rule.
+- Event-specific categories can only be created, renamed, given a cover photo or deleted by an account that can open that event. Global categories are unchanged.
+
+## Reserved for Super Admin
+
+A few actions could hand someone Super Admin power or a full copy of the instance, so no grantable permission unlocks them (builds containing [PicPeak PR #1493](https://github.com/PicPeak/picpeak/pull/1493)):
+
+- Changing the backup destination or database inclusion, and the destination connection test — see [Backup and Restore](/guides/backup-restore).
+- Restores and `.picpeak` imports.
+- Mapping SSO logins to `super_admin`. Other SSO role targets must stay within the editor's own permissions — see [Admin SSO](/features/admin-sso#role-mapping).
+
+## Other permission details
+
+- Thumbnail settings and whole-library regeneration need `settings.edit`; regenerating one event needs `photos.edit` plus access to that event. The built-in Admin role holds `settings.view` but not `settings.edit`, so it can no longer change thumbnail settings. See [Thumbnails](/guides/admin-settings/thumbnails). ([PicPeak PR #1483](https://github.com/PicPeak/picpeak/pull/1483))
+- Testing an IMAP connection, listing IMAP folders and testing a mail account need `email.edit`. See [Email Notifications](/features/email-notifications#mail-server-passwords). ([PicPeak PR #1485](https://github.com/PicPeak/picpeak/pull/1485))
+- Webhook delivery details show the gallery share token and share URL only to roles with `settings.integrations`. See [Webhooks](/features/webhooks#operational-view). ([PicPeak PR #1485](https://github.com/PicPeak/picpeak/pull/1485))
+
 ## Assigning a role
 
 **Users** tab → edit a user → **Role**. Invitations pick a role at creation time.

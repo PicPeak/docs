@@ -56,6 +56,8 @@ Three end states have their own screens: the link expired, the download cap was 
 
 Downloads are logged. Each one records a timestamp and the caller's IP, and the transfer shows a running download count.
 
+A download counts against **Max downloads** when it starts, so a download the recipient abandons halfway still uses one. Downloads that start at the same moment cannot exceed the cap, and a file that no longer exists does not use up a download. (Builds containing [PicPeak PR #1486](https://github.com/PicPeak/picpeak/pull/1486).)
+
 ## Getting files back from the client
 
 Tick the upload option when creating the transfer, or hit **Enable upload link** afterwards. You then get a **six-character code** and a matching link at `https://your-site/transfer-upload/<code>`. The code is meant to be readable over the phone, so it avoids the characters people confuse: no `0`, `O`, `1`, `I` or `L`.

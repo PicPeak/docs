@@ -75,6 +75,22 @@ beta's current base version. The jump is the two channels meeting, not 85
 releases of change — stable v3.132.1 carries the same work as beta v3.132.1-beta.0.
 </Callout>
 
+### Permission, session and backup hardening
+
+Builds containing [PicPeak PR #1477](https://github.com/PicPeak/picpeak/pull/1477), [PicPeak PR #1478](https://github.com/PicPeak/picpeak/pull/1478), [PicPeak PR #1483](https://github.com/PicPeak/picpeak/pull/1483), [PicPeak PR #1485](https://github.com/PicPeak/picpeak/pull/1485), [PicPeak PR #1486](https://github.com/PicPeak/picpeak/pull/1486), [PicPeak PR #1489](https://github.com/PicPeak/picpeak/pull/1489), [PicPeak PR #1491](https://github.com/PicPeak/picpeak/pull/1491), [PicPeak PR #1493](https://github.com/PicPeak/picpeak/pull/1493), [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495) and [PicPeak PR #1497](https://github.com/PicPeak/picpeak/pull/1497) upgrade with the routine steps. Migration `217` only adds two columns, and the Docker Compose secrets volumes are created and filled on the next `docker compose up`. A few behaviours change:
+
+<Callout type="info">
+**Check your logo folders.** Only image files are served from `storage/uploads/logos` and `storage/uploads/favicons` now. Older versions could leave other files there; look for any and delete them.
+</Callout>
+
+- **Mail servers.** Changing an SMTP, IMAP or mail-account server's host, port, username or TLS setting requires entering its password again. Sent invitation and password-reset emails cannot be resent from Messages. See [Email Notifications](/features/email-notifications#mail-server-passwords).
+- **SSO.** Changing the issuer URL or client ID requires entering the client secret again, and role mappings can only target roles within the editor's own permissions. See [Admin SSO](/features/admin-sso#role-mapping).
+- **Backups.** The backup destination, database inclusion, restores and `.picpeak` imports are Super Admin only. See [Backup and Restore](/guides/backup-restore).
+- **Events and roles.** Roles other than Super Admin and Admin see only their own and ownerless events; Admin sees every event but not other owners' share links; thumbnail settings need `settings.edit`. See [Roles & Permissions](/features/multi-admin#events-you-do-not-own).
+- **Galleries.** Changing a gallery password, client PIN or client link signs out the sessions opened with the old one, guest uploads respect the photo cap, and the admin preview follows the session timeout. See [Creating Events](/guides/creating-events#access-control).
+- **Feedback.** The per-event feedback rate-limit switch is gone; the instance-wide limits apply. See [Feedback](/features/feedback#settings).
+- **3.46.x** is end of life. See [Release Channels](/deployment/release-channels#security-support).
+
 ## If an upgrade goes wrong
 
 - **The backend will not start.** Check its logs first

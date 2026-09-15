@@ -37,7 +37,7 @@ From **Clients > Accounts**:
 
 After accepting, the customer profile is editable on both sides --- the admin from the customer detail page, the customer from `/customer/profile`.
 
-Pending invitations show on the **Invitations** tab and can be cancelled from there.
+Pending invitations show on the **Invitations** tab and can be cancelled from there. Once an invitation email has gone out, it cannot be resent from the Messages archive — send a new invitation instead.
 
 ## Assigning galleries to a customer
 
@@ -76,6 +76,8 @@ Three different actions, three different scopes:
 | Force re-login | Send password-reset email; on apply, bumps `password_changed_at` | All galleries | On apply |
 
 All four are on the customer detail page under **Account actions**.
+
+**Logging out of the portal** also ends the gallery sessions the customer opened from it (builds containing [PicPeak PR #1497](https://github.com/PicPeak/picpeak/pull/1497)). Gallery sessions opened from the portal before that update are not linked to the portal login; they expire on their own within 24 hours.
 
 ## Sub-features (in progress)
 

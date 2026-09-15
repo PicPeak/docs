@@ -14,6 +14,7 @@ Available from v3.94.0-beta.0 on the beta channel, logout to IdP from v3.95.0-be
 Good to know:
 
 - The client secret is AES-256-GCM encrypted at rest (`OIDC_ENCRYPTION_KEY`, falling back to `JWT_SECRET`) and write-only in the API — it is never displayed again.
+- Changing the **Issuer URL** or **Client ID** requires entering the client secret again in the same save, so a stored secret is never sent to a different provider (builds containing [PicPeak PR #1493](https://github.com/PicPeak/picpeak/pull/1493)).
 - Identity binding uses the IdP's stable subject (`sub`), never email alone. An existing local admin is linked one-time by email **only** when the ID token carries `email_verified: true`; their password keeps working afterwards.
 - **Auto-provision** (JIT) creates an admin account on first SSO login with the configured default role. With it off, only existing or linked admins can sign in.
 - MFA is the IdP's job on the SSO path; PicPeak's local TOTP still guards the password path.
@@ -26,6 +27,7 @@ Good to know:
 - If several mappings match, the **highest-priority** PicPeak role wins (`super_admin` > `admin` > `editor` > `viewer`).
 - A login that maps to **no** role keeps its current role (existing admins) or gets the default role (JIT) — unless **Require a mapped role** is on, in which case the login is refused. That toggle expresses "only members of these IdP groups may sign in".
 - Safety: the **last active super admin is never demoted** by mapping — the login succeeds, the demotion is skipped and logged.
+- **Mapping targets are grants.** Saving the default role or a mapping target works like assigning that role: only a Super Admin can target `super_admin`, and anyone else can only target roles whose permissions their own role already holds. Changing the issuer, client ID or roles claim, or newly switching on role mapping or auto-provisioning, re-checks every target that stays in the table. Unchanged mappings still save. (Builds containing [PicPeak PR #1493](https://github.com/PicPeak/picpeak/pull/1493).)
 
 ### IdP recipes
 

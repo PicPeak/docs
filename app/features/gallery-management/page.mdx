@@ -29,6 +29,8 @@ Afterwards, **Send gallery email** on the event page sends the link whenever you
 
 **View Gallery** on the event page opens the gallery the way guests see it, skipping the password even on protected galleries and working for drafts. It relies on your admin session, so the URL is useless to anyone who is not signed in as an admin.
 
+The preview follows the admin [session timeout](/guides/admin-settings/security#session): once your admin session has been idle for too long, the gallery shows *Your admin session has expired. Sign in again to preview this gallery.* with a link to the login page. Browsing the preview counts as activity. (Builds containing [PicPeak PR #1497](https://github.com/PicPeak/picpeak/pull/1497).)
+
 The preview does not create a guest session and stays out of your statistics: it is not counted in access logs, download counts, per-photo views, or the notification bell.
 
 ## QR codes and printed cards
@@ -64,6 +66,8 @@ Expiration warnings can be sent via email before the gallery expires.
 ## Guest uploads
 
 Events can optionally allow guests to upload their own photos. This is useful for collaborative events where multiple people contribute photos.
+
+Guest uploads respect the event's **Photo cap**: once it is reached, further uploads are refused and the uploader shows a message naming the limit. A guest upload is only filed under the event's own categories or global ones. (Builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495).)
 
 ## Bulk downloads
 

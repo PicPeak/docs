@@ -134,7 +134,7 @@ Each webhook has a dedicated **Deliveries** page (linked from the Settings table
 
 - Timestamp, event type, status, attempt count, HTTP status, latency
 - Filter chips (all / pending / success / failed)
-- Click a row → slide-over with the exact payload sent, signature, response status, and (truncated to 1KB) response body
+- Click a row → slide-over with the exact payload sent, signature, response status, and (truncated to 1KB) response body. For roles without `settings.integrations`, the gallery `share_token` and `share_url` in that payload are masked (builds containing [PicPeak PR #1485](https://github.com/PicPeak/picpeak/pull/1485))
 - **Replay** button on failed rows — re-enqueues the same payload as a fresh delivery
 - **Send test event** button — fires a synthetic delivery of any event type with a stub payload
 

@@ -47,6 +47,10 @@ Configure under **Admin → Backup & Restore**.
 | `backup_email_on_success` | `false` | Email admin after every successful backup. |
 | `backup_email_on_failure` | `true` | Email admin after a failed backup. |
 
+<Callout type="info">
+**Who can change the destination.** In builds containing [PicPeak PR #1493](https://github.com/PicPeak/picpeak/pull/1493), only a **Super Admin** can change where backups go (`backup_destination_*`, `backup_s3_*`, `backup_rsync_*`), whether they include the database, or run the destination connection test. Roles with `backup.create` keep the schedule, retention and file options; for them the destination fields are locked on the Backup page.
+</Callout>
+
 ### S3 destination settings
 
 | Key | Default | What it does |
@@ -140,6 +144,12 @@ The Backup & Restore page lists every available backup with a **Restore** button
 3. Restores files to `events/active/`, `events/archived/`, `thumbnails/` etc.
 4. Verifies checksums against the manifest.
 5. Reports any files that failed verification.
+
+Restores and `.picpeak` imports replace admin accounts, roles and permissions from the file, so in builds containing [PicPeak PR #1493](https://github.com/PicPeak/picpeak/pull/1493) they require a **Super Admin**. Other roles see an explanation on the Restore tab instead of the wizard.
+
+Before the database is touched, the restore checks the dump file against the SHA-256 recorded in the manifest (`database.checksum`) and refuses a dump that was changed or truncated. Backups whose manifest has no dump checksum still restore, with a warning in the restore log, unless `BACKUP_MANIFEST_REQUIRE_KEYED` is set. (Builds containing [PicPeak PR #1491](https://github.com/PicPeak/picpeak/pull/1491).)
+
+A `.picpeak` import is checked before and while it is extracted: too many entries (`PICPEAK_IMPORT_MAX_ENTRIES`), more unpacked bytes than `PICPEAK_IMPORT_MAX_EXPANDED_BYTES` or than the free space of the extraction directory, or an oversized `manifest.json` (`PICPEAK_IMPORT_MAX_MANIFEST_BYTES`) stop the import before anything is restored. See [Environment Variables](/deployment/environment-variables#backup-and-restore).
 
 The UI restore is a one-shot, full-rollback operation — run it on a fresh instance, not over a live one with newer data, unless you've thought through the consequences.
 

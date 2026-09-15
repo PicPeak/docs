@@ -209,3 +209,14 @@ See **[Webhooks](../../features/webhooks)** for event catalog, payload shapes, a
 | `WEBHOOK_DELIVERY_CONCURRENCY` | No | `5` | Max in-flight deliveries per tick. Bump if your receivers are slow. |
 | `WEBHOOK_HTTP_TIMEOUT_MS` | No | `10000` | Per-request timeout |
 | `WEBHOOK_MAX_ATTEMPTS` | No | `5` | Total attempts before a delivery is marked `failed` |
+
+## Backup and restore
+
+See **[Backup and Restore](/guides/backup-restore)**.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PICPEAK_IMPORT_MAX_ENTRIES` | No | `2000000` | Most entries (files and directories) a `.picpeak` import may contain; more is refused before extracting |
+| `PICPEAK_IMPORT_MAX_EXPANDED_BYTES` | No | 1 TiB | Most bytes a `.picpeak` import may unpack to. Extraction also stops when the extraction directory runs out of free space |
+| `PICPEAK_IMPORT_MAX_MANIFEST_BYTES` | No | 16 MiB | Largest `manifest.json` a `.picpeak` import may contain |
+| `BACKUP_MANIFEST_REQUIRE_KEYED` | No | off | When `true`, restores refuse unkeyed backup manifests, including manifests without a database dump checksum |

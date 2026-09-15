@@ -69,12 +69,14 @@ The "gated by" toggles are in [Event Defaults](/guides/admin-settings/event-defa
 
 Changing the gallery password later **regenerates the share token** — old share links will stop working immediately. The customer needs the new link.
 
+Changing the gallery password, the client PIN or the client link also ends the sessions opened with the old one, so guests or clients are asked for the password again. Re-entering the current password — for example when you resend the gallery email — changes nothing. Customer-portal and slideshow sessions are not affected. (Builds containing [PicPeak PR #1497](https://github.com/PicPeak/picpeak/pull/1497).)
+
 ### Limits
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | **Expiration (days)** | number | from `general_default_expiration_days` (30) | Sets `expires_at = now + N days`. On expiry the gallery is auto-archived. |
-| **Photo cap** | number | `0` (unlimited) | Max number of photos for this event. Replacement uploads (same filename) don't count. |
+| **Photo cap** | number | `0` (unlimited) | Max number of photos for this event. Replacement uploads (same filename) don't count. Applies to admin, chunked and guest uploads. |
 
 ### Display & theming
 

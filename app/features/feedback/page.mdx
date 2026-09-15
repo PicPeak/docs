@@ -91,7 +91,9 @@ Filtered selections export as a ZIP, or as file lists and XMP sidecars for Light
 
 ## Settings
 
-Per event, under the event's feedback settings: the master **Enable feedback** switch, the identity mode, which of the six types are on, the lightbox keyboard scheme, per-guest caps for likes and favourites, and privacy options — require name and email, moderate comments, show feedback to guests, and rate limiting.
+Per event, under the event's feedback settings: the master **Enable feedback** switch, the identity mode, which of the six types are on, the lightbox keyboard scheme, per-guest caps for likes and favourites, and privacy options — require name and email, moderate comments, and show feedback to guests. Guest feedback is limited by the instance-wide feedback rate limits; the per-event rate-limit switch was removed because it was never applied (builds containing [PicPeak PR #1489](https://github.com/PicPeak/picpeak/pull/1489)).
+
+With **Show feedback to guests** off, guests also do not see a photo's average rating or its like, favourite and comment totals. Photos a client has hidden accept no feedback from guests and are left out of the feedback summary. (Builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495).)
 
 Globally, under **Settings → Events**, you set what new galleries start with. Ratings, likes, favourites, comments and reactions default on; colour labels default off. Changing a global default does not touch galleries that already exist.
 

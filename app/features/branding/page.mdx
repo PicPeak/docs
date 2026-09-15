@@ -26,6 +26,10 @@ For per-event theming (specific layout, presets, custom CSS), see [Themes & Bran
 
 Uploaded files are served from `/uploads/logos/` and `/uploads/favicons/` and cached for 7 days at the nginx layer.
 
+<Callout type="info">
+In builds containing [PicPeak PR #1478](https://github.com/PicPeak/picpeak/pull/1478), only image files (PNG, JPG, JPEG, GIF, WebP, SVG, ICO) are served from these folders and from `/favicon.ico`; anything else answers 404. Older versions could leave non-image files in `storage/uploads/logos` or `storage/uploads/favicons` — if you upgraded, look for such files and delete them.
+</Callout>
+
 ## Colors
 
 The color picker exposes four tokens that propagate through the entire UI as CSS variables:
