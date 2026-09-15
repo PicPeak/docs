@@ -16,6 +16,8 @@ A photo belongs to at most one category. Photos with no category are "uncategori
 
 Global categories save re-typing the same names for every wedding. Event-specific ones cover the parts that only exist for that job.
 
+Event-specific categories can only be created, renamed, given a cover photo or deleted by an account that can open that event (builds containing [PicPeak PR #1483](https://github.com/PicPeak/picpeak/pull/1483)). Guest uploads and chunked uploads can only file photos under the event's own categories or global ones (builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495)).
+
 Which controls you get depends on the kind:
 
 | Control | Global | Event-specific |
@@ -77,7 +79,7 @@ Each event-specific category has a download toggle. Turning it off means photos 
 
 Attempting the download anyway returns `403 Downloads are disabled for this category`. Uncategorized photos follow the event setting alone.
 
-This is a real server-side check, unlike the folder toggle above.
+This is a real server-side check, unlike the folder toggle above. It also covers **Download All**: when any photo sits in a category with downloads turned off, guests get the filtered archive instead of the prebuilt zip (builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495)).
 
 ## Order
 

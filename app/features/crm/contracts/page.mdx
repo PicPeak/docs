@@ -47,7 +47,9 @@ Send transitions the contract from `draft` → `sent`:
 
 ## Customer signing flow
 
-The customer follows the link in the email to `/contracts/sign/<token>`. They see:
+The customer follows the link in the email to `/contracts/sign/<token>`. In builds containing [PicPeak PR #1465](https://github.com/PicPeak/picpeak/pull/1465), the page first shows only your company and a masked hint of the customer's email address, and asks for a **6-digit code** that PicPeak emails to the address on file. The code is valid for 15 minutes and allows five attempts, and sending is throttled to one code per minute and five per hour per link. Confirming it opens the contract in that browser for 30 minutes. Customers with a [portal account](/features/customer-accounts) can read and sign from the portal instead, without a code.
+
+After verification they see:
 
 - The contract content, fully rendered (issuer block, recipient block, all included blocks in order)
 - The PDF download link
@@ -57,7 +59,7 @@ The customer follows the link in the email to `/contracts/sign/<token>`. They se
   - **Both**: pick either path.
 
 On submit:
-- The signature image (canvas) or the uploaded signed PDF is persisted alongside the contract.
+- The signature image (canvas) or the uploaded signed PDF is persisted alongside the contract. An uploaded file must really be a PDF; anything else is refused (builds containing [PicPeak PR #1471](https://github.com/PicPeak/picpeak/pull/1471)).
 - The contract transitions to `signed`.
 - The admin gets the `contract_signed_admin_notification` email.
 
@@ -70,6 +72,8 @@ Once the customer has signed, the admin sees a **Countersign** action on the det
 3. Computes a SHA-256 hash of the final PDF bytes and stores it in `contracts.integrity_hash`.
 4. Transitions the contract to `fully_signed`.
 5. Queues the `contract_fully_signed` email to the customer with the final PDF attached.
+
+The fully-signed email only goes out with a PDF that carries both signatures. If the stamped PDF could not be recorded — for example because a re-stamp or an upload changed it at the same moment — no email is sent yet: the contract page shows a banner, and **Re-send signed PDF** sends the emails once the PDF is consistent. Re-stamping or re-sending is refused when a signature image cannot be stamped onto the PDF. (Builds containing [PicPeak PR #1469](https://github.com/PicPeak/picpeak/pull/1469).)
 
 After countersigning, the contract is read-only for both parties.
 

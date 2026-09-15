@@ -76,6 +76,8 @@ docker exec picpeak-backend cat data/ADMIN_CREDENTIALS.txt
 docker exec picpeak cat /data/db/ADMIN_CREDENTIALS.txt
 ```
 
+The password is not written to the container log, and the credentials file is readable only by its owner (mode `0600`), so read it with `docker exec` as shown (builds containing [PicPeak PR #1491](https://github.com/PicPeak/picpeak/pull/1491)).
+
 <Callout type="info">
 On a NAS, where the container UI usually gives you no shell, this is the easier route: set `ADMIN_PASSWORD` before the first start and you never need to read a file at all. It takes effect only while no admin exists — see [Single-container install](/deployment/single-container#nas-installs).
 </Callout>

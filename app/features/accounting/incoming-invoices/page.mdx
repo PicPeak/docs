@@ -51,10 +51,10 @@ Under **Settings → Email** (alongside the existing SMTP outgoing config):
 | `imap_port` | Defaults to 993 |
 | `imap_secure` | TLS — defaults on |
 | `imap_user` | Mailbox login — usually the email address you receive bills at |
-| `imap_pass` | Mailbox password. Stored masked (`********`) on GET; the real value is preserved on PATCH when masked is sent back |
+| `imap_pass` | Mailbox password. Stored masked (`********`) on GET; the real value is preserved when masked is sent back, as long as host, port, user and TLS stay the same. Changing any of them requires entering the password again — see [Mail server passwords](/features/email-notifications#mail-server-passwords) |
 | `imap_folder` | Folder to poll — defaults to `INBOX`. The Settings UI offers a folder-picker that lists the available paths |
 
-Three test actions on the page:
+Three test actions on the page (**Test connection** and **List folders** need the `email.edit` permission):
 
 - **Test connection** — proves login + opens the folder, reports message + unread counts. Non-destructive.
 - **List folders** — populates the folder dropdown with what your server exposes.

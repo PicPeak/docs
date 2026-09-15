@@ -50,6 +50,8 @@ The production compose file mounts these host directories into the backend conta
 
 PostgreSQL and Redis use named Docker volumes (`postgres-data`, `redis-data`).
 
+Generated secrets live in the `picpeak-secrets` volume, which only the backend mounts. In builds containing [PicPeak PR #1491](https://github.com/PicPeak/picpeak/pull/1491), PostgreSQL and Redis read their passwords from their own volumes, `picpeak-db-secret` and `picpeak-redis-secret`, so neither container can read the backend's JWT signing key. The `secrets-init` service fills both from `picpeak-secrets` on every start: upgrading needs no manual step, and the passwords stay the same.
+
 ## Permissions
 
 As of the post-#484 release, the backend container starts as root, chowns the bind-mounted host directories (`/app/storage`, `/app/data`, `/app/logs`) to UID 1001 (the in-container `nodejs` user), then drops privileges via `su-exec` before running the app. **Fresh installs need no host-side `chown`.**

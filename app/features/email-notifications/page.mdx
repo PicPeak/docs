@@ -56,6 +56,18 @@ Requests time out after 15 seconds, and any non-2xx response or transport error 
 
 Per-account SMTP hosts configured under Settings → Mail accounts keep sending over their own SMTP.
 
+## Mail server passwords
+
+The SMTP, IMAP and mail-account forms send the stored password back masked (`********`), so you do not retype it for every edit. In builds containing [PicPeak PR #1485](https://github.com/PicPeak/picpeak/pull/1485), the masked password is only reused for the **same server**:
+
+- Changing a server's host, port, username or encryption (TLS) requires entering its password again. Saving or testing without it fails with a "password required" error.
+- Editing anything else — sender name, folder, polling on or off — keeps the stored password as before.
+- **Test connection** and folder detection for IMAP, and the mail-account test, need the `email.edit` permission.
+
+## Invitation and password-reset emails
+
+Admin invitations, customer invitations and customer password-reset emails contain a link that sets the account's password. Once such an email has been sent, the link is masked in the Messages archive, and the email cannot be resent, retried or sent again from there. To give someone a working link, send a new invitation or password reset. (Builds containing [PicPeak PR #1485](https://github.com/PicPeak/picpeak/pull/1485).)
+
 ## Multilingual templates
 
 Email templates support multiple languages. PicPeak includes English and German templates out of the box. The template language is selected based on event or system settings.

@@ -25,6 +25,8 @@ Validation runs server-side in `backend/src/utils/passwordValidation.js`. Failed
 
 Token refresh: while the user is active the JWT is silently rotated; the timeout above is the *idle* limit, not the absolute one.
 
+The same idle limit applies when an admin [previews a gallery](/features/gallery-management#previewing-as-a-guest) (builds containing [PicPeak PR #1497](https://github.com/PicPeak/picpeak/pull/1497)).
+
 ## Lockout
 
 PicPeak counts failed login attempts per `(IP, email)` pair and locks the pair out after the threshold:

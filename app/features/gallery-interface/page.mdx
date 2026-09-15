@@ -109,6 +109,7 @@ The **Download All** button at the top of the gallery zips every visible photo i
 - A size estimate is shown before the download starts ("Download will be ~340 MB").
 - For very large galleries (hundreds of photos / multiple GB), expect the download to take several minutes — the browser is downloading the original files at full quality.
 - For events with **Pre-zip enabled**, the zip is generated once at upload time and cached, making the download instant. See [Creating Events → Downloads](/guides/creating-events).
+- The cached zip is only used when no photo sits in a category with downloads turned off; otherwise guests get the streamed archive without those photos (builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495)).
 
 If the per-event "Allow downloads" setting is off, the bulk-download button is hidden and individual photos can't be downloaded either.
 

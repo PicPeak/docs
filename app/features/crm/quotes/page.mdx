@@ -48,7 +48,7 @@ The email contains a deep link `https://your.install/quotes/respond/<token>` tha
 
 ## Public response page
 
-The customer-facing page at `/quotes/respond/<token>` shows:
+In builds containing [PicPeak PR #1465](https://github.com/PicPeak/picpeak/pull/1465), the customer-facing page at `/quotes/respond/<token>` first asks for a 6-digit code emailed to the customer's address on file, the same way as the [contract signing page](/features/crm/contracts#customer-signing-flow). Customers with a portal account can answer from the portal instead. After verification the page shows:
 
 - The quote details (read-only) and total
 - A button group: **Accept** / **Decline**
