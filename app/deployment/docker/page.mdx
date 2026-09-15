@@ -50,6 +50,8 @@ The production compose file mounts these host directories into the backend conta
 
 PostgreSQL and Redis use named Docker volumes (`postgres-data`, `redis-data`).
 
+The production compose file does not mount `/backup`. Database dumps then land under the backup destination; to keep them in a host folder instead, mount one and set `BACKUP_DIR` so the entrypoint prepares it. See [Where the database dump is written](/guides/backup-restore#where-the-database-dump-is-written).
+
 Generated secrets live in the `picpeak-secrets` volume, which only the backend mounts. In builds containing [PicPeak PR #1491](https://github.com/PicPeak/picpeak/pull/1491), PostgreSQL and Redis read their passwords from their own volumes, `picpeak-db-secret` and `picpeak-redis-secret`, so neither container can read the backend's JWT signing key. The `secrets-init` service fills both from `picpeak-secrets` on every start: upgrading needs no manual step, and the passwords stay the same.
 
 ## Permissions

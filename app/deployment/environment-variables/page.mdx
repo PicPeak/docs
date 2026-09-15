@@ -220,3 +220,5 @@ See **[Backup and Restore](/guides/backup-restore)**.
 | `PICPEAK_IMPORT_MAX_EXPANDED_BYTES` | No | 1 TiB | Most bytes a `.picpeak` import may unpack to. Extraction also stops when the extraction directory runs out of free space |
 | `PICPEAK_IMPORT_MAX_MANIFEST_BYTES` | No | 16 MiB | Largest `manifest.json` a `.picpeak` import may contain |
 | `BACKUP_MANIFEST_REQUIRE_KEYED` | No | off | When `true`, restores refuse unkeyed backup manifests, including manifests without a database dump checksum |
+| `BACKUP_DIR` | No | (unset; `/data/backup` in the all-in-one image) | A backup root the entrypoint creates and hands to UID 1001 on start. Set it together with a `/backup` mount to keep database dumps at `/backup/database`. See [Where the database dump is written](/guides/backup-restore#where-the-database-dump-is-written) |
+| `LOG_TO_CONSOLE` | No | `false` | When `true`, the backend also logs to the container console, so errors such as a failed database dump appear in `docker compose logs`. Otherwise they go to `logs/error.log` and `logs/combined.log` |
