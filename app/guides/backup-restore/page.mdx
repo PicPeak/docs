@@ -51,6 +51,33 @@ Configure under **Admin → Backup & Restore**.
 **Who can change the destination.** In builds containing [PicPeak PR #1493](https://github.com/PicPeak/picpeak/pull/1493), only a **Super Admin** can change where backups go (`backup_destination_*`, `backup_s3_*`, `backup_rsync_*`), whether they include the database, or run the destination connection test. Roles with `backup.create` keep the schedule, retention and file options; for them the destination fields are locked on the Backup page.
 </Callout>
 
+### Where the database dump is written
+
+Every file backup first writes a database dump (the inline dump, on by default). Scheduled and manual database backups use the same directory. It is controlled by `database_backup_destination_path`, a setting the admin UI does not show; installs seed it as `/backup/database`.
+
+In builds containing [PicPeak PR #1502](https://github.com/PicPeak/picpeak/pull/1502) the directory is chosen like this:
+
+1. **A customised `database_backup_destination_path`** is used as set.
+2. **The seeded `/backup/database` (or an empty value)** is kept when `/backup/database` or `/backup` is writable. The default `docker-compose.yml` (`./backup:/backup`) and the all-in-one image provide `/backup`, so nothing changes there.
+3. **Otherwise** the dump goes to `<backup_destination_path>/database`, or to `<storage>/backups/database` when no backup destination is set, so it ends up inside the backup.
+
+A publicly served directory is refused. If the directory cannot be created, the backup fails with `Cannot create the database backup directory <path>: <code>. Set database_backup_destination_path to a directory the backend can write to, or mount a writable volume at that path.` In production that error is written to `logs/error.log`; it only appears in `docker compose logs` when `LOG_TO_CONSOLE=true`.
+
+The database backup **test configuration** check (`POST /api/admin/database-backup/test`) tests and reports this same directory in builds containing [PicPeak PR #1504](https://github.com/PicPeak/picpeak/pull/1504). Older builds always reported the destination as not writable.
+
+<Callout type="info">
+**Keeping dumps in a host folder with `docker-compose.production.yml`.** The production compose file mounts nothing at `/backup`. To keep dumps at `/backup/database` on the host, add to the `backend` service:
+
+```yaml
+    environment:
+      - BACKUP_DIR=/backup
+    volumes:
+      - ./backup:/backup
+```
+
+On start the entrypoint creates `BACKUP_DIR` and hands it to UID 1001. Builds without PicPeak PR #1502 need this mount, or backups fail with `EACCES: permission denied, mkdir '/backup'`.
+</Callout>
+
 ### S3 destination settings
 
 | Key | Default | What it does |
