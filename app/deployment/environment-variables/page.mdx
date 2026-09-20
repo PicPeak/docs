@@ -197,6 +197,7 @@ See **[Storage Backends](../../features/storage-backends)** for the migration pl
 | `STORAGE_S3_SSL` | No | `true` | `false` for plain-HTTP endpoints (dev MinIO) |
 | `STORAGE_AUTO_IMPORT` | No | `false` | Enable the S3 prefix walker (replaces chokidar in S3 mode) |
 | `STORAGE_AUTO_IMPORT_INTERVAL_MS` | No | `300000` | Walker poll interval (5 minutes) |
+| `VIDEO_THUMBNAIL_MAX_SOURCE_BYTES` | No | `536870912` (512 MB) | S3 only. Largest video PicPeak downloads from the bucket to rebuild a **missing** video thumbnail when a guest opens a gallery; a bigger video gets the placeholder tile instead. Does not affect uploads or local storage. See [Video Support → Thumbnail generation](/features/video-support#thumbnail-generation). Builds containing [PicPeak PR #1417](https://github.com/PicPeak/picpeak/pull/1417). |
 
 ## Webhooks
 
