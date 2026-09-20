@@ -32,6 +32,14 @@ That single list governs the admin upload screen, the admin chunked-upload API a
 
 Video thumbnails are automatically extracted from the first few seconds of each video using FFmpeg. FFmpeg is bundled via npm (`@ffmpeg-installer/ffmpeg`) --- no system installation is required.
 
+When FFmpeg cannot read a file, the video gets a neutral placeholder tile with a play icon instead of a poster frame.
+
+### Missing thumbnails repair themselves
+
+In builds containing [PicPeak PR #1417](https://github.com/PicPeak/picpeak/pull/1417), a video whose thumbnail is missing or unreadable --- typically one uploaded on a much older version --- is repaired the first time someone opens its gallery: PicPeak takes the poster frame again and stores it, so it happens once per video. Older builds showed a broken tile for these videos. No action is needed after updating.
+
+On **S3 storage** the repair has to download the video from the bucket first. To keep a guest's gallery visit from triggering multi-gigabyte downloads, videos larger than `VIDEO_THUMBNAIL_MAX_SOURCE_BYTES` (default 512 MB) get the placeholder tile instead of a poster frame. Raise the value in your [environment](/deployment/environment-variables#storage-backend) if your videos are routinely larger and you prefer real poster frames. The limit does not apply to local storage, to external folders, or to new uploads.
+
 ## Resource requirements
 
 <Callout type="warning">
