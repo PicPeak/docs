@@ -6,6 +6,7 @@ export default {
   'environment-variables': 'Environment Variables',
   'reverse-proxy': 'Reverse Proxy',
   ssl: 'SSL Certificates',
+  'bot-protection': 'Bots and Scanners',
   'nas-example': 'Example: NAS at Home',
   'release-channels': 'Release Channels',
   upgrading: 'Upgrading',

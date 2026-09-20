@@ -1,0 +1,163 @@
+import { Steps, Callout } from 'nextra/components'
+
+# CrowdSec (Advanced)
+
+<Callout type="warning">
+**This page is for people who are comfortable with a terminal.** You will type commands as `root`, edit configuration files, and look after one more program on your server. If that is not you, use [Cloudflare](/deployment/bot-protection#step-2-optional-put-cloudflare-in-front) instead: it gives comparable protection without any of this.
+</Callout>
+
+[CrowdSec](https://www.crowdsec.net/) is a free, open-source program that works like a neighbourhood watch. Thousands of servers report the addresses that attack them, and everyone receives the resulting blocklist. On top of that it reads your own proxy log and blocks an address that starts scanning *you*.
+
+Two setups are covered here:
+
+- [On a Linux server](#on-a-linux-server) — a VPS, mini PC or Raspberry Pi running Ubuntu, Debian or Raspberry Pi OS, where you can install programs yourself.
+- [On a NAS with NPMplus](#on-a-nas-with-npmplus) — Docker-only systems where you cannot.
+
+Do not combine CrowdSec with Cloudflare's proxy. Behind Cloudflare the firewall only ever sees Cloudflare's addresses and has nothing to block.
+
+## On a Linux server
+
+The commands below were checked against CrowdSec v1.8.1.
+
+<Steps>
+
+### Install CrowdSec
+
+```bash
+curl -s https://install.crowdsec.net | sudo sh
+sudo apt update
+sudo apt install crowdsec
+```
+
+CrowdSec on its own only *detects*. The next step adds the part that actually blocks.
+
+### Install the blocker
+
+```bash
+sudo apt install crowdsec-firewall-bouncer-iptables
+```
+
+It connects itself to CrowdSec automatically. From now on, addresses on the community blocklist are dropped by the server's firewall.
+
+### Make the blocker cover Docker
+
+Docker sends traffic to its containers on a path of its own that the normal firewall rules do not touch. One small edit includes it. Open the configuration file:
+
+```bash
+sudo nano /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+```
+
+Find the block below and remove the `#` in front of `- DOCKER-USER`, keeping the spaces in front of the dash, so that it reads:
+
+```yaml
+iptables_chains:
+  - INPUT
+#  - FORWARD
+  - DOCKER-USER
+```
+
+Save with `Ctrl+O`, `Enter`, leave with `Ctrl+X`, then restart the blocker:
+
+```bash
+sudo systemctl restart crowdsec-firewall-bouncer
+```
+
+<Callout type="warning">
+Do not skip this step. Without it CrowdSec looks healthy and lists blocked addresses, while PicPeak in Docker is still reachable for all of them.
+</Callout>
+
+### Let CrowdSec read your proxy log
+
+This is what lets CrowdSec notice an address that scans *your* server. If you use **Nginx Proxy Manager**, install its rule set:
+
+```bash
+sudo cscli collections install crowdsecurity/nginx-proxy-manager
+```
+
+Then tell CrowdSec where the logs are. Create the file:
+
+```bash
+sudo mkdir -p /etc/crowdsec/acquis.d
+sudo nano /etc/crowdsec/acquis.d/npm.yaml
+```
+
+with this content, replacing `/path/to/npm/data` with the folder you mounted as `/data` for Nginx Proxy Manager:
+
+```yaml
+filenames:
+  - /path/to/npm/data/logs/proxy-host-*_access.log
+  - /path/to/npm/data/logs/proxy-host-*_error.log
+labels:
+  type: nginx-proxy-manager
+```
+
+For plain nginx, Caddy or Traefik, install the matching collection from the [CrowdSec Hub](https://app.crowdsec.net/hub/collections) instead; each one documents its own log path.
+
+### Switch off the crawler rule
+
+<Callout type="error">
+**Required for PicPeak.** The standard rule set contains a rule against "aggressive crawling" that mistakes a guest scrolling through a gallery for a bot. In our test a single visitor opening a gallery of 200 photos was banned **after three seconds**. At an event, where all guests share the venue Wi-Fi address, one ban locks everybody out.
+</Callout>
+
+Remove that one rule and restart CrowdSec:
+
+```bash
+sudo cscli scenarios remove crowdsecurity/http-crawl-non_statics --force
+sudo systemctl restart crowdsec
+```
+
+All other rules and the community blocklist stay active; in the same test a scanner probing for `/wp-login.php`, `/.env` and similar files was still banned within seconds. `cscli collections list` shows the rule set as `tainted` afterwards. That only means "modified by you" and is expected.
+
+### Check that it works
+
+```bash
+sudo cscli bouncers list      # the firewall bouncer is listed and recently active
+sudo cscli metrics            # your log files appear with lines read and parsed
+sudo cscli decisions list     # addresses your own server has banned (empty at first)
+```
+
+Then open your largest gallery on a phone using mobile data, scroll all the way to the end, and run `sudo cscli decisions list` again. Your own address must not appear.
+
+</Steps>
+
+### If a real visitor gets locked out
+
+```bash
+sudo cscli decisions list                      # find the address and the rule that fired
+sudo cscli decisions delete --ip 203.0.113.7   # lift the ban
+```
+
+If the same rule keeps hitting real visitors, remove it the same way as the crawler rule above.
+
+## On a NAS with NPMplus
+
+On a NAS you usually cannot install system programs, so the firewall blocker is not available, and the standard Nginx Proxy Manager has no way to ask CrowdSec whether a visitor should be blocked. [NPMplus](https://github.com/ZoeyVid/NPMplus) is a community-maintained variant of Nginx Proxy Manager that has this built in, with CrowdSec running as a second container next to it.
+
+<Callout type="warning">
+Moving from Nginx Proxy Manager to NPMplus **cannot be undone**, NPMplus needs a reasonably recent 64-bit processor, and its setup steps change between versions. Make a copy of your Nginx Proxy Manager folders first.
+</Callout>
+
+Follow the two sections of the NPMplus guide in this order:
+
+1. [Migration from nginx-proxy-manager](https://github.com/ZoeyVid/NPMplus#migration-from-upstreamvanilla-nginx-proxy-manager)
+2. [Crowdsec](https://github.com/ZoeyVid/NPMplus#crowdsec)
+
+Things that are specific to PicPeak:
+
+- **Switch off the crawler rule** here too. The NPMplus rule set includes it. The reason is explained [above](#switch-off-the-crawler-rule):
+
+  ```bash
+  docker exec crowdsec cscli scenarios remove crowdsecurity/http-crawl-non_statics --force
+  docker restart crowdsec
+  ```
+
+- **Switch AppSec off for the PicPeak host.** In the proxy host's settings, tick **Disable Crowdsec Appsec**. AppSec holds back every upload until it is fully received and inspects its content, which slows down large photo uploads and can reject legitimate ones. Blocking by address keeps working without it.
+- **Ports on a NAS.** NPMplus uses the NAS's own network instead of Docker port mappings. If the NAS web interface already owns 80 and 443 (see the [NAS example](/deployment/nas-example#2-port-forwarding)), set `HTTP_PORT=7080`, `HTTPS_PORT=7443` and `NPM_PORT=7081` in its Compose file so your router's port forwarding stays as it is.
+- **Reaching PicPeak.** Because NPMplus is no longer on the shared Docker network, it cannot find PicPeak by container name. Give the PicPeak container a port mapping that is only reachable from the NAS itself (`127.0.0.1:3000:3000` for the all-in-one image) and set the proxy host's forward address to `127.0.0.1`, port `3000`.
+- **Test with a real gallery** as in [Check that it works](#check-that-it-works). The command becomes `docker exec crowdsec cscli decisions list`.
+
+## Privacy
+
+CrowdSec reports the addresses it blocks on your server, together with the kind of attack, to the CrowdSec network. That is how the shared blocklist is built. No gallery content, passwords or data about normal visitors is sent. You can [turn sharing off](https://docs.crowdsec.net/docs/next/configuration/crowdsec_configuration/#sharing); you then still receive a smaller blocklist.
+
+If you publish a privacy policy for your galleries, mention that visitors may be blocked based on their IP address.

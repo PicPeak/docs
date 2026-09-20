@@ -1,0 +1,85 @@
+import { Steps, Callout } from 'nextra/components'
+
+# Protecting Against Bots and Scanners
+
+Every server that is reachable from the internet gets visited by automated scanners, usually within minutes of going online. They are not after you personally: they try thousands of addresses and look for forgotten WordPress logins, open admin panels and weak passwords. In your logs this shows up as requests for pages PicPeak does not even have, such as `/wp-login.php` or `/.env`.
+
+This is normal and, on its own, harmless. PicPeak already defends itself against the parts that matter.
+
+<Callout>
+**Only using PicPeak inside your home or office network, or over a VPN?** Scanners cannot reach you. You can skip this page.
+</Callout>
+
+## Step 1: The checklist
+
+If your gallery is reachable from the internet, do these four things. **For most photographers this is all that is needed.**
+
+1. **Use a long, unique admin password and turn on two-factor authentication.** See [Security Settings → Two-factor authentication](/guides/admin-settings/security#two-factor-authentication).
+2. **Keep PicPeak updated.** Security fixes only help once they are installed. See [Upgrading](/deployment/upgrading).
+3. **Use HTTPS.** See [Reverse Proxy](/deployment/reverse-proxy) and [SSL Certificates](/deployment/ssl).
+4. **Open only ports 80 and 443 in your router.** Never forward the PicPeak backend port (`3001`), the Nginx Proxy Manager admin page (`81`), the database, or SSH.
+
+PicPeak does the rest without any setup:
+
+- **Login lockout** — after 5 wrong passwords the login is blocked for 30 minutes. See [Lockout](/guides/admin-settings/security#lockout).
+- **Rate limiting** — a single visitor address can only send a limited number of requests, and only 5 failed logins, per 15 minutes. See [API rate limiting](/guides/admin-settings/security#api-rate-limiting).
+- **reCAPTCHA** on the admin login, if you switch it on. See [reCAPTCHA](/guides/admin-settings/security#recaptcha).
+
+With a strong password and two-factor authentication, a scanner knocking on the door cannot get in, no matter how often it tries.
+
+## Step 2 (optional): Put Cloudflare in front
+
+If you want known attackers and bots turned away **before** they reach your server at all, the easiest way is [Cloudflare](https://www.cloudflare.com/). It is a service that receives your visitors first and passes the good ones on to you. The free plan is enough, there is nothing to install, and it works for every kind of PicPeak install, including a NAS at home.
+
+Everything happens on the Cloudflare website, apart from one line you copy into your PicPeak configuration at the end. Plan about 30 minutes.
+
+<Steps>
+
+### Add your domain to Cloudflare
+
+Create a free account at [cloudflare.com](https://www.cloudflare.com/), add your domain and follow the wizard. It asks you to change the **nameservers** at the company where you bought the domain, and shows you the two names to enter there. The change can take a few hours to become active; Cloudflare sends an email when it is done.
+
+### Switch protection on for your gallery address
+
+Under **DNS**, find the entry for your gallery (for example `gallery.example.com`) and set it to **Proxied** (the orange cloud). A grey cloud means visitors still come to you directly and nothing is filtered.
+
+### Encrypt the whole way
+
+Under **SSL/TLS**, choose **Full (strict)**. This keeps the connection encrypted between Cloudflare and your server too. It needs a valid certificate on your side, which you already have if you followed [SSL Certificates](/deployment/ssl) or the [NAS example](/deployment/nas-example).
+
+### Turn on bot blocking
+
+In the **Security** settings, switch on **Bot Fight Mode**.
+
+### Tell PicPeak that visitors now arrive through Cloudflare
+
+Without this step PicPeak believes all your visitors are one and the same person, and a busy gallery can start showing empty picture tiles for everyone at once.
+
+Copy this line **exactly as it is** into your `.env` file (or into the `environment:` block of your Compose file), then restart PicPeak:
+
+```bash
+TRUST_PROXY=loopback, linklocal, uniquelocal, 173.245.48.0/20, 103.21.244.0/22, 103.22.200.0/22, 103.31.4.0/22, 141.101.64.0/18, 108.162.192.0/18, 190.93.240.0/20, 188.114.96.0/20, 197.234.240.0/22, 198.41.128.0/17, 162.158.0.0/15, 104.16.0.0/13, 104.24.0.0/14, 172.64.0.0/13, 131.0.72.0/22, 2400:cb00::/32, 2606:4700::/32, 2803:f800::/32, 2405:b500::/32, 2405:8100::/32, 2a06:98c0::/29, 2c0f:f248::/32
+```
+
+The numbers are Cloudflare's published addresses. They change rarely; the current list is always at [cloudflare.com/ips](https://www.cloudflare.com/ips/).
+
+If you use a **Cloudflare Tunnel** instead of port forwarding, skip this step.
+
+### Check it
+
+Open a large gallery on your phone using mobile data and scroll to the end. All pictures load: you are done.
+
+</Steps>
+
+**Good to know**
+
+- **Uploads keep working.** Cloudflare's free plan rejects any single upload larger than 100 MB. PicPeak's admin uploader already sends photos in smaller batches and splits large files into pieces, so there is nothing to change.
+- **Cloudflare can see your traffic.** It opens each request to inspect it and encrypts it again. If you publish a privacy policy for your galleries, list Cloudflare in it.
+- **Read the terms if you host a lot of video.** Cloudflare's [service-specific terms](https://www.cloudflare.com/service-specific-terms-application-services/) restrict using the free plan mainly to deliver video or very large files.
+
+## Other tools
+
+- **CrowdSec** is a free, self-hosted alternative to Cloudflare. It needs a terminal, some maintenance, and one PicPeak-specific adjustment, otherwise it locks out your own gallery guests. See [CrowdSec (Advanced)](/deployment/bot-protection/crowdsec).
+- **fail2ban** is a poor match for a Docker install: out of the box its bans do not apply to Docker containers, and it has no shared blocklist, so every attacker gets a few free attempts first. If you already run it for SSH, keep it for that.
+
+Use **either** Cloudflare **or** CrowdSec, not both. Behind Cloudflare, a CrowdSec firewall only ever sees Cloudflare's addresses and has nothing to block.

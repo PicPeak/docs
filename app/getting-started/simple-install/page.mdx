@@ -98,6 +98,10 @@ sudo ./picpeak-setup.sh --docker --unattended \
 - **Native + `--domain`** — the script can provision automatic HTTPS with [Caddy](https://caddyserver.com/) (Let's Encrypt).
 - **Docker + `--domain`** — terminate TLS with your own reverse proxy (Traefik, nginx, or a Cloudflare Tunnel) pointed at the frontend port. See [Reverse Proxy](/deployment/reverse-proxy) and [SSL](/deployment/ssl).
 
+<Callout type="warning">
+**Putting PicPeak on the internet?** Any public server is probed by automated scanners within minutes. Before you share your first gallery link, read [Bots and Scanners](/deployment/bot-protection): a four-point checklist that takes ten minutes, plus an optional free shield in front of PicPeak. Installs that are only reachable inside your own network can skip it.
+</Callout>
+
 ## Updating and removing
 
 ```bash
