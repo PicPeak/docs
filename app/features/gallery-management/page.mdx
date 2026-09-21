@@ -73,6 +73,31 @@ Guest uploads respect the event's **Photo cap**: once it is reached, further upl
 
 Guests can download all photos from a gallery (or a filtered subset) as a ZIP archive with a single click.
 
+## Download limit
+
+A gallery can cap how many photos the client downloads, for packages such as "10 photos included". Set **Download Limit** on the Create Event or Edit Event form; empty or `0` means unlimited, which is the default. New events take their value from [Event Defaults](/guides/admin-settings/event-defaults).
+
+**What counts.** The limit counts distinct photos. A photo uses a slot the first time it is downloaded in any way: single download, *Download selected*, *Download all*, or a download at another resolution. Downloading the same photo again is free, so an interrupted or repeated download does not cost anything. Videos count like photos.
+
+**What the client sees.**
+
+- A counter such as **3 of 10 downloads used** above the gallery.
+- When selecting photos, what the selection costs. Photos already downloaded cost nothing. A selection that needs more than is left is flagged before the download starts, and its download button is disabled.
+- *Download all* is disabled while the gallery holds more photos than the remaining downloads.
+- Once the limit is used up, download buttons are disabled for photos not yet downloaded, and a refused download shows *Download limit reached. Please contact your photographer for more downloads.*
+
+A download that does not fit is refused as a whole: a ZIP is never delivered with some photos silently left out.
+
+**Full-size originals.** While a limit is set, the lightbox shows guests the preview version (at most 1920 px) of photos they have not downloaded, not the original. Otherwise the original would be one "Save image as" away and the limit would not mean anything. Videos have no preview version, so they stay playable in full.
+
+**Who is counted.** The limit applies to the gallery as a whole, not per guest. Customer-portal sessions count against it. Your own admin preview never does.
+
+**Usage and reset.** The event page shows the usage, for example **7 / 10 downloaded**, next to the download protection badges. To give the client more downloads, raise the limit in the edit form. **Reset** clears the usage: the client gets the full limit back, and photos they already downloaded count again. Lowering the limit below what is already used is allowed; the gallery then shows no downloads left, and nothing already downloaded is taken back. Duplicating an event copies the limit but not the usage.
+
+The v1 API accepts `download_limit` on `POST /api/v1/events`.
+
+Available on the beta channel in builds containing PicPeak/picpeak PR 1568.
+
 ## Filtering and search
 
 The gallery interface supports:
