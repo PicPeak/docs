@@ -47,6 +47,12 @@ PicPeak stores `width` and `height` for every photo so masonry and justified lay
 
 Click **Repair photo dimensions** to scan every `photos` row with null `width`/`height` and re-extract from the file. Read-only progress: the button shows current count + total. Safe to run anytime; it only writes when a value actually needs filling in.
 
+## Photo credits from EXIF
+
+New photos get their [credit](/features/gallery-management#uploader-names-and-photo-credits) when they are added. **Read Credits from EXIF** does the same for photos added before that: it reads EXIF `Artist`, then XMP `dc:creator`, then the name inside `Copyright`, and writes what it finds. It never touches a guest upload or a name you set by hand, and it skips archived events, whose originals are inside the archive.
+
+The card counts photos with a credit and photos not read yet. Files that carry no name stay in "not read yet", so the button stays available; running it again only re-reads them. Needs the `system.manage` permission, like the other maintenance jobs on this tab.
+
 ## Update notifications
 
 The dashboard shows the latest available beta or stable version (fetched from GitHub releases) and a **Update Now** button that downloads the latest Docker image and recreates the container. The check runs every 6 hours on the backend. There is nothing to configure on this tab — the version-check service is enabled in code.

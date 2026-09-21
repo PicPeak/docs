@@ -69,6 +69,33 @@ Events can optionally allow guests to upload their own photos. This is useful fo
 
 Guest uploads respect the event's **Photo cap**: once it is reached, further uploads are refused and the uploader shows a message naming the limit. A guest upload is only filed under the event's own categories or global ones. (Builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495).)
 
+### Uploader names and photo credits
+
+Available on the beta channel in builds containing PicPeak/picpeak PR 1569.
+
+At a wedding or a party with many uploaders, a name on each photo answers the first question everyone asks: who took this? **Uploader names**, next to the guest upload options on the event form, controls whether the upload dialog asks for one:
+
+| Mode | Upload dialog |
+|---|---|
+| **Off** (default) | No name asked, nothing recorded. The behaviour before this feature. |
+| **Optional** | Offers a name field; guests may leave it empty. |
+| **Required** | Uploading is only possible after entering a name. |
+
+The name is the gallery's guest identity, the same one likes and comments use when guest feedback runs in guest identity mode, so one guest has one name everywhere. It is asked once and remembered on that device; a guest uploading in several batches does not retype it, and **Not you?** switches to another name on a shared phone. The dialog shows a short notice saying who will see the name.
+
+**Show uploader names to guests** is off by default: names are recorded for you and for the host (client access), and guests see nothing. Turned on, the lightbox shows "Uploaded by Anna", and the gallery gets a **By** filter listing every name with its photo count, plus "Guests without a name" and "Photographer" for the rest. Names are never sent to the Live Slideshow and never appear in share-preview (Open Graph) metadata.
+
+In the admin, every photo carries its credit:
+
+- the photo grid's list view has a **Credit** column, and the grid view shows the name on hover
+- the filter bar has a credit filter, including "No name"
+- the photo viewer can edit or clear a name, and **Set name** does the same for a selection. A name set by hand is final: nothing read from EXIF replaces it.
+- the CSV and JSON photo exports and both feedback exports carry a `credit` column, and XMP sidecars write it as `dc:creator`
+
+Removing a guest (**Delete** on the Guests tab, or the guest's own "forget me") removes their name from the photos they uploaded; the photos stay. Merging duplicate guests moves their uploads to the kept guest's name.
+
+Photos you or an import add get their credit from the file: EXIF `Artist`, then XMP `dc:creator`, then the name inside `Copyright`. Guest uploads never read EXIF: phone metadata names the phone's owner, not the guest. Photos uploaded before this feature have no credit; [Settings → Status](/guides/admin-settings/status#photo-credits-from-exif) can read the EXIF credit for them.
+
 ## Bulk downloads
 
 Guests can download all photos from a gallery (or a filtered subset) as a ZIP archive with a single click.
