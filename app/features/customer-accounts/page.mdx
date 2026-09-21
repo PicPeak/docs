@@ -72,7 +72,7 @@ Three different actions, three different scopes:
 |---|---|---|---|
 | Remove from one gallery | "Manage galleries" dialog removes the junction row; `verifyGalleryAccess` re-checks on every customer-minted JWT | One gallery | Yes (next request) |
 | Deactivate the account | Sets `customer_accounts.is_active = false` and bumps `password_changed_at`; rejects every outstanding JWT | All galleries | Yes (next request) |
-| GDPR-erase the account | Wipes profile + invalidates everything | All galleries; profile data anonymised | Permanent |
+| GDPR-erase the account | Wipes profile + invalidates everything. Signed contracts are kept; see [What erasing a customer keeps](/features/crm/contracts#what-erasing-a-customer-keeps) | All galleries; profile data anonymised | Permanent |
 | Force re-login | Send password-reset email; on apply, bumps `password_changed_at` | All galleries | On apply |
 
 All four are on the customer detail page under **Account actions**.
