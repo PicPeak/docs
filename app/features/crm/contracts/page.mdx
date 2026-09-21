@@ -95,6 +95,38 @@ Contracts don't have a Storno path. To cancel a `fully_signed` contract:
 
 If you also need to refund money already invoiced under this contract, that's an [invoice Storno](/features/crm/invoices#storno-cancellation) on the related invoice(s).
 
+## What erasing a customer keeps
+
+<Callout type="info">
+Available on the beta channel in builds containing PicPeak/picpeak PR 1545. Earlier builds anonymise the customer account but leave their contracts untouched.
+</Callout>
+
+[GDPR-erasing a customer](/features/customer-accounts#locking-out-a-customer) anonymises their account. What happens to their contracts depends on whether anyone has signed them yet.
+
+**A contract with at least one signature is kept.** This covers a signature by the customer, by any co-signer or by you as the issuer, and any contract in `signed_by_customer`, `signed_by_admin` or `fully_signed` status. Such a contract is the record of a concluded, or partly concluded, agreement, and commercial and tax law generally requires you to keep it, and the evidence of how it was signed, for the statutory retention period. Erasure therefore only ends access to it.
+
+**A contract still in `draft` or `sent` that nobody has signed is cancelled and redacted.** Nothing was agreed, so there is nothing to keep.
+
+| Data | Contract with a signature | `draft` / `sent` contract, no signature |
+|---|---|---|
+| Contract row and status | Kept, status unchanged | Set to `cancelled` |
+| Signing links, signing sessions and action tokens | Revoked | Revoked |
+| Signer records: encrypted name, email address, IP address, user agent and decline reason, and the email lookup hash | Kept, for every signer, including co-signers who never signed | Cleared, for every signer |
+| Customer name and address in the frozen contract text | Kept | Blanked. The stored content hash is not recomputed; the contract records that its text was redacted on erasure, so a later integrity check does not read the change as tampering |
+| Stored PDFs, signature images, signing certificate | Kept | Not deleted. An unsigned contract has no signature images, but the PDF generated when it was sent stays in storage |
+| Signing event log | Kept | Kept, with a new `revoked` event. Labels already in the log, such as the name of a signer who opened the contract, stay |
+| Documents the customer uploaded and linked to the contract | Kept and unshared; the file name is replaced with `erased.pdf` | Same |
+
+Other points:
+
+- **The signing event log cannot be edited.** Each event's hash covers the event before it, so changing or removing a label would break the chain for every later event. Names already recorded there are retained, including on a cancelled contract.
+- **Contracts in any other state are kept as they are.** A contract that was already `cancelled` before the erasure, or that the customer `declined`, is not redacted: its signer records, including a decline reason, and the customer's name and address in its text stay.
+- **Only the `customer_name` and `customer_address` placeholders are redacted.** Text you typed into the contract yourself, such as the title, an event name or a clause mentioning the customer, is not touched.
+- **Portal documents not linked to a contract** are deleted with the account, and their files are removed from storage.
+- The customer's activity log entry for the erasure lists which contracts were cancelled and which were kept.
+
+PicPeak does not delete a kept contract when its retention period ends.
+
 ## Per-customer feature override
 
 `customer_accounts.feature_contracts` toggle on the customer detail page hides the contract surface for that customer when off. Useful for casual / wedding clients where a contract isn't part of the workflow.
