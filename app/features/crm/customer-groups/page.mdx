@@ -1,0 +1,163 @@
+import { Callout } from 'nextra/components'
+
+# Customer Groups
+
+Sort your customers into groups — weddings, families, business, VIP, a lead
+source — and use those groups to filter the customer list, to target a
+newsletter, and to branch a workflow.
+
+A customer can be in **no group, one, or several**. A group is referenced by its
+id everywhere, so renaming or recolouring it shows up on every customer at once
+without touching a customer record.
+
+<Callout type="info">
+Groups live on the customer list at **Clients → Accounts**, which needs the
+**Clients** feature flag. They are part of the [CRM (Beta)](/features/crm).
+</Callout>
+
+## Permissions
+
+| Permission | Grants |
+|---|---|
+| `customers.view` | See groups: the chips on customers, the filter, the **Groups** tab (read-only). |
+| `customers.groups.manage` | Create, edit, reorder, archive and delete groups, and put customers in or take them out of groups — one by one, on creation, or in bulk. |
+
+`customers.groups.manage` is granted to `super_admin` and `admin` by default. It is
+separate from `customers.edit` on purpose: a role that may edit a customer's
+address does not silently gain the right to reorganise the whole customer base.
+See [Multi-Admin](/features/multi-admin) for the role editor.
+
+Every group change and every assignment is written to the activity log with the
+admin who made it.
+
+## Managing the catalogue
+
+Open **Clients → Accounts → Groups**.
+
+- **Create** a group with a name (up to 80 characters, unique regardless of case —
+  "VIP" and "vip" are the same group), an optional description and a colour.
+- **Colour** — pick one of the eight palette colours or any hex value. The colour
+  is only ever a dot beside the name, never the only thing that tells groups
+  apart, so every colour is allowed. If a colour is hard to make out on the light
+  or dark background, the form says so; it does not refuse it.
+- **Reorder** with the up / down arrows. The order is the one used on chips,
+  filters and pickers everywhere.
+- **Archive** a group to retire it. An archived group stays on the customers who
+  already carry it — it is history — but it is no longer offered for new
+  assignments or as a filter. **Restore** brings it back.
+- **Delete** only works on a group nobody is in. Deleting a group never deletes
+  or changes a customer. To get rid of a group that is in use, archive it, or
+  take the customers out of it first.
+
+## Putting customers in groups
+
+- **On the customer's page** — the **Groups** card lists the customer's groups;
+  **Change groups** opens a checklist. An archived group the customer already
+  carries stays ticked; untick it to take them out.
+- **When creating a customer** — the create / invite form shows the live groups
+  as checkboxes when you hold `customers.groups.manage`. If a picked group turns
+  out to be archived or gone, nothing is created, so you never end up with a
+  customer who silently lost the groups you picked.
+- **In bulk** — see [Bulk changes](#bulk-changes) below.
+
+## Filtering the customer list
+
+The list opens on **every** customer. Above it:
+
+- **Group pills** — click one or more to show only customers in those groups.
+  Each pill shows how many customers are in the group.
+- **Any of them / All of them** — appears once two or more groups are selected.
+  *Any* shows customers in at least one of the selected groups; *All* only those
+  in every one of them.
+- **Ungrouped** — customers in no group at all, the ones that still need
+  sorting. It cannot be combined with group pills: picking one switches the
+  other off.
+- **Status** — all, active or deactivated customers.
+- **Search** — email, name or company, on top of whatever is filtered.
+- **Clear** resets everything.
+
+The counts on the pills (and on **Ungrouped**) are over **all** customers,
+whatever their status, and are not narrowed by the search or status filter.
+
+The whole filter is kept in the page address, so a filtered list survives a
+reload and can be bookmarked or pasted to another admin. A group that has been
+archived or deleted since the link was made is dropped from the filter.
+
+When nothing matches, the list says **"No customers match these filters."** with
+a way back to the full list; **"No customers yet"** only appears when there are
+really no customers.
+
+## Bulk changes
+
+With `customers.groups.manage`, each row of the customer list has a checkbox.
+The checkbox in the header selects every customer the current filter and search
+show. Changing the filter or the search clears the selection.
+
+1. Select customers, then choose **Add to groups…** or **Remove from groups…**.
+2. Pick the groups. *Add* offers the live groups; *Remove* offers the groups the
+   selected customers are actually in, archived ones included.
+3. The dialog works out the effect before anything is changed — for example
+   *"Adds 12 memberships. 3 customers are already in VIP."* Customers already in
+   a group are not added twice, and removing someone from a group they are not
+   in does nothing.
+4. The confirm button states the effect (**Add 12 memberships**) and stays off
+   while the preview is loading or when the change would do nothing.
+
+<Callout type="warning">
+There is **no undo**. The preview is the safeguard: read it before confirming.
+</Callout>
+
+A bulk change is **all or nothing**. If any selected customer or group no longer
+exists, or a group to add has been archived in the meantime, nothing is changed
+and the dialog says why. One bulk change covers up to 500 customers and 100
+groups. It is recorded as a single activity-log entry with the admin, the group
+ids, the customer ids and the counts — no names or email addresses.
+
+## Groups elsewhere in the admin
+
+Admins with `customers.view` see a customer's group chips (up to two, then
+"+n") wherever a customer is picked or shown:
+
+- the customer picker in the quote, invoice, contract, hours and message editors
+  — on the search results and on the selected customer;
+- the customer picker on the event form, and the customers assigned to an event;
+- the project cockpit, beside the project's customer.
+
+Event and project pages only need `events.view`. Without `customers.view` those
+pages simply show no groups.
+
+## Newsletters by group
+
+A [newsletter campaign](/features/newsletters) can target **Customers in groups**
+(needs `customers.view` to pick them). Choose one or more live groups and, for
+two or more, *any* or *all* of them.
+
+- Membership is read **when the campaign is queued**, not when you save the
+  draft: customers added to the group in between receive it, customers removed
+  in between don't, and a group deleted in between contributes nobody. If the
+  groups have nobody left in them, the campaign refuses to queue.
+- The same rules as **All active customers** apply on top: deactivated customers
+  and customers who opted out of marketing mail are left out.
+- Who a queued campaign reached is recorded per recipient at queue time. Changing
+  the groups afterwards does not change that record.
+- A draft that names a group which has since been archived can't be saved until
+  that group is unticked.
+
+## Workflows
+
+Workflows can branch on **Customer is in group**: pick the groups and whether the
+customer has to be in any or all of them. The check runs when the step runs, so a
+step after a wait sees the groups as they are then.
+
+The condition needs a customer on the run. The customer-created, quote, contract
+and invoice triggers carry one; on gallery and event triggers there is no
+customer and the condition always takes the **no** branch.
+
+When a customer is created with groups, the customer-created workflow event fires
+just before the groups are stored. A condition that runs immediately does not see
+them yet; one after a wait step does.
+
+## Erasing a customer
+
+[Erasing a customer](/features/customer-accounts) takes them out of every group,
+so the member counts drop and an otherwise empty group can then be deleted.
