@@ -50,7 +50,7 @@ If preparing the contract fails at that moment, the details stay saved and the c
 
 ### Reminders and expiry
 
-- **Reminders** go to signers who haven't signed yet, 3 and then 7 days after their last link by default (**Settings → CRM → Contracts**, *Signing reminders*; empty turns them off). Links are stored only as hashes, so a reminder carries a **new** link and the earlier one stops working. The contract page also has a *Send reminder* button per signer.
+- **Reminders** go to signers who haven't signed yet — and aren't on the signing page right now or haven't opened it in the last day — 3 and then 7 days after their last link by default (**Settings → CRM → Contracts**, *Signing reminders*; empty turns them off). Links are stored only as hashes, so a reminder carries a **new** link and the earlier one stops working. The contract page also has a *Send reminder* button per signer.
 - **Expiry.** A contract that is not signed by every customer by its *valid until* date plus 14 days (or, without a date, when the newest link runs out, 60 days after it was sent) becomes **Expired**: its links stop working and you are notified. A partly signed contract expires too; to go ahead, create and send a new contract.
 
 ### Workflow triggers
@@ -71,6 +71,7 @@ All under **Settings → CRM → Contracts**.
 | Email me every time a signer signs | on | Off: you are notified only once every customer has signed |
 | Signing reminders | `3,7` | Days after the last link; empty turns reminders off |
 | Alert after unknown signing links per client and hour | 20 | See [Alerts](#alerts-on-probing) |
+| Alert after unknown signing links per hour, all visitors together | 200 | See [Alerts](#alerts-on-probing) |
 | Alert after wrong codes per contract and hour | 10 | See [Alerts](#alerts-on-probing) |
 | Legal notice (German / English) | standard text | See [The legal notice](#the-legal-notice) |
 
@@ -78,7 +79,7 @@ Fixed limits: a code is valid for 15 minutes and allows five attempts; a new cod
 
 ## Alerts on probing
 
-The signing pages count, per hour, what someone trying links or codes leaves behind: unknown links, withdrawn or expired links, wrong codes, requests refused by the rate limit, a signature key replayed with different details, and a session asking for another contract's file. **System Health** shows the last 24 hours. When unknown links from one client, or wrong codes on one contract, cross the thresholds above, you get one email per kind per hour and an activity-log entry.
+The signing pages count, per hour, what someone trying links or codes leaves behind: unknown links, withdrawn or expired links, wrong codes, requests refused by the rate limit, a signature key replayed with different details, and a session asking for another contract's file. **System Health** shows the last 24 hours. When unknown links from one client, unknown links from all visitors together, or wrong codes on one contract cross the thresholds above, you get one email per rule per hour and an activity-log entry. With *Store signer's IP address* off, only the all-visitors threshold applies; System Health says which mode is active.
 
 No IP address, link, code or name is stored for this: a client is counted as a keyed hash of its address, and not at all when *Store signer's IP address* is off. "Per client" relies on the backend seeing the real client address; behind the bundled nginx it does. With another reverse proxy in front, set [`TRUST_PROXY`](/deployment/environment-variables) accordingly.
 
