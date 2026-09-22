@@ -3,6 +3,7 @@ export default {
   disclaimers: 'Disclaimers',
   quotes: 'Quotes',
   contracts: 'Contracts',
+  'contract-templates': 'Contract Templates & PDF Design',
   invoices: 'Invoices',
   'hours-logging': 'Hours Logging',
   calendar: 'Calendar',
