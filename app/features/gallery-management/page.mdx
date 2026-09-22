@@ -88,7 +88,7 @@ A gallery can cap how many photos the client downloads, for packages such as "10
 
 A download that does not fit is refused as a whole: a ZIP is never delivered with some photos silently left out.
 
-**Full-size originals.** While a limit is set, the lightbox shows guests the preview version (at most 1920 px) of photos they have not downloaded, not the original. Otherwise the original would be one "Save image as" away and the limit would not mean anything. Videos have no preview version, so they stay playable in full.
+**Full-size originals.** While a limit is set, the lightbox shows guests the preview version (at most 1920 px) of photos they have not downloaded, not the original. Otherwise the original would be one "Save image as" away and the limit would not mean anything. Videos have no preview version, so they stay playable in full. Previews (at most 1920 px) and thumbnails never count against the limit, so a photo whose original is no larger than 1920 px is viewable at full size without using a download. If full-size access must be restricted, cap the [download resolution](/features/reveal-mode#download-resolutions) or add a [watermark](/features/image-processing#watermarking).
 
 **Who is counted.** The limit applies to the gallery as a whole, not per guest. Customer-portal sessions count against it. Your own admin preview never does.
 
