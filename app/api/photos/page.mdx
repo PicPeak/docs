@@ -186,8 +186,13 @@ The response carries:
 - `Content-Type` — the photo's type (`image/jpeg`, `image/png`, `video/mp4`, …).
 - `Content-Disposition: attachment` with the original upload filename, both as
   an ASCII fallback and RFC 5987 encoded (`filename*=UTF-8''…`) so umlauts and
-  spaces survive.
+  spaces survive. It is always the original upload name, whatever the
+  **Use original filenames for downloads** setting says — an integration wants
+  the name your files carry, not the renamed storage name.
 - `Content-Length`, and `X-Content-Type-Options: nosniff`.
+
+`HEAD` answers the same headers, `Content-Length` included, without reading the
+file — a cheap way to check a photo is there and how big it is.
 
 Range requests are not supported; a partial download restarts from zero.
 
@@ -203,8 +208,10 @@ built, so there is no waiting before the first byte, and it has no
 `Content-Length`.
 
 - Entries are the stored originals, uncompressed (photos and videos are
-  already compressed), named by their original upload filename. Duplicate names
-  get `_1`, `_2` … suffixes.
+  already compressed), always named by their original upload filename. `:` is
+  replaced by `_`, and duplicate names get `_1`, `_2` … suffixes — compared
+  case-insensitively, so `IMG.jpg` and `img.JPG` don't overwrite each other when
+  extracted on macOS or Windows.
 - `ids` limits the archive to those photos: `?ids=1234,1235,1236`, at most 500,
   and every id must belong to the event.
 - The [list filters](#list-photos-for-an-event) work here too (`marked_only`,
@@ -212,9 +219,36 @@ built, so there is no waiting before the first byte, and it has no
   `my_min_rating`, `logic`), so you can zip exactly what you just listed — for
   example `?marked_only=true&color_labels=green`.
 - A photo whose file is missing from storage is skipped, and its id is listed
-  in a `MISSING_FILES.txt` entry inside the archive.
-- One request is capped at **5000 photos and 20 GiB** (by the recorded file
-  sizes). Beyond that you get `400 ZIP_TOO_LARGE`; split the request with `ids`.
+  in a `MISSING_FILES.txt` entry inside the archive (`MISSING_FILES_1.txt` if
+  one of your photos is itself called `MISSING_FILES.txt`).
+- One request is capped at **5000 photos and 20 GiB**, checked before anything
+  is streamed. Sizes come from the recorded file sizes; for older photos
+  without one, PicPeak asks the storage for the size. Beyond the cap you get
+  `400 ZIP_TOO_LARGE`; split the request with `ids`.
+- `HEAD` answers the status and headers a `GET` would, without building the
+  archive.
+
+<Callout type="warning">
+**Archives over 4 GiB are ZIP64.** Tools that read the central directory
+(`unzip` 6, 7-Zip, macOS Archive Utility, Python's `zipfile`) handle that; some
+*streaming* unzip tools and libraries don't. If yours doesn't, keep each
+archive under 4 GiB with `ids` batches.
+</Callout>
+
+**If a file fails to read while the archive is streaming**, PicPeak aborts the
+connection rather than ending the response, so a truncated archive never
+arrives looking complete. Treat an incomplete transfer (your client reports a
+connection reset or a premature end) as a failure and retry. A failure before
+streaming starts is a normal `500` JSON error.
+
+### Rate limit
+
+Every API request counts against the general rate limit: by default **300
+requests per 15 minutes per client IP**, adjustable under **Settings →
+Security → API rate limiting**. Downloading an event photo by photo with the single
+endpoint spends one request per photo, so an event with a few hundred photos
+hits the limit (`429`). For bulk delivery use the ZIP endpoint — one request
+for the whole event, or one per `ids` batch of up to 500.
 
 ### Download errors
 
@@ -230,6 +264,8 @@ built, so there is no waiting before the first byte, and it has no
 | `404` | `PHOTO_FILE_MISSING` | The photo exists but its file is gone from storage (single download only). |
 | `404` | `NO_PHOTOS` | The ZIP selection matched no photos. |
 | `409` | `EVENT_ARCHIVED` | The event is archived: its originals only exist inside the archive. [Restore](/guides/archiving) the event first. |
+| `429` | — | [Rate limit](#rate-limit) exceeded. |
+| `500` | — | Unexpected server error before the file or archive started streaming. After that, the connection is aborted instead. |
 
 ### What an API download does not do
 
@@ -242,9 +278,11 @@ API downloads are integration access, not guest downloads:
   per-category download switch, the standard download resolution, the
   watermark — do not apply. Anyone holding a token with `photos.download` gets
   the originals.
-- Each download leaves one entry in the admin activity log (and the
-  notification bell) with the token id, event id and photo id — one entry per
-  ZIP, with the photo count, rather than one per photo.
+- Each single download leaves one entry in the admin activity log with the
+  token id, event id and photo id. The notification bell does not list those;
+  it shows one entry per token, event and hour with a running count ("API token
+  “n8n” downloaded 42 originals from …"). A ZIP is one entry with its photo
+  count.
 
 ### n8n: send the originals on WhatsApp
 
@@ -258,9 +296,11 @@ API downloads are integration access, not guest downloads:
    field `data`. n8n takes the filename and MIME type from the response headers.
 4. Hand the binary field `data` to the WhatsApp Cloud API media upload.
 
-For a single archive instead, point one HTTP Request node at
+This spends one API request per photo, so for events with more than a couple
+of hundred photos mind the [rate limit](#rate-limit) — or fetch a single archive
+instead: point one HTTP Request node at
 `/api/v1/events/{{eventId}}/photos/download` with the same *File* response
-format.
+format, and unpack it with n8n's *Compression* node.
 
 <Callout type="warning">
 Give the n8n token only the `read` scope. It can then list and download, but
