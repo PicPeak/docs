@@ -107,6 +107,9 @@ show. Changing the filter or the search clears the selection.
 There is **no undo**. The preview is the safeguard: read it before confirming.
 </Callout>
 
+At most 500 customers can be selected for one change; above that the buttons
+are off until you narrow the filter or the selection.
+
 A bulk change is **all or nothing**. If any selected customer or group no longer
 exists, or a group to add has been archived in the meantime, nothing is changed
 and the dialog says why. One bulk change covers up to 500 customers and 100
@@ -134,7 +137,8 @@ two or more, *any* or *all* of them.
 
 - Membership is read **when the campaign is queued**, not when you save the
   draft: customers added to the group in between receive it, customers removed
-  in between don't, and a group deleted in between contributes nobody. If the
+  in between don't, and a group deleted or archived in between contributes
+  nobody. With *all of them*, one such group means nobody matches. If the
   groups have nobody left in them, the campaign refuses to queue.
 - The same rules as **All active customers** apply on top: deactivated customers
   and customers who opted out of marketing mail are left out.
@@ -153,9 +157,9 @@ The condition needs a customer on the run. The customer-created, quote, contract
 and invoice triggers carry one; on gallery and event triggers there is no
 customer and the condition always takes the **no** branch.
 
-When a customer is created with groups, the customer-created workflow event fires
-just before the groups are stored. A condition that runs immediately does not see
-them yet; one after a wait step does.
+When a customer is created with groups, the customer and the groups are stored
+together, before the customer-created workflow event fires, so the condition sees
+them straight away.
 
 ## Erasing a customer
 
