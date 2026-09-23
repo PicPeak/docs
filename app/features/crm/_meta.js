@@ -4,6 +4,7 @@ export default {
   'customer-groups': 'Customer Groups',
   quotes: 'Quotes',
   contracts: 'Contracts',
+  'contract-templates': 'Contract Templates & PDF Design',
   invoices: 'Invoices',
   'hours-logging': 'Hours Logging',
   calendar: 'Calendar',
