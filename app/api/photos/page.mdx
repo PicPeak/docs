@@ -222,11 +222,19 @@ built, so there is no waiting before the first byte, and it has no
   in a `MISSING_FILES.txt` entry inside the archive (`MISSING_FILES_1.txt` if
   one of your photos is itself called `MISSING_FILES.txt`).
 - One request is capped at **5000 photos and 20 GiB**, checked before anything
-  is streamed. Sizes come from the recorded file sizes; for older photos
-  without one, PicPeak asks the storage for the size. Beyond the cap you get
-  `400 ZIP_TOO_LARGE`; split the request with `ids`.
-- `HEAD` answers the status and headers a `GET` would, without building the
-  archive.
+  is streamed. Sizes come from the recorded file sizes; for photos with no
+  recorded size (or a recorded size of `0`), a `GET` asks the storage for the
+  size. Beyond the cap you get `400 ZIP_TOO_LARGE`; split the request with
+  `ids`. The cap is also enforced on the bytes actually streamed: an archive
+  that grows past 20 GiB anyway is aborted mid-transfer (see below).
+- `HEAD` is a cheap probe: it runs the filter, id and count checks and the size
+  check on recorded sizes only, then answers with the ZIP headers without
+  loading rows, asking the storage or building the archive. Because unsized
+  photos are only sized on `GET`, a `HEAD` can answer `200` where the `GET`
+  then refuses with `ZIP_TOO_LARGE`.
+- At most **2 archives per API token** are built at once. Another `GET`
+  meanwhile gets `429 ZIP_CONCURRENCY`; wait for one to finish. `HEAD` does
+  not count.
 
 <Callout type="warning">
 **Archives over 4 GiB are ZIP64.** Tools that read the central directory
@@ -235,8 +243,9 @@ built, so there is no waiting before the first byte, and it has no
 archive under 4 GiB with `ids` batches.
 </Callout>
 
-**If a file fails to read while the archive is streaming**, PicPeak aborts the
-connection rather than ending the response, so a truncated archive never
+**If a file fails to read while the archive is streaming**, or the streamed
+bytes pass the 20 GiB cap, PicPeak aborts the connection rather than ending
+the response, so a truncated archive never
 arrives looking complete. Treat an incomplete transfer (your client reports a
 connection reset or a premature end) as a failure and retry. A failure before
 streaming starts is a normal `500` JSON error.
@@ -265,6 +274,7 @@ for the whole event, or one per `ids` batch of up to 500.
 | `404` | `NO_PHOTOS` | The ZIP selection matched no photos. |
 | `409` | `EVENT_ARCHIVED` | The event is archived: its originals only exist inside the archive. [Restore](/guides/archiving) the event first. |
 | `429` | — | [Rate limit](#rate-limit) exceeded. |
+| `429` | `ZIP_CONCURRENCY` | This token already has 2 archives in progress (ZIP only). |
 | `500` | — | Unexpected server error before the file or archive started streaming. After that, the connection is aborted instead. |
 
 ### What an API download does not do
