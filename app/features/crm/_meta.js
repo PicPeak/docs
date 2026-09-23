@@ -5,6 +5,7 @@ export default {
   quotes: 'Quotes',
   contracts: 'Contracts',
   'contract-templates': 'Contract Templates & PDF Design',
+  'contract-signing': 'Signing Contracts',
   invoices: 'Invoices',
   'hours-logging': 'Hours Logging',
   calendar: 'Calendar',

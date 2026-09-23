@@ -1,0 +1,134 @@
+import { Callout } from 'nextra/components'
+
+# Signing contracts
+
+<Callout type="info">
+Describes builds that include the signing lifecycle changes from [PicPeak issue 1446](https://github.com/PicPeak/picpeak/issues/1446). Contracts sent before those changes keep signing the way they were sent.
+</Callout>
+
+This page covers what happens after you press **Send** on a contract: how signers get in, what they confirm, what is recorded as evidence, how long it is kept, and how to check a signed contract. For composing contracts, see [Contracts](/features/crm/contracts).
+
+## What kind of signature this is
+
+PicPeak records a **simple electronic signature**: each signer proves they control their email address with a one-time code (or by being signed in to the [customer portal](/features/customer-accounts)), signs in the browser by drawing or typing their name, and every step is written to a hash-chained signing log. The signed PDF and a signing certificate are issued at completion.
+
+It is **not** an advanced or qualified electronic signature. Contracts that the law requires in written form (for example a guarantee, a consumer credit agreement or a fixed-term employment contract in Germany) must be signed on paper. Whether a simple electronic signature is enough for your contracts is a question for your lawyer — see the [CRM disclaimers](/features/crm/disclaimers).
+
+### The legal notice
+
+Every contract carries a legal notice saying exactly that. It is:
+
+- set in **Settings → CRM → Contracts** per language (German and English); an empty language uses the standard text;
+- **frozen into the contract when it is sent**, together with the clauses, the price and the declarations — so it is part of the content hash the signatures are bound to;
+- shown at the foot of the signing page and printed on the signing certificate.
+
+Changing the setting affects only contracts sent afterwards.
+
+## From send to signature
+
+1. **Send.** The contract's content — clauses, placeholders, the source quote's line items and totals, the declarations, the legal notice — is frozen and hashed, the PDF is rendered with a signature field per signer, and the list of attachments (with each file's SHA-256) is hashed too. Each customer signer gets their own link; in a sequential contract, only the next signer.
+2. **Verify.** The link shows only your company and a masked email address until the signer enters the six-digit code emailed to them.
+3. **Review.** The signer reads the contract, its price and its attachments, and sees who signs in which order. Opening the contract is logged once per session.
+4. **Sign.** A compact summary (contract number, parties, total, number of attachments, the start of the content hash), each declaration as its own checkbox — never pre-ticked — and the signature. The button says what it does: *Sign contract no. 2026-014 bindingly*. Declining and uploading a paper copy sit behind *Other options*.
+5. **Receipt.** The signer gets a confirmation email straight away; you get a notice per signature (switchable, see below).
+6. **Countersign.** Once every customer has signed, you countersign on the contract page. That seals the contract: the final PDF and the signing certificate go to everyone by email, and every signing link and session stops working.
+
+When the stored content or the attachment list no longer matches what was hashed at send, signing is refused (`CONTRACT_CHANGED`) and nothing is written.
+
+### Declarations
+
+What a signer confirms is defined per contract template (**Clients → Contracts → Templates**, *Declarations the signer confirms*): up to eight, each with a key, whether it is required, and its wording in German and English. The standard one is *I have read this contract and agree to be bound by its terms.* Changing a declaration's wording gives it a new version when you save the draft. Publishing the template freezes the declarations; sending a contract copies them into its content. Each signer's answer is recorded with the declaration's version and a hash of its wording, and printed on the certificate.
+
+### Collecting missing details first
+
+When the customer's address would print empty, **Send** offers *Ask the customer to complete their details first*. The contract then goes out in two steps:
+
+1. Only the first signer — who must be the customer themselves — is invited, with an email that asks for their details and carries nothing of the contract. The status is *Details needed*. Nothing is rendered or frozen yet.
+2. After the code, they fill in address, postal code, city and country (company, VAT number and phone optionally). Their customer record is updated, then the contract is frozen with those details and sent to the other signers, and they can read and sign it straight away.
+
+If preparing the contract fails at that moment, the details stay saved and the contract page offers *Finish sending*.
+
+### Reminders and expiry
+
+- **Reminders** go to signers who haven't signed yet — and aren't on the signing page right now or haven't opened it in the last day — 3 and then 7 days after their last link by default (**Settings → CRM → Contracts**, *Signing reminders*; empty turns them off). Links are stored only as hashes, so a reminder carries a **new** link and the earlier one stops working. The contract page also has a *Send reminder* button per signer.
+- **Expiry.** A contract that is not signed by every customer by its *valid until* date plus 14 days (or, without a date, when the newest link runs out, 60 days after it was sent) becomes **Expired**: its links stop working and you are notified. A partly signed contract expires too; to go ahead, create and send a new contract.
+
+### Workflow triggers
+
+The workflow engine (feature flag `workflows`) can react to `contract.sent`, `contract.signed_by_customer` (every customer has signed), `contract.signed` (complete), `contract.declined` and `contract.expired`. The built-in flow *Contract completed → approval → draft invoice* (disabled by default) asks you, once a contract is complete, whether to prepare its invoice; on approval the invoice is created on hold and nothing is sent until you send it.
+
+## Settings
+
+All under **Settings → CRM → Contracts**.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Attach contract PDF to email | on | The sent PDF goes with each signing invitation |
+| Require drawn signature | off | A typed name alone is not accepted |
+| Allow customer to upload a wet-signed PDF | on | Offered only when there is a single customer signer |
+| Store signer's IP address | on | Off: no IP address or browser is stored with a signature, and the enumeration alerts keep no per-client count |
+| Signing window (days) | 30 | Default *valid until* of a new contract |
+| Email me every time a signer signs | on | Off: you are notified only once every customer has signed |
+| Signing reminders | `3,7` | Days after the last link; empty turns reminders off |
+| Alert after unknown signing links per client and hour | 20 | See [Alerts](#alerts-on-probing) |
+| Alert after unknown signing links per hour, all visitors together | 200 | See [Alerts](#alerts-on-probing) |
+| Alert after wrong codes per contract and hour | 10 | See [Alerts](#alerts-on-probing) |
+| Legal notice (German / English) | standard text | See [The legal notice](#the-legal-notice) |
+
+Fixed limits: a code is valid for 15 minutes and allows five attempts; a new code can be requested once a minute and five times an hour; a verified signing session lasts one hour.
+
+## Alerts on probing
+
+The signing pages count, per hour, what someone trying links or codes leaves behind: unknown links, withdrawn or expired links, wrong codes, requests refused by the rate limit, a signature key replayed with different details, and a session asking for another contract's file. **System Health** shows the last 24 hours. When unknown links from one client, unknown links from all visitors together, or wrong codes on one contract cross the thresholds above, you get one email per rule per hour and an activity-log entry. With *Store signer's IP address* off, only the all-visitors threshold applies; System Health says which mode is active.
+
+No IP address, link, code or name is stored for this: a client is counted as a keyed hash of its address, and not at all when *Store signer's IP address* is off. "Per client" relies on the backend seeing the real client address; behind the bundled nginx it does. With another reverse proxy in front, set [`TRUST_PROXY`](/deployment/environment-variables) accordingly.
+
+## What is kept, and for how long
+
+| Data | Kept |
+|---|---|
+| Contract, frozen content, PDFs, signature images, signing certificate | With the contract, until you delete it — PicPeak does not delete contracts when a retention period ends |
+| Signer evidence: name, email, IP address, browser, decline reason (encrypted) | With the contract |
+| Declarations each signer answered | With the contract |
+| Signing event log | With the contract; it cannot be edited (every entry's hash covers the one before) |
+| Email codes and signing sessions | Removed 30 days after they expired |
+| Probing counts and alerts | 30 days |
+
+Erasing a customer follows the rule in [What erasing a customer keeps](/features/crm/contracts#what-erasing-a-customer-keeps): a contract with a signature is kept whole, including the encrypted evidence of every signer on it (co-signers and you included), one without is redacted. There is no per-customer export of signing evidence yet; the evidence panel on the contract page shows it, and every opening is logged.
+
+## The evidence key
+
+Signer names, email addresses, IP addresses, browsers and decline reasons are encrypted with the **evidence key** — `PICPEAK_EVIDENCE_KEY`, or a key file PicPeak generates. Use a raw 32-byte key in production; a passphrase works but logs a warning at every start. **Back it up**: without it that evidence cannot be read (the signatures, PDFs and log stay valid). How to rotate it and what to keep is under [Evidence key](/deployment/environment-variables#losing-or-changing-the-evidence-key). **System Health** shows which key is in use and how many stored values are still under an older one.
+
+## Checking a signed contract
+
+### The integrity report
+
+**Verify** on the contract page re-reads every file of the contract and compares each with the value recorded when it was made:
+
+| Check | Compared with |
+|---|---|
+| Sent PDF, signed PDF | The SHA-256 stored when each was written |
+| Signing certificate | Its stored SHA-256 |
+| Signature image (per signer) | The SHA-256 recorded with the signature |
+| Frozen content | Recomputed and compared with the content hash (not checkable after a customer erasure redacted it) |
+| Each attachment | The SHA-256 in the attachment list recorded at send |
+| Attachment list | The hash of the list frozen at send |
+| Signing log | Re-hashed entry by entry; a break names the first entry that doesn't hold |
+| Completed document | The hash the *completed* log entry recorded against the signed PDF |
+
+Every check is listed with both values, and a mismatch names the item that changed. **Report as PDF** downloads the same list as a one-page document. Each run is recorded in the activity log.
+
+There is deliberately no public "is this hash contract N?" lookup — it would let anyone probe for contracts.
+
+### Checking a PDF by hand
+
+The signing certificate prints the SHA-256 of the signed PDF. Anyone who has both can check them without PicPeak:
+
+```bash
+sha256sum contract-2026-014-signed.pdf        # Linux
+shasum -a 256 contract-2026-014-signed.pdf    # macOS
+Get-FileHash contract-2026-014-signed.pdf     # Windows PowerShell
+```
+
+The printed value must equal the one on the certificate. The certificate also prints the content hash, each attachment's hash, the attachment list's hash, each signer's declarations and the final hash of the signing log.

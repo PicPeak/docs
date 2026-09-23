@@ -49,6 +49,10 @@ Send transitions the contract from `draft` → `sent`:
 
 ## Customer signing flow
 
+<Callout type="info">
+Signers, declarations, reminders, expiry, collecting missing details, the legal notice, what is kept and the itemised integrity report are described in **[Signing contracts](/features/crm/contract-signing)**.
+</Callout>
+
 The customer follows the link in the email to `/contracts/sign/<token>`. In builds containing [PicPeak PR #1465](https://github.com/PicPeak/picpeak/pull/1465), the page first shows only your company and a masked hint of the customer's email address, and asks for a **6-digit code** that PicPeak emails to the address on file. The code is valid for 15 minutes and allows five attempts, and sending is throttled to one code per minute and five per hour per link. Confirming it opens the contract in that browser for 30 minutes. Customers with a [portal account](/features/customer-accounts) can read and sign from the portal instead, without a code.
 
 After verification they see:
@@ -80,6 +84,8 @@ The fully-signed email only goes out with a PDF that carries both signatures. If
 After countersigning, the contract is read-only for both parties.
 
 ## Integrity check
+
+The current report checks far more than the PDF — see [Checking a signed contract](/features/crm/contract-signing#checking-a-signed-contract).
 
 Once a contract has an `integrity_hash`, the admin detail page shows a **Verify integrity** action. The current button re-reads the stored PDF, recomputes the SHA-256, and compares it to the stored hash:
 
