@@ -114,7 +114,9 @@ A theme change applies to documents rendered afterwards. Documents already sent 
 - WOFF, WOFF2, a font collection, or not a font;
 - incomplete or missing the tables a PDF needs;
 - larger than 5 MB or with more than 65,535 glyphs;
-- marked by its maker as *restricted licence embedding* — such a font may not be put into a PDF.
+- marked by its maker as *restricted licence embedding* — such a font may not be put into a PDF. A font without an OS/2 table declares no embedding restriction and passes this check, as the OpenType specification defines.
+
+The check runs in an isolated worker. If no worker can be started, the upload is refused with *The font cannot be checked right now. Please try again later.* (`422 DOCUMENT_CHECK_UNAVAILABLE`) rather than parsed inside the server.
 
 The font then appears under **Your fonts** in the theme's font list. Fonts are archived, never deleted. Documents whose theme uses an archived font fall back to Helvetica, and the template check reports it. A font set through the earlier free-text font path is moved into **Your fonts** once, on the first start of a build with this feature, and every theme is pointed at it so documents keep their look.
 
