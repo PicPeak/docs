@@ -83,7 +83,9 @@ At a wedding or a party with many uploaders, a name on each photo answers the fi
 
 The name is the gallery's guest identity, the same one likes and comments use when guest feedback runs in guest identity mode, so one guest has one name everywhere. It is asked once and remembered on that device; a guest uploading in several batches does not retype it, and **Not you?** switches to another name on a shared phone. The dialog shows a short notice saying who will see the name.
 
-**Show uploader names to guests** is off by default: names are recorded for you and for the host (client access), and guests see nothing. Turned on, the lightbox shows "Uploaded by Anna", and the gallery gets a **By** filter listing every name with its photo count, plus "Guests without a name" and "Photographer" for the rest. Names are never sent to the Live Slideshow and never appear in share-preview (Open Graph) metadata.
+**Show uploader names to guests** is off by default: names are recorded for you and for the host (client access), and guests see nothing. Turned on, the lightbox shows "Uploaded by Anna", and the gallery gets a **By** filter listing every name with its photo count, plus "Guests without a name" and "Photographer" for the rest.
+
+The switch applies per upload, so a guest who was told the name stays private keeps it private. Other guests see a guest's name only if the switch was on when that photo was uploaded **and** is on now. Turning it off hides every name from guests; turning it on later does not reveal names given on earlier uploads. Credits read from EXIF or typed by you follow the current switch alone. The host (client PIN) always sees every name. Names are never sent to the Live Slideshow, slideshow links cannot register a guest name, and names never appear in share-preview (Open Graph) metadata. Names may contain apostrophes (`O'Brien`); a name that has no displayable characters left after cleaning is refused.
 
 In the admin, every photo carries its credit:
 
@@ -92,7 +94,7 @@ In the admin, every photo carries its credit:
 - the photo viewer can edit or clear a name, and **Set name** does the same for a selection. A name set by hand is final: nothing read from EXIF replaces it.
 - the CSV and JSON photo exports and both feedback exports carry a `credit` column, and XMP sidecars write it as `dc:creator`
 
-Removing a guest (**Delete** on the Guests tab, or the guest's own "forget me") removes their name from the photos they uploaded; the photos stay. Merging duplicate guests moves their uploads to the kept guest's name.
+Removing a guest (**Delete** on the Guests tab, or the guest's own "forget me") removes their name from the photos they uploaded, including a name you typed on those photos by hand; the photos stay. Merging duplicate guests moves their uploads to the kept guest's name.
 
 Photos you or an import add get their credit from the file: EXIF `Artist`, then XMP `dc:creator`, then the name inside `Copyright`. Guest uploads never read EXIF: phone metadata names the phone's owner, not the guest. Photos uploaded before this feature have no credit; [Settings → Status](/guides/admin-settings/status#photo-credits-from-exif) can read the EXIF credit for them.
 
