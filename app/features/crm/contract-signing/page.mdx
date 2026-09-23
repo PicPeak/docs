@@ -94,11 +94,11 @@ No IP address, link, code or name is stored for this: a client is counted as a k
 | Email codes and signing sessions | Removed 30 days after they expired |
 | Probing counts and alerts | 30 days |
 
-Erasing a customer follows the rule in [What erasing a customer keeps](/features/crm/contracts#what-erasing-a-customer-keeps): a contract with a signature is kept whole, one without is redacted. There is no per-customer export of signing evidence yet; the evidence panel on the contract page shows it, and every opening is logged.
+Erasing a customer follows the rule in [What erasing a customer keeps](/features/crm/contracts#what-erasing-a-customer-keeps): a contract with a signature is kept whole, including the encrypted evidence of every signer on it (co-signers and you included), one without is redacted. There is no per-customer export of signing evidence yet; the evidence panel on the contract page shows it, and every opening is logged.
 
 ## The evidence key
 
-Signer names, email addresses, IP addresses, browsers and decline reasons are encrypted with the **evidence key** — `PICPEAK_EVIDENCE_KEY`, or a key file PicPeak generates. **Back it up**: without it that evidence cannot be read (the signatures, PDFs and log stay valid). How to rotate it and what to keep is under [Evidence key](/deployment/environment-variables#losing-or-changing-the-evidence-key). **System Health** shows which key is in use and how many stored values are still under an older one.
+Signer names, email addresses, IP addresses, browsers and decline reasons are encrypted with the **evidence key** — `PICPEAK_EVIDENCE_KEY`, or a key file PicPeak generates. Use a raw 32-byte key in production; a passphrase works but logs a warning at every start. **Back it up**: without it that evidence cannot be read (the signatures, PDFs and log stay valid). How to rotate it and what to keep is under [Evidence key](/deployment/environment-variables#losing-or-changing-the-evidence-key). **System Health** shows which key is in use and how many stored values are still under an older one.
 
 ## Checking a signed contract
 

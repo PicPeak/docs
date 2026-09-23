@@ -217,7 +217,7 @@ See **[Contracts](/features/crm/contracts)**.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PICPEAK_EVIDENCE_KEY` | No | key file `storage/business-docs/keys/evidence.key`, created with the first signature | Key that encrypts each signer's name, email address, IP address, user agent and decline reason. 64 hex digits or 43 characters of base64 are used as the key itself; any other value is treated as a passphrase. A value that is one or two characters off a key is refused at startup. When unset, PicPeak generates the key file; once it exists, every start logs a warning asking you to back it up |
+| `PICPEAK_EVIDENCE_KEY` | No | key file `storage/business-docs/keys/evidence.key`, created with the first signature | Key that encrypts each signer's name, email address, IP address, user agent and decline reason. 64 hex digits or 43 characters of base64 are used as the key itself; any other value is treated as a passphrase. Use a raw 32-byte key in production (`openssl rand -hex 32`): a passphrase is derived with a fixed salt, so the evidence is only as strong as the passphrase, and every start logs a warning while one is configured. A value that is one or two characters off a key is refused at startup. When unset, PicPeak generates the key file; once it exists, every start logs a warning asking you to back it up |
 | `PICPEAK_EVIDENCE_KEYS_OLD` | No | (unset) | Earlier evidence keys, comma-separated, in the same forms as `PICPEAK_EVIDENCE_KEY`. Evidence written under one of them stays readable while `scripts/rotate-evidence-key.js` moves it to the current key; new evidence is always written under the current key. A malformed entry is refused at startup. Needed only while rotating |
 
 ### Losing or changing the evidence key
@@ -239,7 +239,7 @@ Each stored value names the key it was written under. PicPeak reads it with the 
    docker compose exec backend node scripts/rotate-evidence-key.js
    ```
 
-   On its first run it keeps a replaced generated key file as `evidence.key.<keyId>`, then re-encrypts every value that is under another key, in batches. It can be stopped and run again at any time, and a signature recorded while it runs is never overwritten. It prints how many values it moved and how many are still under another key.
+   On its first run it keeps a replaced generated key file as `evidence.key.<keyId>`, then re-encrypts every value that is under another key, in batches. It is safe to stop and run again at any time: a run re-encrypts only values still under another key, so a second run after a complete one changes nothing. A signature recorded while it runs is never overwritten; it is skipped and picked up by the next run. It prints how many values it moved and how many are still under another key.
 4. Keep the old key until the script reports **0 values still under another key**, then remove it from `PICPEAK_EVIDENCE_KEYS_OLD` (or delete the `evidence.key.<keyId>` file).
 
 Rotation changes only the encrypted values. The content hash, the PDFs, the signing certificate and the signing log's hashes stay exactly as they were.
