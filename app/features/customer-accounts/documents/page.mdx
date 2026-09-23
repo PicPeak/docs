@@ -1,0 +1,154 @@
+import { Callout } from 'nextra/components'
+
+# Customer Documents
+
+The customer portal has a **Documents** area where you and your customer exchange files: you share offers, contract appendices or price lists with them, they send you signed contracts, ID copies or questionnaires. Every file belongs to exactly one customer and is never visible to anyone else.
+
+## Enabling documents
+
+Documents are off by default.
+
+1. Open **Settings > Features** and enable **Customer documents** in the Clients section.
+2. Every customer gets the Documents tab. To hide it for one customer, turn off **Documents** under **Customer features** on their record.
+3. Admins need the **Manage Customer Documents** permission (`customers.documents.manage`). It is granted to the `super_admin` and `admin` roles; other roles start without it.
+
+The settings live under **Settings > CRM > Customer documents**.
+
+## Sharing a document with a customer
+
+On the customer record, the **Documents** card:
+
+- **Upload** a file, optionally link it to one of the customer's events or projects, and tick **Share with the customer**.
+- **Share / Unshare** an existing file. Unsharing takes effect on the customer's very next request.
+- **Link** a document to an event, a project or a contract. A document linked to a contract of the same deal, or to the event's project, also shows on the customer's page for that event.
+- **Notify the customer by email** — when ticked, sharing sends the customer an email with a link to the document. The default for the checkbox is the setting **Email the customer when a document is shared with them** (on). The link opens the portal login and then the document; it carries no token. If the email could not be queued, the document is still shared and the card says so.
+
+The card shows for each file who uploaded it, its size, event, contract and status, and whether the customer has downloaded it (how often, and when last).
+
+## What your customer sees
+
+The customer's **Documents** page lists the files you shared and the files they uploaded, each with its status in words:
+
+| Status | Meaning |
+|---|---|
+| Available | Can be downloaded |
+| Awaiting review | An upload of theirs you have not checked yet (or the malware scanner has not finished) |
+| Rejected | You did not accept it; your reason is shown |
+
+Every document has its own page (`/customer/documents/<id>`), which is what the notification links to. A document the customer can no longer see gets its own message instead of simply vanishing: **no longer shared**, **removed**, or **not found** (a link to someone else's document looks exactly like a link to one that never existed).
+
+The dashboard lists what needs the customer's attention — including uploads you rejected and documents you asked for — and a **Recent** section with what was shared, uploaded, reviewed, sent or signed lately. Both are built from the same data as the lists they link to, so an unshared document drops out at once.
+
+Customers can **delete their own uploads** (not files you shared, and not a file linked to a contract). The confirmation tells them you may already have downloaded it.
+
+## Customer uploads and review
+
+Customer uploads start as **Awaiting review** and cannot be downloaded — not even by the customer — until they are marked clean. You review them on the customer record: download, then **Mark clean** or **Reject** with an optional reason that the customer sees. A rejection is emailed to the customer.
+
+You get an email at your business address (Settings > Business profile) whenever a customer uploads a document.
+
+With a [malware scanner](#malware-scanning) configured, a file the scanner finds clean is available at once and an infected one is refused; the admin review is then only needed for files the scanner could not check.
+
+## Accepted file types
+
+By default only **PDF** is accepted. Under **Settings > CRM > Customer documents > File types customers can upload** you can add:
+
+| Type | Checked for |
+|---|---|
+| PDF | JavaScript, launch actions, embedded files, XFA forms, encryption; parsed in an isolated worker with memory and time limits. Signed PDFs (with a signature form field) are accepted |
+| DOCX, XLSX | Must really be a Word/Excel file; refused with macros (`vbaProject.bin`), embedded code, ActiveX, a macro-enabled type renamed to `.docx`/`.xlsx`, or **any link to outside content** |
+| ODT, ODS | Must really be an OpenDocument text/spreadsheet; refused with macros (`Basic/`, `Scripts/`) or a password |
+| TXT, CSV | Must be UTF-8 text without NUL bytes |
+
+Never accepted: images, legacy Office formats (`.doc`, `.xls`, `.ppt`), macro-enabled formats (`.docm`, `.xlsm`), archives, HTML and SVG.
+
+The last extension of the file name decides (`contract.pdf.exe` is an `.exe`), and the content must match it. Office files are opened in an isolated worker with limits on the number of parts and their size, so a "zip bomb" is refused rather than unpacked.
+
+The office check is best-effort: it refuses the active-content patterns listed above, but a trick it does not know about passes (it fails open). A file whose format it does not recognise is refused. Keep the [malware scanner](#malware-scanning) and your own review as the next line of defence.
+
+PDF and office checks run at most two at a time, and at most 20 more wait. Past that an upload is refused with *"… cannot be checked right now. Please try again later."* (`503 DOCUMENT_CHECK_UNAVAILABLE`) instead of piling up.
+
+<Callout type="warning">
+**Word and Excel files with web links are refused.** A link to outside content is how a document loads a remote template with macros, and the check cannot tell a harmless web link from that. Ask the customer to save such a file as PDF.
+</Callout>
+
+<Callout type="warning">
+**CSV files are passed on exactly as uploaded.** A cell starting with `=`, `+`, `-` or `@` is a formula when someone opens the file in a spreadsheet program. PicPeak does not rewrite customer files; open CSVs from unknown sources in a text editor first.
+</Callout>
+
+## Requesting a document
+
+On the customer record, **Requested from the customer** lets you ask for a specific document ("Signed contract", "Copy of your ID") with an optional note and due date. The customer gets an email with a link that opens the upload with the request preselected, and the request shows under **Needs your attention** in their portal until they upload a file for it.
+
+Reminders go out after the days in **Remind about requested documents after** (default `3,7`: three and seven days after the request; leave it empty to turn reminders off). Each step is sent once. A fulfilled or cancelled request gets no more reminders. If you reject or delete the file that answered a request, the request is open again.
+
+## Downloads
+
+Every download — for you and for the customer — is an **attachment**, never opened in the browser, with `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` and a `Content-Security-Policy: default-src 'none'; sandbox` that the bundled nginx passes through. The file type served comes from PicPeak's own list, never from what the upload claimed.
+
+Each customer download is recorded with its time only — **no IP address and no browser details**. That is what the "downloaded 2×, last …" line on the admin card shows.
+
+## Limits
+
+| Setting | Default | Meaning |
+|---|---|---|
+| Largest file | 25 MB | Per upload, for you and for the customer |
+| Storage per customer | 250 MB | Counts only the customer's own uploads that are not deleted; your uploads don't count |
+| Upload rate | 20 per 10 minutes | Per customer, uploads and deletes together |
+
+## Retention and deletion
+
+- **Deleting** a document hides it from the customer at once. The file itself is removed by an hourly sweep (minute 25) once `customer_documents_retention_days` (default **30**) have passed; the database row stays, marked as purged, as the record that the file existed.
+- **Rejected** uploads are deleted automatically the same number of days after the rejection.
+- **Contract-linked documents** are part of the contractual record. They cannot be deleted while linked — the card explains this and offers **Unlink from contract** — and the sweep never removes their files.
+- **Deactivating** a customer does not touch their documents.
+- **Erasing** a customer deletes every document not linked to a contract (files removed immediately) and every document request. Contract-linked documents are kept as evidence, unshared, and renamed to `erased.<type>` so the file name the customer chose is gone too. See [What erasing a customer keeps](/features/crm/contracts#what-erasing-a-customer-keeps).
+- There is **no per-customer export** of documents yet.
+
+## Malware scanning
+
+PicPeak can scan every upload with ClamAV. It is optional and off until you configure it:
+
+```bash
+docker compose --profile clamav up -d
+```
+
+and set `CLAMAV_HOST=clamav` in `.env` (see [Environment Variables](/deployment/environment-variables#malware-scanner-for-customer-documents)). ClamAV needs about 1 GB of RAM and a few minutes on first start to download its signatures.
+
+- A clean file is available at once; an infected one is refused and logged, and cannot be marked clean.
+- A scan that does not finish (scanner down, timeout, file larger than `CLAMAV_MAX_BYTES`) leaves the file **Awaiting review**, never available. An hourly re-scan (minute 40) retries those files; if you decide on a file by hand in the meantime, your decision wins.
+- While a scan is pending or the scanner keeps failing, you can still **Mark clean** a file after checking it yourself. Only a file the scanner flagged as malware cannot be marked clean.
+- With a scanner configured, your own uploads are scanned too.
+
+**System Health** shows whether the scanner is configured and reachable and when it last scanned successfully.
+
+## Activity and alerts
+
+The customer record's **Activity** card is a timeline of everything that happened on the account: uploads, shares and unshares, downloads, reviews, deletions, requests and reminders, logins and account changes. The same events appear in the admin notifications. The log holds ids, never file names or file contents.
+
+PicPeak also counts, per customer and hour:
+
+- attempts to open a document that belongs to **another customer** (a 404 for them, but an existing document),
+- uploads refused because the customer's storage is full,
+- hits on the upload rate limit.
+
+The 24-hour totals are on **System Health**. When one customer tries more than **Alert after attempts on other customers' documents (per hour)** (default 20) foreign documents within an hour, your business address gets one email.
+
+## Workflows
+
+Three workflow triggers fire for documents: `document.shared`, `document.uploaded` (a customer upload) and `document.requested`. The direct share email needs no approval — your click on **Share** is the approval; automated follow-ups you build on these triggers go through the workflow engine's own approval gate.
+
+## Email templates
+
+Under **Settings > Email > Templates**, category **Customers** (hand-translated `en` + `de`):
+
+| Template | Sent to | When |
+|---|---|---|
+| `customer_document_shared` | Customer | A document is shared with them (unless you untick **Notify**) |
+| `customer_document_uploaded_admin` | Business address | The customer uploads a document |
+| `customer_document_reviewed` | Customer | You reject their upload |
+| `customer_document_requested` | Customer | You request a document |
+| `customer_document_request_reminder` | Customer | Each step of the reminder ladder |
+| `customer_document_access_alert_admin` | Business address | A customer passes the foreign-access alert threshold |
+
+Customers who are deactivated, have no password yet, or have documents turned off get none of the customer emails.

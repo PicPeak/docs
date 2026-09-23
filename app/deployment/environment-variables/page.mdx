@@ -230,6 +230,17 @@ Stored evidence can only be decrypted with the key it was written under, and Pic
 
 Back up `PICPEAK_EVIDENCE_KEY` with your other secrets, or the key file with the database. The key file sits under `business-docs`, which is part of the backup export.
 
+## Malware scanner for customer documents
+
+See **[Customer Documents → Malware scanning](/features/customer-accounts/documents#malware-scanning)**. Unset, no scanner is used and customer uploads wait for an admin's review. The bundled compose files have an opt-in ClamAV service: `docker compose --profile clamav up -d`, then set `CLAMAV_HOST=clamav`.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `CLAMAV_HOST` | No | — | Host of a `clamd` listening on TCP. Unset turns scanning off |
+| `CLAMAV_PORT` | No | `3310` | `clamd` TCP port |
+| `CLAMAV_TIMEOUT_MS` | No | `30000` | Connect plus the whole scan; a scan that takes longer leaves the file awaiting review |
+| `CLAMAV_MAX_BYTES` | No | `26214400` (25 MiB) | Largest file sent to `clamd`; a larger one stays awaiting review. Keep it at least as large as the upload limit, and raise `clamd`'s `StreamMaxLength` to match if you raise it |
+
 ## Backup and restore
 
 See **[Backup and Restore](/guides/backup-restore)**.
