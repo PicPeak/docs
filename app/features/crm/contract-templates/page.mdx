@@ -1,0 +1,150 @@
+import { Callout } from 'nextra/components'
+
+# Contract Templates & PDF Design
+
+Contract templates decide what a new contract says: its clauses in order, the title, intro and closing text, and the PDFs sent with it. The PDF theme decides how every quote, invoice and contract looks. This page covers both, and what PicPeak keeps fixed once a contract has been sent.
+
+<Callout type="info">
+Available on the beta channel in builds containing the contract designer work tracked in PicPeak/picpeak issue 1445. The template library, attachments and the colour/font theme shipped earlier; the pre-publication check, version compare, autosave, the pre-send review, page layout settings and uploaded fonts are newer.
+</Callout>
+
+## Templates and versions
+
+Open **Clients → Contracts → Templates**. A template has at most one **draft** and any number of **published** versions. The newest published version is the one new contracts start from; earlier ones stay in the history.
+
+- **Standard contract** is built in. It can't be edited — **Duplicate** it and edit the copy.
+- **Set as default** picks the template a new contract starts from when nobody chooses one.
+- **Publish** freezes the draft into a new version. A published version never changes again, and neither does a contract made from it — editing the template or the clause library later only affects new contracts.
+- **New draft from this version** (in the version list) replaces the current draft with a copy of an older version. It creates a new draft; the old version stays as it was.
+
+### Editing a template
+
+The editor saves by itself two seconds after your last change; the status next to the undo buttons says **Saving…**, **Saved 14:02**, **Unsaved changes** or **Offline**. **Save draft** saves at once. Leaving the page with unsaved changes asks first.
+
+- **Undo / Redo** (buttons, or Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z outside a text field) cover the whole draft. Inside a text field the browser's own undo applies.
+- **Reorder clauses** with the drag handle, the arrow buttons, or Alt+↑/↓ on a clause. The drag handle also works from the keyboard: focus it, press Space, move with the arrow keys, press Space again.
+- **Insert placeholder** next to each text opens a searchable list of the values PicPeak fills in — customer, event, contract, pricing and your business — with a sample of each. It inserts at the cursor.
+- **Show only if…** on a clause shows it only when a value is filled in (for example, only when the contract has an event date), or only when it is empty (for example, only when there is no source quote). There is no other logic: one value, filled in or empty.
+
+If another admin saves the same template while you are editing, autosave stops and your changes stay on screen. **Compare** shows their version against yours, **Keep mine** saves yours on top of theirs, and **Take theirs** loads their version — **Undo** brings yours back. The contract editor offers **Keep mine** and **Take theirs** in the same situation.
+
+### The check before publishing
+
+**Check** — and every **Publish** — runs the pre-publication check and a test render of the whole contract:
+
+| Blocks publishing | Only a warning |
+|---|---|
+| No clauses | A clause with German text but no English, or the reverse |
+| A clause archived in the clause library | The theme's font could not be loaded (the PDF falls back to Helvetica) |
+| An empty free-text section | The logo file could not be found |
+| An unknown placeholder, e.g. a typo in `{{custmer_name}}` | The contract runs to more than 30 pages |
+| A "Show only if" block inside another one, or one that is not closed | |
+| An attachment that is archived, missing, or no longer matches its file | |
+| The contract could not be rendered | |
+
+Each finding names the clause, language and placeholder it is about; **Go to** opens that clause in that language. A refused publish changes nothing. After a check, the clause list shows where the pages break (**— page 3 —**); the markers fade once you change the draft.
+
+### Previews
+
+- **Preview PDF** renders the draft through the real PDF pipeline with sample data — a sample customer, event and three-line quote — so placeholders show real-looking values. Every page is labelled *Preview — template name, version* so a printed preview can't pass for a contract.
+- **Preview signing page** shows the draft as the customer's signing page will, at desktop width or at a phone's 390 px. It uses the same component as the real signing page. The PDF remains the document that is signed.
+
+### Version history
+
+Each published version shows who published it and when. **Compare with previous** lists what changed: title, intro and closing text, each clause added, removed, moved or changed (word by word), and the attachments.
+
+### When the standard template is updated
+
+When a PicPeak update changes the built-in template, it is published as a new version of **Standard contract** — the old version stays, and contracts made from it are unaffected. A copy you made shows **The system template was updated**, with **Compare**, **Add the new clauses to my draft** (appends the clauses your copy doesn't have) and **Mark as reviewed**. Nothing is applied to your copy by itself.
+
+### Which template a contract from a quote uses
+
+A quote template can name a **Contract template** (in the quote template editor). **Convert to contract** on an accepted quote asks which template to start from, preselected with that one, or the default contract template.
+
+## Sending
+
+**Send to customer** opens a review first. It shows the customer, the signers and their order, the attachments and whether their files still match, the price the contract will freeze, the template and version, and any problems. Errors — a changed attachment file, a deactivated customer, a customer without an email address — disable the send button, which says what it does (*Send to 2 signers*). **Show the signing page** previews the page the signers will read.
+
+### What is frozen when a contract is sent
+
+At send, PicPeak freezes and hashes (SHA-256) what the contract says:
+
+- every clause's text in every language, the title, intro and closing text;
+- the placeholder values of that moment (customer name and address, event, dates, payment terms);
+- the source quote's line items and totals — the price the customer signs for;
+- the attachments, each pinned by its SHA-256.
+
+The PDF that goes out is stored with its own SHA-256, page count, the theme and font it was rendered with, the template version and the attachment manifest. From then on the contract opens as that stored file. Later edits to the template, the clause library, the customer, the quote, the attachments or the theme never change it. Placeholder values are printed as typed: a customer named `**ACME**` appears with the asterisks, in the PDF and on the signing page alike.
+
+## Attachments
+
+**Clients → Contracts → Attachments** holds PDFs such as terms and conditions or a privacy notice. A template or a contract includes them **in the PDF** (merged between the contract body and the signature page, in order) or as a **separate file** sent with it.
+
+Uploads are checked by their content, not their name, and refused if they are:
+
+- not a PDF, encrypted, or damaged;
+- carrying JavaScript, actions, forms or embedded files;
+- larger than 20 MB or longer than 100 pages.
+
+At most 20 attachments per contract or template. Library entries are archived, never deleted; an archived attachment can't be added anew and blocks publishing a template that still uses it.
+
+## The PDF theme
+
+**Branding → PDF theme** styles quotes, invoices and contracts. **All documents** holds the defaults; each document type can override any setting, and an empty field inherits.
+
+- **Colours**, **title size**, **font**, **footer**, **page numbers**, **folding marks** — as before.
+- **Presets** (Classic, Modern, Compact, Large print) fill in the form as a starting point; nothing is saved until you save.
+- **Margins**: left 20–30 mm (20 mm is the DIN 5008 binding edge), right 10–25 mm, bottom 15–30 mm. The top is set by the address window and the letterhead.
+- **Address window**: on for window envelopes (DIN 5008), or off — the recipient then follows the letterhead, without the return-address line.
+- **Logo position**: in the letterhead on the right (as before), top left or top centre, and **above** or **beside** the company name. A logo at the top is kept clear of the address window.
+- **Body text size** 9–12 pt and **line height** 1.2–1.6 for running text; tables keep their size.
+
+The card warns — without blocking — when text or muted colours fall below 4.5:1 contrast against white, the accent below 3:1, body text is under 9.5 pt, the line height under 1.3, or lines run past about 95 characters.
+
+<Callout type="info">
+**A contract's signature page never moves.** Whatever the margins, it keeps its fixed layout, so signatures are always stamped into their boxes.
+</Callout>
+
+A theme change applies to documents rendered afterwards. Documents already sent open as their stored files and are not re-rendered.
+
+### Your own fonts
+
+**Branding → Your fonts for PDFs** adds a font family: the regular face, optionally bold and italic, as TTF or OTF files. You name it, describe its licence, and confirm that you may embed it. Each file is checked by its content and refused if it is:
+
+- WOFF, WOFF2, a font collection, or not a font;
+- incomplete or missing the tables a PDF needs;
+- larger than 5 MB or with more than 65,535 glyphs;
+- marked by its maker as *restricted licence embedding* — such a font may not be put into a PDF. A font without an OS/2 table declares no embedding restriction and passes this check, as the OpenType specification defines.
+
+The check runs in an isolated worker. If no worker can be started, the upload is refused with *The font cannot be checked right now. Please try again later.* (`422 DOCUMENT_CHECK_UNAVAILABLE`) rather than parsed inside the server.
+
+The font then appears under **Your fonts** in the theme's font list. Fonts are archived, never deleted. Documents whose theme uses an archived font fall back to Helvetica, and the template check reports it. A font set through the earlier free-text font path is moved into **Your fonts** once, on the first start of a build with this feature, and every theme is pointed at it so documents keep their look.
+
+## Permissions
+
+| Permission | Allows |
+|---|---|
+| `contracts.view` | Read templates, versions and contracts; template previews with sample data |
+| `contracts.manage` | Create, edit and send contracts; the pre-send review |
+| `contracts.templates.manage` | Create, edit, check, publish, archive templates; the attachment library |
+| `customers.view` (in addition) | A template preview rendered with a real customer's data |
+| `settings.view` / `settings.banking` | Read / change the PDF theme and uploaded fonts |
+| `quotes.manage` | Convert a quote to a contract and pick its template |
+
+Everything contract-related also needs the `contracts` feature flag.
+
+## Where the files live, and backups
+
+| Files | Location under your storage path |
+|---|---|
+| Generated PDFs (sent contracts, quotes, invoices) | `business-docs/<type>/<year>/` |
+| Attachment library | `business-docs/attachments/<sha256>.pdf` |
+| Uploaded fonts | `business-docs/fonts/<sha256>.ttf` / `.otf` |
+
+`business-docs` is part of every backup, and the database tables for templates, versions, attachments, fonts and generated documents are part of every `.picpeak` export. A sent contract restored from a backup opens as the same file, and its PDF and attachments re-hash to the recorded SHA-256 values. The records store absolute file paths, so restore onto an instance with the same storage path (`/app/storage` in the Docker Compose setup, `/data/storage` in the single-container image).
+
+For what erasing a customer does to their contracts, see [Contracts → What erasing a customer keeps](/features/crm/contracts#what-erasing-a-customer-keeps).
+
+## Rendering limits
+
+Every PDF is rendered in a separate worker with a memory limit (256 MB), a 60-second time limit and at most two renders at once. A document that exceeds them is refused with *The document could not be rendered* (`PDF_RENDER_FAILED`) instead of slowing down the server. A contract that can't be rendered is not sent — it stays a draft.
