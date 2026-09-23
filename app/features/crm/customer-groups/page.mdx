@@ -81,7 +81,10 @@ whatever their status, and are not narrowed by the search or status filter.
 
 The whole filter is kept in the page address, so a filtered list survives a
 reload and can be bookmarked or pasted to another admin. A group that has been
-archived or deleted since the link was made is dropped from the filter.
+archived or deleted since the link was made is dropped from the filter. The
+customer-list API still accepts an archived group as a filter, since an archived
+group still describes who was in it; that is a view only. Actions — newsletters
+and workflows — ignore archived groups.
 
 When nothing matches, the list says **"No customers match these filters."** with
 a way back to the full list; **"No customers yet"** only appears when there are
@@ -151,7 +154,9 @@ two or more, *any* or *all* of them.
 
 Workflows can branch on **Customer is in group**: pick the groups and whether the
 customer has to be in any or all of them. The check runs when the step runs, so a
-step after a wait sees the groups as they are then.
+step after a wait sees the groups as they are then. As with newsletters, an
+archived group contributes nobody: with *all of them*, a condition that names an
+archived group never matches.
 
 The condition needs a customer on the run. The customer-created, quote, contract
 and invoice triggers carry one; on gallery and event triggers there is no
