@@ -102,6 +102,31 @@ Photos you or an import add get their credit from the file: EXIF `Artist`, then 
 
 Guests can download all photos from a gallery (or a filtered subset) as a ZIP archive with a single click.
 
+## Download limit
+
+A gallery can cap how many photos the client downloads, for packages such as "10 photos included". Set **Download Limit** on the Create Event or Edit Event form; empty or `0` means unlimited, which is the default. New events take their value from [Event Defaults](/guides/admin-settings/event-defaults).
+
+**What counts.** The limit counts distinct photos and videos. An item uses a slot the first time it is downloaded in any way: single download, *Download selected*, *Download all*, or a download at another resolution. Playing a video's original in the gallery also uses one slot; replays and seeking within that video are free, and a playback that fails gives the slot back. Downloading the same item again is free, so an interrupted or repeated download does not cost anything, and a browser revalidating its cached copy (HTTP 304) never uses a slot. A video used as the hero image shows its poster frame and costs nothing.
+
+**Who downloads originals.** On a limited event only the client draws on the quota and gets originals: a session logged in with the [client PIN](/guides/creating-events) or through the customer portal. Share-link guests get preview-size copies (at most 1920 px) from single downloads and ZIPs, cannot download or play videos ("This video is available to the client only."), and see a preview-size note instead of the counter and the resolution picker. A limited gallery without a password therefore has no client, and every visitor gets preview copies. Your own admin preview is never counted.
+
+**What the client sees.**
+
+- A counter such as **3 of 10 downloads used** above the gallery.
+- When selecting items, what the selection costs. Items already downloaded cost nothing. A selection that needs more than is left is flagged before the download starts, and its download button is disabled.
+- *Download all* is disabled while the gallery holds more items than the remaining downloads.
+- Once the limit is used up, download buttons are disabled for items not yet downloaded, a refused download shows *Download limit reached. Please contact your photographer for more downloads.*, and a video not yet downloaded shows that message instead of the player.
+
+A download that does not fit is refused as a whole: a ZIP is never delivered with some items silently left out.
+
+**Full-size originals.** While a limit is set, the lightbox shows the preview version (at most 1920 px) of photos the client has not downloaded, not the original. Otherwise the original would be one "Save image as" away and the limit would not mean anything. Previews and thumbnails never count against the limit, so a photo whose original is no larger than 1920 px is viewable at full size without using a download. A video only loads when the client presses Play, which is what uses its slot; the Premium and Carousel layouts show the video's poster instead. The [live slideshow](/features/live-slideshow) cannot play videos that are not unlocked yet. If full-size access must be restricted further, cap the [download resolution](/features/reveal-mode#download-resolutions) or add a [watermark](/features/image-processing#watermarking).
+
+**Usage and reset.** The limit applies to the gallery as a whole, not per session. The event page shows the usage, for example **7 / 10 downloaded**, next to the download protection badges. To give the client more downloads, raise the limit in the edit form. **Reset** clears the usage: the client gets the full limit back, and photos they already downloaded count again. Lowering the limit below what is already used is allowed; the gallery then shows no downloads left, and nothing already downloaded is taken back. Duplicating an event copies the limit but not the usage. Admins who can see an event but do not own it see the usage but no **Reset**.
+
+The v1 API accepts `download_limit` on `POST /api/v1/events`.
+
+Available on the beta channel in builds containing PicPeak/picpeak PR 1568.
+
 ## Filtering and search
 
 The gallery interface supports:
