@@ -9,7 +9,7 @@ is the most common reason a request comes back `401`.
 |---|---|---|
 | **Auth** | API token (`Authorization: Bearer pp_live_…`) | Admin session JWT |
 | **For** | Integrations, scripts, the Lightroom plugin | The admin UI |
-| **Photo endpoints** | Upload, replace, list-with-marks | Everything else on this page |
+| **Photo endpoints** | Upload, replace, list-with-marks, download originals | Everything else on this page |
 
 The admin API is **JWT-only** — `adminAuth` verifies a signed session token, so
 an API token sent to an `/api/admin/…` route is rejected. There is currently no
@@ -164,6 +164,158 @@ Three fields are worth understanding before you build against this:
 
 `my_rating` and `my_color_label` are scoped to the token owner. Marks made by a
 different admin are deliberately not visible here.
+
+### Download an original
+
+Streams one photo or video exactly as it was uploaded — the stored original,
+not the gallery's download rendition. No resize to the gallery's standard
+resolution, no watermark.
+
+```bash
+curl -OJ "$BASE_URL/api/v1/events/$EVENT_ID/photos/$PHOTO_ID/download" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Requires the `read` scope and **both** the `photos.view` and `photos.download`
+permissions on the token owner's role, and the owner must be allowed to see the
+event. The built-in `editor` and `viewer` roles have no `photos.download`, so
+their tokens can list photos but not download them.
+
+The response carries:
+
+- `Content-Type` — the photo's type (`image/jpeg`, `image/png`, `video/mp4`, …).
+- `Content-Disposition: attachment` with the original upload filename, both as
+  an ASCII fallback and RFC 5987 encoded (`filename*=UTF-8''…`) so umlauts and
+  spaces survive. It is always the original upload name, whatever the
+  **Use original filenames for downloads** setting says — an integration wants
+  the name your files carry, not the renamed storage name.
+- `Content-Length`, and `X-Content-Type-Options: nosniff`.
+
+`HEAD` answers the same headers, `Content-Length` included, without reading the
+file — a cheap way to check a photo is there and how big it is.
+
+Range requests are not supported; a partial download restarts from zero.
+
+### Download originals as a ZIP
+
+```bash
+curl -o originals.zip "$BASE_URL/api/v1/events/$EVENT_ID/photos/download" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Same permissions as the single download. The archive is streamed as it is
+built, so there is no waiting before the first byte, and it has no
+`Content-Length`.
+
+- Entries are the stored originals, uncompressed (photos and videos are
+  already compressed), always named by their original upload filename. `:` is
+  replaced by `_`, and duplicate names get `_1`, `_2` … suffixes — compared
+  case-insensitively, so `IMG.jpg` and `img.JPG` don't overwrite each other when
+  extracted on macOS or Windows.
+- `ids` limits the archive to those photos: `?ids=1234,1235,1236`, at most 500,
+  and every id must belong to the event.
+- The [list filters](#list-photos-for-an-event) work here too (`marked_only`,
+  `mark_source`, `color_labels`, `my_color_labels`, `min_rating`,
+  `my_min_rating`, `logic`), so you can zip exactly what you just listed — for
+  example `?marked_only=true&color_labels=green`.
+- A photo whose file is missing from storage is skipped, and its id is listed
+  in a `MISSING_FILES.txt` entry inside the archive (`MISSING_FILES_1.txt` if
+  one of your photos is itself called `MISSING_FILES.txt`).
+- One request is capped at **5000 photos and 20 GiB**, checked before anything
+  is streamed. Sizes come from the recorded file sizes; for photos with no
+  recorded size (or a recorded size of `0`), a `GET` asks the storage for the
+  size. Beyond the cap you get `400 ZIP_TOO_LARGE`; split the request with
+  `ids`. The cap is also enforced on the bytes actually streamed: an archive
+  that grows past 20 GiB anyway is aborted mid-transfer (see below).
+- `HEAD` is a cheap probe: it runs the filter, id and count checks and the size
+  check on recorded sizes only, then answers with the ZIP headers without
+  loading rows, asking the storage or building the archive. Because unsized
+  photos are only sized on `GET`, a `HEAD` can answer `200` where the `GET`
+  then refuses with `ZIP_TOO_LARGE`.
+- At most **2 archives per API token** are built at once. Another `GET`
+  meanwhile gets `429 ZIP_CONCURRENCY`; wait for one to finish. `HEAD` does
+  not count.
+
+<Callout type="warning">
+**Archives over 4 GiB are ZIP64.** Tools that read the central directory
+(`unzip` 6, 7-Zip, macOS Archive Utility, Python's `zipfile`) handle that; some
+*streaming* unzip tools and libraries don't. If yours doesn't, keep each
+archive under 4 GiB with `ids` batches.
+</Callout>
+
+**If a file fails to read while the archive is streaming**, or the streamed
+bytes pass the 20 GiB cap, PicPeak aborts the connection rather than ending
+the response, so a truncated archive never
+arrives looking complete. Treat an incomplete transfer (your client reports a
+connection reset or a premature end) as a failure and retry. A failure before
+streaming starts is a normal `500` JSON error.
+
+### Rate limit
+
+Every API request counts against the general rate limit: by default **300
+requests per 15 minutes per client IP**, adjustable under **Settings →
+Security → API rate limiting**. Downloading an event photo by photo with the single
+endpoint spends one request per photo, so an event with a few hundred photos
+hits the limit (`429`). For bulk delivery use the ZIP endpoint — one request
+for the whole event, or one per `ids` batch of up to 500.
+
+### Download errors
+
+| Status | `code` | When |
+|---|---|---|
+| `400` | `INVALID_PHOTO_IDS` | `ids` is malformed, or an id does not belong to this event (the offending ids are not named). |
+| `400` | `TOO_MANY_PHOTO_IDS` | More than 500 `ids`. |
+| `400` | `ZIP_TOO_LARGE` | Over 5000 photos or 20 GiB; the body carries `photo_count` and `total_bytes`. |
+| `401` | `NO_TOKEN`, `INVALID_TOKEN`, `TOKEN_REVOKED`, … | Missing, unknown, revoked or expired token. |
+| `403` | `INSUFFICIENT_SCOPE` / `FORBIDDEN` | Token lacks the `read` scope, or its owner lacks `photos.view` or `photos.download`. |
+| `403` | — | The event belongs to another admin (same answer as the other `/api/v1` event routes). |
+| `404` | — | Unknown event or photo. A photo of a *different* event gets the same `404` as an unknown id. |
+| `404` | `PHOTO_FILE_MISSING` | The photo exists but its file is gone from storage (single download only). |
+| `404` | `NO_PHOTOS` | The ZIP selection matched no photos. |
+| `409` | `EVENT_ARCHIVED` | The event is archived: its originals only exist inside the archive. [Restore](/guides/archiving) the event first. |
+| `429` | — | [Rate limit](#rate-limit) exceeded. |
+| `429` | `ZIP_CONCURRENCY` | This token already has 2 archives in progress (ZIP only). |
+| `500` | — | Unexpected server error before the file or archive started streaming. After that, the connection is aborted instead. |
+
+### What an API download does not do
+
+API downloads are integration access, not guest downloads:
+
+- They do **not** count towards the gallery's download statistics, per-photo
+  download counters or any download limit, and they write no gallery access
+  log entries.
+- Gallery settings that shape guest downloads — downloads disabled, the
+  per-category download switch, the standard download resolution, the
+  watermark — do not apply. Anyone holding a token with `photos.download` gets
+  the originals.
+- Each single download leaves one entry in the admin activity log with the
+  token id, event id and photo id. The notification bell does not list those;
+  it shows one entry per token, event and hour with a running count ("API token
+  “n8n” downloaded 42 originals from …"). A ZIP is one entry with its photo
+  count.
+
+### n8n: send the originals on WhatsApp
+
+1. **HTTP Request** — `GET {{BASE_URL}}/api/v1/events/{{eventId}}/photos?limit=100`,
+   Authentication *Generic → Header Auth* with name `Authorization` and value
+   `Bearer pp_live_…`. Page with `page=2`, `3`, … while
+   `pagination.pages` says there are more.
+2. **Split Out** on `photos`.
+3. **HTTP Request** — `GET {{BASE_URL}}/api/v1/events/{{eventId}}/photos/{{$json.id}}/download`,
+   same credential, *Options → Response → Response Format: File*, put output in
+   field `data`. n8n takes the filename and MIME type from the response headers.
+4. Hand the binary field `data` to the WhatsApp Cloud API media upload.
+
+This spends one API request per photo, so for events with more than a couple
+of hundred photos mind the [rate limit](#rate-limit) — or fetch a single archive
+instead: point one HTTP Request node at
+`/api/v1/events/{{eventId}}/photos/download` with the same *File* response
+format, and unpack it with n8n's *Compression* node.
+
+<Callout type="warning">
+Give the n8n token only the `read` scope. It can then list and download, but
+cannot create events or upload.
+</Callout>
 
 ## Admin API endpoints
 
@@ -331,8 +483,9 @@ See [System Status](/guides/admin-settings/status) for when to run this.
 
 ## Photo + thumbnail serving
 
-Originals and thumbnails are served only through the authenticated gallery
-API, which applies the per-photo rules (download permission, per-category
+For integrations, the [original download endpoints](#download-an-original)
+above serve the stored files with an API token. Everything else is served only
+through the authenticated gallery API, which applies the per-photo rules (download permission, per-category
 download opt-out, watermarking, resolution cap, reveal windows, hidden
 photos, customer-assignment re-check):
 
