@@ -28,11 +28,26 @@ That single list governs the admin upload screen, the admin chunked-upload API a
 - Per-file cap: **Max Video Size (MB)** in General settings (default 500 MB), separate from the photo cap. Raise it, and the reverse-proxy body limit below, for long recordings.
 - Large files go through the admin chunked-upload API (10 MB chunks, resumable per chunk) — see [Photos API](/api/photos#chunked-upload-large-files).
 
+## Browser playback
+
+The gallery plays the file you uploaded. Browsers decode H.264 in an MP4 container; an HEVC (H.265) recording from a recent phone plays in Safari and nowhere else, a QuickTime `.mov` is unreliable outside Safari, and an MP4 whose index sits at the end of the file has to download whole before the first frame. For those files the guest sees "This video format cannot be played in this browser" and a download link.
+
+**Browser-playable copies of videos** in [General settings](/guides/admin-settings/general) fixes this at ingest. It is off by default. Switched on, a background worker checks every video and, for anything a browser will not play, writes an H.264/AAC MP4 (streamable, at most 1920 px on the long edge) next to the original. The gallery then streams that copy; the download stays the original file. A video that already plays as it is gets no copy.
+
+What to expect:
+
+- Switching the setting on queues every video already in your galleries. The worker takes them one at a time; a transcode runs at roughly real time on a small server, so a large back catalogue takes a while. Nothing changes for guests until each copy is ready, and the setting can be switched off again at any point.
+- The copies live in PicPeak's storage (also on S3), including for videos imported from an external folder — the originals on the share are never touched. Plan for the extra space: a 1080p copy is typically 10–20 MB per minute.
+- When a copy cannot be made, the video's tile on the admin Media tab carries a **No web copy** note with the reason, and the original keeps playing as before. Switching the setting off and on again retries failed copies.
+- Needs FFmpeg with the `libx264` encoder, which the PicPeak images include.
+
+Tunables for the worker are listed under [Environment Variables → Video copies](/deployment/environment-variables#video-copies). Builds containing [PicPeak PR #1761](https://github.com/PicPeak/picpeak/pull/1761).
+
 ## Thumbnail generation
 
-Video thumbnails are automatically extracted from the first few seconds of each video using FFmpeg. FFmpeg is bundled via npm (`@ffmpeg-installer/ffmpeg`) --- no system installation is required.
+Video thumbnails are automatically extracted from the first few seconds of each video using FFmpeg. The Docker images ship FFmpeg (`ffmpeg` and `ffprobe`); on a native installation, install it from your distribution and make sure it is on the backend's `PATH`.
 
-When FFmpeg cannot read a file, the video gets a neutral placeholder tile with a play icon instead of a poster frame.
+When FFmpeg cannot read a file, the video gets a neutral placeholder tile with a play icon instead of a poster frame. On the admin Media tab that tile carries a **No poster frame** note with FFmpeg's reason, and a **Retry** that takes the poster frame again — useful after installing or updating FFmpeg. Builds containing [PicPeak PR #1760](https://github.com/PicPeak/picpeak/pull/1760).
 
 ### Missing thumbnails repair themselves
 
