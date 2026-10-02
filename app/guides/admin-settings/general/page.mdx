@@ -13,6 +13,7 @@ The **General** tab covers your instance's identity, upload limits, language, an
 | **Max File Size (MB)** | `50` | Per-photo upload cap. Range: 1–500. Larger files are rejected before disk write. |
 | **Max Files per Upload** | `500` | Per-batch cap. Range: 1–2000. Hard-capped at the `MAX_ALLOWED_FILES_PER_UPLOAD` build constant — UI value can be lower but never higher. |
 | **Max Video Size (MB)** | `500` | Per-video upload cap, separate from the photo cap so photos can keep a smaller limit. |
+| **Browser-playable copies of videos** | off | Re-encodes videos a browser cannot play (HEVC, QuickTime, non-streamable MP4) into an H.264 MP4 that the gallery streams instead; the download stays the original. Switching it on queues the videos already uploaded. Costs CPU per video and a second file. See [Video Support → Browser playback](/features/video-support#browser-playback). |
 | **Allowed File Types** | `jpg,jpeg,png,webp` | Comma-separated extensions. One list for every upload path: the admin upload screen, the admin chunked-upload API, guest uploads and the v1 API. Videos are off by default — add `mp4,mov,webm` (and `m4v`, `avi` if needed) to accept them. See [Allowed file types](#allowed-file-types) below. |
 
 ## Allowed file types

@@ -200,6 +200,20 @@ See **[Storage Backends](../../features/storage-backends)** for the migration pl
 | `STORAGE_AUTO_IMPORT_INTERVAL_MS` | No | `300000` | Walker poll interval (5 minutes) |
 | `VIDEO_THUMBNAIL_MAX_SOURCE_BYTES` | No | `536870912` (512 MB) | S3 only. Largest video PicPeak downloads from the bucket to rebuild a **missing** video thumbnail when a guest opens a gallery; a bigger video gets the placeholder tile instead. Does not affect uploads or local storage. See [Video Support → Thumbnail generation](/features/video-support#thumbnail-generation). Builds containing [PicPeak PR #1417](https://github.com/PicPeak/picpeak/pull/1417). |
 
+## Video copies
+
+The worker behind **Browser-playable copies of videos** ([Video Support → Browser playback](/features/video-support#browser-playback)). All optional; the setting itself is switched on in the admin, not here. Builds containing [PicPeak PR #1761](https://github.com/PicPeak/picpeak/pull/1761).
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `VIDEO_RENDITION_CONCURRENCY` | No | `1` | Transcodes running at once. One is right for a small server that also serves galleries; each extra worker keeps another core busy. |
+| `VIDEO_RENDITION_POLL_MS` | No | `5000` | How often an idle worker looks for queued videos. |
+| `VIDEO_RENDITION_STUCK_TIMEOUT_MS` | No | `7200000` (2 hours) | A video claimed by a worker that died is queued again after this long. Raise it if a single transcode on your hardware can take longer. |
+| `VIDEO_RENDITION_TIMEOUT_MS` | No | `3600000` (1 hour) | Longest a single transcode may run before it is killed and the video marked failed. |
+| `VIDEO_RENDITION_MAX_EDGE` | No | `1920` | Longest edge of the copy in pixels. Smaller sources are not upscaled. |
+| `VIDEO_RENDITION_CRF` | No | `23` | x264 quality (lower is better and larger). |
+| `VIDEO_RENDITION_DISABLED` | No | `false` | `true` keeps the worker from starting on this instance, for example on a replica that should only serve requests. |
+
 ## Webhooks
 
 See **[Webhooks](../../features/webhooks)** for event catalog, payload shapes, and verification examples.

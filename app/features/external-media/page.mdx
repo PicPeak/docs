@@ -58,6 +58,8 @@ Reference folders remain local filesystem paths even when `STORAGE_BACKEND=s3`. 
 
 The import includes subfolders and accepts `.jpg`, `.jpeg`, `.png` and `.webp` files. Hidden files and folders are skipped. Files already imported into the event are skipped on later passes; the existing duplicate-name rules also apply, so use distinct filenames within each photo type.
 
+Videos are imported too, but only for the extensions on the [Allowed File Types](/guides/admin-settings/general#allowed-file-types) list. The default list holds no video type, so a library that has always had clips next to its photos is not changed by an upgrade; add `mp4`, `mov` or `webm` to the list and the next manual import, or the next pass over a watched folder, brings the clips in. An imported video gets a poster frame and its runtime, codec and dimensions from FFmpeg, the same as an uploaded one; it is not scanned for faces. Builds containing [PicPeak PR #1738](https://github.com/PicPeak/picpeak/pull/1738).
+
 Wait until your copy has finished before starting a manual import. Automatic watching adds the settling checks described below.
 
 ## Watch a folder for new files
