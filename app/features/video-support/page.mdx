@@ -41,6 +41,7 @@ What to expect:
 - When a copy cannot be made, the video's tile on the admin Media tab carries a **No web copy** note with the reason, and the original keeps playing as before. Switching the setting off and on again retries failed copies.
 - The copies are part of the backup export (the `videos` folder of PicPeak's storage). After a restore that did not bring them back, a video whose copy is missing is noticed the first time a guest opens it: it goes back to the worker while the setting is on, and is retried by the next switch-on otherwise; the original plays meanwhile.
 - Archiving a gallery drops its copies together with the rest of its derived files; restoring the archive queues them again while the setting is on. Archived galleries are left out when the setting is switched on.
+- An HDR recording (HLG or PQ, the default on recent phones) is tone-mapped to SDR for its copy, so colours and highlights come out as on the phone rather than dark and flat. This needs FFmpeg's `zscale` and `tonemap` filters; the PicPeak images have them, and a build without them still gets a playable, untone-mapped copy. Builds containing [PicPeak PR #1766](https://github.com/PicPeak/picpeak/pull/1766).
 - Needs FFmpeg with the `libx264` encoder, which the PicPeak images include.
 
 Tunables for the worker are listed under [Environment Variables → Video copies](/deployment/environment-variables#video-copies). Builds containing [PicPeak PR #1761](https://github.com/PicPeak/picpeak/pull/1761).
