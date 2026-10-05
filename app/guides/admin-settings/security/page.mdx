@@ -39,6 +39,8 @@ PicPeak counts failed login attempts per `(IP, email)` pair and locks the pair o
 
 Lockouts log to `auth_attempts` and `security_events`. An admin can clear a lockout from the Users page.
 
+In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) the admin and customer-portal password forms apply this per pair as described, so failed attempts from one address no longer lock the account for everyone else. The second-factor step is counted differently: wrong codes are counted per account across all addresses, in a counter of its own, so changing address does not buy more guesses and failed password attempts by someone else cannot lock you out of the code prompt.
+
 ## Two-factor authentication
 
 | Setting | Default | What it does |

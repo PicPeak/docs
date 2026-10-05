@@ -57,6 +57,8 @@ The event slug is derived as `{type-prefix}-{slugified-name}-{date}`, e.g. `wedd
 
 The "gated by" toggles are in [Event Defaults](/guides/admin-settings/event-defaults).
 
+In builds containing [PicPeak PR #1793](https://github.com/PicPeak/picpeak/pull/1793) the customer name and email of an existing event can be cleared by emptying the field and saving, unless the matching "required" toggle is on. A gallery without a customer address gets no gallery email: **Resend creation email** says so instead of reporting success, and **Reset gallery password** shows the new password with a note that no email went out, so you can pass it on yourself.
+
 ### Access control
 
 | Field | Type | Default | Notes |
@@ -75,7 +77,7 @@ Changing the gallery password, the client PIN or the client link also ends the s
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
-| **Expiration (days)** | number | from `general_default_expiration_days` (30) | Sets `expires_at = now + N days`. On expiry the gallery is auto-archived. |
+| **Expiration (days)** | number | from `general_default_expiration_days` (30) | Sets `expires_at = now + N days`. On expiry the gallery is auto-archived. An explicit expiry date-time sent without a time zone is read as UTC (builds containing [PicPeak PR #1788](https://github.com/PicPeak/picpeak/pull/1788)). |
 | **Photo cap** | number | `0` (unlimited) | Max number of photos for this event. Replacement uploads (same filename) don't count. Applies to admin, chunked and guest uploads. |
 
 ### Display & theming

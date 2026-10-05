@@ -102,6 +102,8 @@ By default the `og:image` is your branding logo. Each event has an opt-in to use
 The thumbnail is fetched **unauthenticated** by every link-preview crawler --- enabling the toggle effectively makes the hero photo public to anyone the URL is shared with. Default is off; pick a hero you're comfortable surfacing publicly before enabling.
 </Callout>
 
+A gallery that is expired, archived, deactivated or still a draft gets the generic site preview instead of its own name, date and hero photo (builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809)).
+
 To verify a gallery's preview metadata from the host:
 
 ```bash

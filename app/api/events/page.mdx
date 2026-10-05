@@ -116,6 +116,8 @@ curl -X PATCH "$API_URL/v1/events/$EVENT_ID" \
 
 Accepts any subset of the create-event fields. `password` change regenerates the share token.
 
+On the admin API (`PUT /api/admin/events/:id`), builds containing [PicPeak PR #1793](https://github.com/PicPeak/picpeak/pull/1793) accept `""` or `null` for `customer_name` and `customer_email` to clear them, unless the field is required by the event defaults; `customer_email` must be a string or `null`. Builds containing [PicPeak PR #1788](https://github.com/PicPeak/picpeak/pull/1788) read an `expires_at` without a time zone as UTC, store it in ISO form, and answer `400` for a value that is not a readable date-time. Sending `customer_account_ids` needs the `customers.events` permission when it changes the assignment (builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809)).
+
 ### Publish (draft → live)
 
 ```bash

@@ -47,6 +47,8 @@ Opening any photo opens the lightbox — full-screen viewer with navigation, zoo
 - 5-star rating (if ratings enabled)
 - Comment / Open feedback panel (if comments enabled)
 
+**Link to a photo** (beta channel from v3.161.0-beta.0, [PicPeak PR #1799](https://github.com/PicPeak/picpeak/pull/1799)): while a photo is open the address bar carries `?photo=<id>`. Copying the address gives a link that opens the gallery on that photo, the browser's Back button closes the lightbox, and stepping through photos keeps the address in step. The parameter is carried through short links (`/s/…`). A link to a photo in another folder opens that folder, and active filters are cleared if they would hide it. A link to a photo the visitor has no access to (hidden from guests, removed) opens the gallery without it.
+
 **iOS:**
 - Toolbar respects `env(safe-area-inset-bottom)` so buttons sit above the home indicator.
 - Close button respects `env(safe-area-inset-top)` so it stays clear of the notch / dynamic island.
@@ -84,6 +86,14 @@ If the event has feedback enabled (per-event setting in the Edit Event → Feedb
 
 The setting lives on the event, not globally — different events can use different identity modes.
 
+### Rating from the grid
+
+On the beta channel from v3.161.0-beta.0 ([PicPeak PR #1796](https://github.com/PicPeak/picpeak/pull/1796)) a guest can rate without opening the lightbox: hovering or focusing a tile shows the five stars under the tile's action buttons. Clicking the star already given clears the rating, as in the lightbox. The name prompt, if the event asks for one, appears once and is then used for every tile.
+
+- Available in the Grid, Justified, Mosaic, Timeline and Masonry (columns mode) layouts. The Masonry modes rows, Flickr and quilted have no tile feedback buttons and therefore no tile rating.
+- Tiles lower than 104 px — panoramic crops in Mosaic or Masonry — show the action buttons only; rate those in the lightbox.
+- The instance-wide rating limit is 2,000 per hour so a proofing session is not cut off. An install that still had the old seeded limit of 100 is raised by the upgrade; a limit you set yourself is kept.
+
 ## Search & filter
 
 The filter bar (toggleable globally; default on) gives guests:
@@ -101,6 +111,12 @@ When feedback is enabled, additional filter chips appear:
 - **Rated** — only photos with at least one rating
 - **Commented** — only photos with at least one approved comment
 
+On the beta channel from v3.161.0-beta.0 ([PicPeak PR #1800](https://github.com/PicPeak/picpeak/pull/1800)) a **My rating** chip row filters by the guest's own stars: `1+` to `5`, one at a time, click the active chip to clear it. It only offers thresholds the guest has actually reached, appears only while ratings are on for the event, and narrows whatever the other filters leave. In the sidebar layout, **Select all (N)** selects exactly the photos the active filters leave on screen.
+
+### Copy filenames for the RAW editor
+
+On the beta channel from v3.161.0-beta.0 ([PicPeak PR #1797](https://github.com/PicPeak/picpeak/pull/1797)) **Copy filenames** produces one line of filenames to paste into the filename search of Lightroom, Capture One or another RAW editor. It lists the selected photos while a selection is active, otherwise the guest's favourites — in the Story and Premium layouts, the photos the guest liked. Extensions are left off so the list also matches the RAW files, the separator is a comma or a space, and a photo that was replaced by an edited version is listed under its original camera filename. The button is offered in every layout, including the empty state of a filter that matches nothing.
+
 ## Bulk download
 
 The **Download All** button at the top of the gallery zips every visible photo into a single `.zip`. Behavior:
@@ -112,6 +128,8 @@ The **Download All** button at the top of the gallery zips every visible photo i
 - The cached zip is only used when no photo sits in a category with downloads turned off; otherwise guests get the streamed archive without those photos (builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495)).
 
 If the per-event "Allow downloads" setting is off, the bulk-download button is hidden and individual photos can't be downloaded either.
+
+At most two streamed archives are built at the same time per server, with eight more waiting; beyond that a download request is answered with `429` and `Retry-After: 10`, and the gallery asks the guest to try again shortly (builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809)).
 
 ## Language
 

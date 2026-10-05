@@ -71,8 +71,10 @@ Fully headless — the admin is seeded from the password you pass, so there is n
 
 ```bash
 sudo ./picpeak-setup.sh --docker --unattended \
-  --admin-password 'S0me-Str0ng-Pass' --channel beta
+  --admin-password-file /root/picpeak-admin-password --channel beta
 ```
+
+The file holds the password on its first line and must be readable by its owner only (`chmod 600`).
 </Tabs.Tab>
 </Tabs>
 
@@ -83,13 +85,14 @@ sudo ./picpeak-setup.sh --docker --unattended \
 | `--docker` / `--native` | Install method (default: `docker`) |
 | `--unattended` | Run without prompts, using defaults + the flags below |
 | `--email EMAIL` | Admin email (default `admin@example.com`) |
-| `--admin-password PASS` | Seed the admin directly (skips the browser token step) |
+| `--admin-password-file FILE` | Seed the admin directly from a password file (skips the browser token step). The file must be a regular file with no group or other permissions. Builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809). |
+| `--admin-password PASS` | The same with the password on the command line. Still works, with a warning: the password ends up in the process list and the shell history. |
 | `--domain DOMAIN` | Domain name (enables HTTPS URLs) |
 | `--enable-ssl` | Native only: provision HTTPS via Caddy (requires `--domain`) |
 | `--install-dir DIR` | Install directory (Docker; default `~/picpeak`) |
 | `--channel CHANNEL` | Image channel: `stable` (default) or `beta` |
 | `--port PORT` | User-facing port |
-| `--smtp-host` / `--smtp-port` / `--smtp-user` / `--smtp-pass` | Email configuration |
+| `--smtp-host` / `--smtp-port` / `--smtp-user` / `--smtp-pass-file` | Email configuration. `--smtp-pass-file FILE` reads the SMTP password from a file under the same rules; `--smtp-pass PASS` still works, with the same warning. |
 | `--update` | Update an existing installation |
 | `--uninstall` | Remove PicPeak |
 

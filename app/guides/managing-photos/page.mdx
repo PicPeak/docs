@@ -12,6 +12,8 @@ From an event's admin view, use the upload area to add photos:
 
 Thumbnails are generated automatically during upload using Sharp (for images) or FFmpeg (for videos).
 
+**Dropping a folder** (beta channel from v3.161.0-beta.0, [PicPeak PR #1795](https://github.com/PicPeak/picpeak/pull/1795)): the uploader reads the folder and its subfolders and adds the files it accepts, in name order per folder. Files of other types, such as XMP sidecars, are skipped. The **Upload** button waits until the folder has been read. The usual limits apply: if the folder holds more than **Max files per upload** allows, the first files up to the limit are added and a notice says how many fit. For a very large folder the scan stops early and says so; drop its subfolders one at a time.
+
 ## Categories
 
 Organize photos into categories within an event:

@@ -12,7 +12,7 @@ A guest can like a photo and, separately, mark it as a favourite. Both are count
 
 ### Star ratings
 
-One to five stars per guest per photo. A guest clears their rating by clicking the star they already gave, which removes it rather than storing a zero — so the photo's average and count recalculate, and it can drop back out of any "rated" filter.
+One to five stars per guest per photo. On the beta channel (from v3.161.0-beta.0) a guest can also rate straight from the grid tile — see [Rating from the grid](/features/gallery-interface#rating-from-the-grid). A guest clears their rating by clicking the star they already gave, which removes it rather than storing a zero — so the photo's average and count recalculate, and it can drop back out of any "rated" filter.
 
 ### Comments
 
@@ -92,6 +92,8 @@ Filtered selections export as a ZIP, or as file lists and XMP sidecars for Light
 ## Settings
 
 Per event, under the event's feedback settings: the master **Enable feedback** switch, the identity mode, which of the six types are on, the lightbox keyboard scheme, per-guest caps for likes and favourites, and privacy options — require name and email, moderate comments, and show feedback to guests. Guest feedback is limited by the instance-wide feedback rate limits; the per-event rate-limit switch was removed because it was never applied (builds containing [PicPeak PR #1489](https://github.com/PicPeak/picpeak/pull/1489)).
+
+In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) the totals guests see (feedback summary, photo count) only count photos that guest can see, and a guest's own feedback list leaves out photos that were hidden afterwards. View, download and visitor totals are no longer sent to guests at all; they are on the admin [Analytics](/features/analytics) page.
 
 With **Show feedback to guests** off, guests also do not see a photo's average rating or its like, favourite and comment totals. Photos a client has hidden accept no feedback from guests and are left out of the feedback summary. (Builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495).)
 
