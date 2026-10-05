@@ -137,6 +137,8 @@ verification:
 
 Format is `json` or `yaml` per `backup_manifest_format`. JSON is more compact; YAML is human-readable.
 
+The manifest also records the backup settings that were in force. In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) credentials are left out of that record: the S3 access and secret key, the rsync SSH key and any other setting whose name marks it as a secret. Manifests written by older builds still contain them — treat old manifests like the credentials themselves, and rotate the keys if a manifest may have been read by someone who should not have them.
+
 ## S3 prefix walker (auto-import)
 
 When PicPeak is reading backups *from* S3 (e.g. you migrated to a new server and want to restore from your existing S3 backup bucket), the **S3 Prefix Walker** scans the bucket under your configured `backup_s3_prefix` and surfaces every backup it finds.
@@ -179,6 +181,23 @@ Before the database is touched, the restore checks the dump file against the SHA
 A `.picpeak` import is checked before and while it is extracted: too many entries (`PICPEAK_IMPORT_MAX_ENTRIES`), more unpacked bytes than `PICPEAK_IMPORT_MAX_EXPANDED_BYTES` or than the free space of the extraction directory, or an oversized `manifest.json` (`PICPEAK_IMPORT_MAX_MANIFEST_BYTES`) stop the import before anything is restored. See [Environment Variables](/deployment/environment-variables#backup-and-restore).
 
 The UI restore is a one-shot, full-rollback operation — run it on a fresh instance, not over a live one with newer data, unless you've thought through the consequences.
+
+In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) a restore is stricter about what it accepts and what it reports:
+
+- **Every file counts.** A file that is missing, unreadable or fails its checksum fails the restore; it is no longer reported as complete with some files skipped. The check covers the whole manifest.
+- **Size limit.** `restore_max_file_size_mb` (default 5000) is enforced for every file, on the size the manifest states and on the bytes actually read. An oversized or swapped object stops the restore, and the partial file is removed.
+- **No symlinks.** A file in a local backup must be a regular file inside the backup folder. Symbolic links are refused.
+- **Everyone signs in again.** After a full or database restore, after a rollback and after a `.picpeak` import, all admin, customer and gallery sessions issued before it are invalid.
+- **`.picpeak` imports** only restore files under the folders an export writes: `business-docs`, `uploads`, `events/active` and `events/archived`. Anything else in the archive stops the import. Under the publicly served folders `uploads/logos` and `uploads/favicons`, HTML and JavaScript files are refused.
+- **S3 manifests** larger than 16 MiB are refused.
+
+### SQLite: characters in the dump path
+
+On SQLite installs, `database_backup_destination_path` must not contain quotes, backslashes or control characters; saving such a path is refused (builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809)).
+
+### `scripts/backup.sh`
+
+The helper script writes its archive readable by the calling user only (directory `0700`, archive `0600`), because the archive contains `.env` (builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809)).
 
 ### Manual restore — DB
 

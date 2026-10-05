@@ -359,6 +359,14 @@ curl -X DELETE "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID" 
 Re-sending a chunk index replaces the earlier copy, so a failed chunk can be
 retried on its own.
 
+In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) the chunk layout is fixed by `fileSize`:
+`totalChunks`, when sent, must equal `ceil(fileSize / chunkSize)`, every chunk
+but the last must be exactly `chunkSize` bytes and the last one the remainder
+(`400` otherwise). An upload belongs to the admin and event that initialised
+it; another admin or another event gets `404` for its id. `complete` can be
+called once: a second call while the first is merging, or after it finished,
+answers `409`.
+
 #### File type rule
 
 The file type is **derived from the filename extension**, and that extension

@@ -65,7 +65,7 @@ After verification they see:
   - **Both**: pick either path.
 
 On submit:
-- The signature image (canvas) or the uploaded signed PDF is persisted alongside the contract. An uploaded file must really be a PDF; anything else is refused (builds containing [PicPeak PR #1471](https://github.com/PicPeak/picpeak/pull/1471)).
+- The signature image (canvas) or the uploaded signed PDF is persisted alongside the contract. An uploaded file must really be a PDF; anything else is refused (builds containing [PicPeak PR #1471](https://github.com/PicPeak/picpeak/pull/1471)). In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) a PDF uploaded by the customer is also inspected before it is accepted: at most 10 MB, not encrypted, and without scripts, actions, forms or embedded files. A PDF that defines the same object twice in a way viewers and the check could read differently is refused (`PDF_AMBIGUOUS_OBJECTS`); exporting it again from the scanner or PDF app fixes that. The file is stored exactly as uploaded. Once a contract is fully signed, a customer upload can no longer replace its PDF (`CONTRACT_ALREADY_SIGNED`).
 - The contract transitions to `signed`.
 - The admin gets the `contract_signed_admin_notification` email.
 

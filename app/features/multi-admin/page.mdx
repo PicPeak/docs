@@ -87,6 +87,19 @@ A few actions could hand someone Super Admin power or a full copy of the instanc
 - Testing an IMAP connection, listing IMAP folders and testing a mail account need `email.edit`. See [Email Notifications](/features/email-notifications#mail-server-passwords). ([PicPeak PR #1485](https://github.com/PicPeak/picpeak/pull/1485))
 - Webhook delivery details show the gallery share token and share URL only to roles with `settings.integrations`. See [Webhooks](/features/webhooks#operational-view). ([PicPeak PR #1485](https://github.com/PicPeak/picpeak/pull/1485))
 
+### October 2026 changes
+
+In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809):
+
+- **Analytics tracker code.** The tracker provider, the Umami and Rybbit URLs and the custom head HTML can only be changed by a Super Admin. They decide which script runs in visitors' browsers, so `settings.integrations` no longer covers them; the other analytics fields are unchanged. See [Analytics](/guides/admin-settings/analytics).
+- **Settings with a screen of their own.** The General, Security, Analytics and SEO save actions refuse keys that belong to another screen — `backup_*`, `database_backup_*`, `rate_limit_*`, `max_image_requests_*`, `ledger_*` and `restore_*` — with `400` and the code `SETTINGS_OWNED_ELSEWHERE`. Change them on the Backup, Security (rate limiting), Image Security, Accounting and Restore screens, which check their own permissions.
+- **Customers on events and projects.** Assigning customer accounts to an event needs `customers.events`, on top of the event permission; without `customers.view` the event page shows no assigned customers. Linking a customer to a project needs `customers.view`, and a role without it does not see the project's customer.
+- **Deal documents.** The deal view lists quotes, contracts and invoices only for the document types the role may view (`quotes.view`, `contracts.view`, `bills.view`).
+- **Mailbox actions.** Archive, Restore and Delete on the Messages page need `email.edit`; with `email.view` alone the page is read-only.
+- **S3 bucket list.** Listing the buckets of the backup credentials is Super Admin only, like the destination test.
+- **Deleting administrators.** A role with `users.delete` that is not Super Admin can only delete accounts whose role is within its own permissions, and not an account that still owns events or projects — reassign those first, or let a Super Admin delete it.
+- **Cancelling invitations.** The same ceiling as for creating them: an invitation to Super Admin or to a role beyond your own permissions cannot be cancelled by you, and an accepted invitation cannot be cancelled at all.
+
 ## Assigning a role
 
 **Users** tab → edit a user → **Role**. Invitations pick a role at creation time.
@@ -126,6 +139,10 @@ The login page's **Remember me** box extends the session from 24 hours to 30 day
 The notification bell in the admin header surfaces what guests are doing: a gallery being opened, photos being downloaded by a guest or by a customer account, and photos being favourited.
 
 These are deliberately debounced so a busy gallery does not flood the bell — one open notification per gallery per six hours, one single-photo save per gallery per hour. Slideshow traffic is excluded entirely. There are no per-type settings for this yet.
+
+In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) the bell follows the same rule as the event list: Super Admin and Admin see every entry, every other role sees entries for its own events and for events without an owner. Entries that belong to no event (logins, settings changes) are shown to the roles that see everything.
+
+**Clear all** never deletes anything: the entries are also the audit trail behind the activity log, contract history and customer timelines. In builds containing [PicPeak PR #1813](https://github.com/PicPeak/picpeak/pull/1813) it hides the entries from **your** bell only. Other administrators keep theirs, read/unread state is not touched, and a download summary that grows after you cleared it comes back. **Mark all read** still marks the entries read for everyone who can see them.
 
 ## Related
 

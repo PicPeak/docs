@@ -92,6 +92,25 @@ Builds containing [PicPeak PR #1477](https://github.com/PicPeak/picpeak/pull/147
 - **Feedback.** The per-event feedback rate-limit switch is gone; the instance-wide limits apply. See [Feedback](/features/feedback#settings).
 - **3.46.x** is end of life. See [Release Channels](/deployment/release-channels#security-support).
 
+### October 2026: hardening and proofing
+
+Builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809), [PicPeak PR #1813](https://github.com/PicPeak/picpeak/pull/1813), [PicPeak PR #1788](https://github.com/PicPeak/picpeak/pull/1788), [PicPeak PR #1792](https://github.com/PicPeak/picpeak/pull/1792), [PicPeak PR #1793](https://github.com/PicPeak/picpeak/pull/1793) and — on the beta channel — [PicPeak PR #1795](https://github.com/PicPeak/picpeak/pull/1795), [PicPeak PR #1796](https://github.com/PicPeak/picpeak/pull/1796), [PicPeak PR #1797](https://github.com/PicPeak/picpeak/pull/1797), [PicPeak PR #1799](https://github.com/PicPeak/picpeak/pull/1799) and [PicPeak PR #1800](https://github.com/PicPeak/picpeak/pull/1800) upgrade with the routine steps. The migrations run on their own: on the beta channel `261` (notification dismissals), `262` (rating limit) and `263` (SQLite expiry values); on stable `238` (SQLite expiry values) and `239` (notification dismissals). A few behaviours change:
+
+- **Roles.** Tracker code settings and the S3 bucket list are Super Admin only; assigning customers to events needs `customers.events`; mailbox actions need `email.edit`; the bell shows a role its own events; deleting an administrator who still owns events needs a Super Admin. See [Roles & Permissions](/features/multi-admin#october-2026-changes).
+- **Notifications.** **Clear all** hides entries for the admin who clicks it and no longer deletes the activity log. See [Guest activity in the bell](/features/multi-admin#guest-activity-in-the-bell).
+- **Logins.** Lockout is per account and address; the second factor has its own counter per account. See [Security Settings](/guides/admin-settings/security#lockout).
+- **Analytics.** The tracker no longer runs in the customer portal or on short links. See [Analytics](/guides/admin-settings/analytics#umami-settings).
+- **Slideshow.** Regenerating or disabling a slideshow link ends the sessions opened with it. See [Live Slideshow](/features/live-slideshow#good-to-know).
+- **Restore.** A restore fails when any file is missing, enforces `restore_max_file_size_mb`, and signs everyone out afterwards; `.picpeak` imports only accept the folders an export writes. See [Backup and Restore](/guides/backup-restore#from-the-admin-ui).
+- **Backup manifests** no longer contain S3 or SSH credentials. Manifests from older builds still do; rotate the keys if those files were exposed.
+- **Workflow approvals.** An approval link sent by email is valid for 14 days unless the gate sets another time-out, and never longer than 90 days. Links from older builds that had no expiry are treated as expired; the approval itself stays open and can be decided from the admin inbox.
+- **Contracts and invoices.** PDFs uploaded by signers and PDFs arriving by mail are inspected before use; only the newest payment-check link of an invoice works. See [Contracts](/features/crm/contracts), [Invoices](/features/crm/invoices#payment-check-tokens) and [Incoming Invoices](/features/accounting/incoming-invoices#pdf-checks).
+- **Gallery expiry on SQLite.** Galleries now expire on their date whatever form the date was stored in; overdue galleries expire on the first check after the upgrade. An expiry date-time sent to the API without a time zone is read as UTC. See [Gallery Management](/features/gallery-management#expiration-and-archiving).
+- **Custom CSS.** A `<` in custom CSS is stored as the CSS escape `\3c `, which browsers read as the same character, and theme colours must be real colour values (hex, `rgb()`, `hsl()` or a basic colour name); anything else falls back to the default. See [Custom CSS](/guides/custom-css#tips).
+- **Fonts.** The public landing page serves Inter from the PicPeak server; it no longer loads anything from Google Fonts (builds containing [PicPeak PR #1787](https://github.com/PicPeak/picpeak/pull/1787)).
+- **Building from source.** The frontend build needs Node.js 20 or newer and stops with a message on older versions. The Docker images are not affected.
+- **Installer.** `picpeak-setup.sh` writes `.env` readable by its owner only and accepts `--admin-password-file` and `--smtp-pass-file`. See [Simple Install](/getting-started/simple-install#options).
+
 ## If an upgrade goes wrong
 
 - **The backend will not start.** Check its logs first

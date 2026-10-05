@@ -5,7 +5,7 @@ import { Callout } from 'nextra/components'
 PicPeak ships with **two** distinct analytics tracks:
 
 1. **Built-in analytics** (always on, no third-party calls) — gallery views, photo opens, downloads, unique visitors, device types. Recorded server-side, displayed on the Analytics admin page.
-2. **Umami integration** (optional) — embeds a [Umami](https://umami.is) tracking script in the public gallery and admin pages so you get a privacy-friendly third-party dashboard alongside the built-in metrics.
+2. **Umami integration** (optional) — embeds a [Umami](https://umami.is) tracking script in the public pages and galleries so you get a privacy-friendly third-party dashboard alongside the built-in metrics.
 
 This tab only configures #2. The built-in tracking has no admin knobs — you can disable it on the [General Settings](/guides/admin-settings/general) tab via the "Enable analytics tracking" feature toggle.
 
@@ -19,6 +19,12 @@ This tab only configures #2. The built-in tracking has no admin knobs — you ca
 | **Share URL** | (empty) | Optional public share link (e.g. `https://analytics.example.com/share/abc123/Picpeak`). When set, the admin Analytics page links to it. |
 
 All three of `URL`, `Website ID`, and the master toggle are required for the script to load. Bad configuration results in a console warning in the browser, not a hard error.
+
+In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809):
+
+- **Who can change it.** The tracker provider, the tracker URLs and the custom head HTML are saved by a **Super Admin** only. Other roles with access to this tab can still edit the website ID and the share URL.
+- **Where the tracker runs.** It is never loaded in the admin area, in the customer portal (`/customer`), on short links (`/s/…`) or on pages that are opened with a one-time link: invitations, quotes, contracts, payment checks and transfers. Galleries are tracked, with the share token removed from the recorded path.
+- **Share URL.** The share link is only sent to signed-in admins. It is no longer part of the public settings the gallery loads.
 
 ## What gets tracked
 

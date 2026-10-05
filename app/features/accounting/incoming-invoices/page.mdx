@@ -165,6 +165,10 @@ Captured files live under `storage/business-docs/inbound/<year>/` (so the direct
 
 Path-traversal protection is enforced by `assertPathInside([storagePath/business-docs])` on every download / render route — the captured filename is whitelisted at intake (`email-<timestamp>-<rand>.<ext>` for IMAP, `<subdir>-<timestamp>.<ext>` for manual upload) so nothing supplier-controlled ever reaches the filesystem path.
 
+## PDF checks
+
+In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) every PDF, from the mailbox or from a manual upload, is inspected in an isolated worker before PicPeak opens it. A PDF that is encrypted, malformed, too complex, that contains scripts, actions, forms or embedded files, or that defines the same object twice in a way viewers and the check could read differently is not processed: a mail attachment is kept in the inbox as **declined** with the reason, and is not retried; a manual upload is refused with the reason. Accepted files are stored byte for byte as received, so a digitally signed invoice keeps its signature.
+
 ## Per-page resource bounds
 
 To prevent a hostile 1000-page PDF from walking your rasteriser, the document's stored `page_count` is **capped to 200 at ingest** (`Math.min(pageCount, 200)`). The render endpoint refuses any page number outside `[1, 200]`. `pdftoppm` itself is timeout-bounded to 25 seconds with a 4MB stderr cap.

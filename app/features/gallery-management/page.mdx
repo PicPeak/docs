@@ -63,6 +63,8 @@ When an event reaches its expiration date:
 
 Expiration warnings can be sent via email before the gallery expires.
 
+On SQLite installs, builds containing [PicPeak PR #1788](https://github.com/PicPeak/picpeak/pull/1788) compare the expiry by its point in time whatever form it was stored in. Before that, a gallery whose expiry had been extended could stay open past its date, miss its warning email, or be listed in the wrong order. The upgrade rewrites stored values once (see [Upgrading](/deployment/upgrading#october-2026-hardening-and-proofing)); galleries that are already past their date expire on the next check after the upgrade.
+
 ## Guest uploads
 
 Events can optionally allow guests to upload their own photos. This is useful for collaborative events where multiple people contribute photos.

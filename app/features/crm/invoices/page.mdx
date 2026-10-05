@@ -101,6 +101,8 @@ On submit, the admin gets a `invoice_payment_check_notification` email with what
 
 The payment-check token does NOT automatically mark the invoice paid — it's a customer-initiated **claim** that the admin verifies. This avoids the social-engineering risk of "click here to mark your invoice paid".
 
+In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) only the newest payment-check link of an invoice works. Sending a new one retires the older links once the new email is queued, and a link answers `410` after it was used or replaced. A link for an invoice that is no longer `sent` or `overdue` — already paid, cancelled or replaced — is refused instead of changing the invoice.
+
 ## Reminders
 
 When `crm_invoices_reminders_enabled` is true, the scheduler walks `overdue` invoices and sends a series of reminder emails based on `reminder_level`:

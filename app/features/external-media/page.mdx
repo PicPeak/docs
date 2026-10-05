@@ -62,6 +62,12 @@ Videos are imported too, but only for the extensions on the [Allowed File Types]
 
 Wait until your copy has finished before starting a manual import. Automatic watching adds the settling checks described below.
 
+In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809):
+
+- **The folder has to be inside `EXTERNAL_MEDIA_ROOT` for real.** A symbolic link that leads outside the root is refused when browsing, importing and serving, and symbolic links inside a folder are not followed.
+- **The photo cap applies.** An import stops when the event's [photo cap](/guides/creating-events#limits) is reached and reports the rest as skipped.
+- **Very large trees are cut off.** An import reads at most 100,000 entries and 16 folder levels and says so when it stopped there; import the subfolders separately.
+
 ## Watch a folder for new files
 
 <Callout type="info">

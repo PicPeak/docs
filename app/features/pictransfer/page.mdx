@@ -109,6 +109,7 @@ These live in the database and are settable through the settings API, but have *
 - Transfer files are stored outside the publicly served upload directories, so they are only reachable through the token routes.
 - A source photo that has gone missing from disk is skipped silently while the ZIP streams, rather than failing the whole download.
 - Both public routes are rate limited per IP: 60 page views and 20 downloads per minute on the download side, 30 and 10 on the upload side.
+- Disabling uploads, deleting the transfer or reaching its expiry also stops an upload that is already in progress: the request is checked again once the files have arrived, and nothing is stored if it no longer qualifies (builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809)).
 
 ## Related
 
