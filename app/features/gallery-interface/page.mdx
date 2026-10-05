@@ -47,7 +47,7 @@ Opening any photo opens the lightbox — full-screen viewer with navigation, zoo
 - 5-star rating (if ratings enabled)
 - Comment / Open feedback panel (if comments enabled)
 
-**Link to a photo** (beta channel, builds containing [PicPeak PR #1799](https://github.com/PicPeak/picpeak/pull/1799)): while a photo is open the address bar carries `?photo=<id>`. Copying the address gives a link that opens the gallery on that photo, the browser's Back button closes the lightbox, and stepping through photos keeps the address in step. The parameter is carried through short links (`/s/…`). A link to a photo the visitor cannot see (hidden, filtered out, another folder) opens the gallery without it.
+**Link to a photo** (beta channel, builds containing [PicPeak PR #1799](https://github.com/PicPeak/picpeak/pull/1799)): while a photo is open the address bar carries `?photo=<id>`. Copying the address gives a link that opens the gallery on that photo, the browser's Back button closes the lightbox, and stepping through photos keeps the address in step. The parameter is carried through short links (`/s/…`). A link to a photo in another folder opens that folder, and active filters are cleared if they would hide it. A link to a photo the visitor has no access to (hidden from guests, removed) opens the gallery without it.
 
 **iOS:**
 - Toolbar respects `env(safe-area-inset-bottom)` so buttons sit above the home indicator.
