@@ -5,7 +5,7 @@ import { Callout } from 'nextra/components'
 PicPeak provides two Docker Compose files:
 
 - `docker-compose.yml` --- builds from source; includes an optional MailHog mail catcher for email testing, gated behind the `dev` profile (start it with `docker compose --profile dev up -d`).
-- `docker-compose.production.yml` --- uses pre-built images from GitHub Container Registry. **Use this one for production**, including for updates: run compose commands with `-f docker-compose.production.yml`.
+- `docker-compose.production.yml` --- uses pre-built images from GitHub Container Registry (the same images are also on Docker Hub, see below). **Use this one for production**, including for updates: run compose commands with `-f docker-compose.production.yml`.
 
 ## Services
 
@@ -16,9 +16,22 @@ PicPeak provides two Docker Compose files:
 | `postgres` | `postgres:15-alpine` | 5432 | PostgreSQL database |
 | `redis` | `redis:7-alpine` | 6379 | Session and cache store |
 
+### Docker Hub mirror
+
+Every PicPeak image is published to Docker Hub as well, with the same tags:
+
+| GHCR | Docker Hub |
+|---|---|
+| `ghcr.io/picpeak/picpeak/backend` | [`picpeak/backend`](https://hub.docker.com/r/picpeak/backend) |
+| `ghcr.io/picpeak/picpeak/frontend` | [`picpeak/frontend`](https://hub.docker.com/r/picpeak/frontend) |
+| `ghcr.io/picpeak/picpeak/aio` | [`picpeak/aio`](https://hub.docker.com/r/picpeak/aio) |
+| `ghcr.io/picpeak/picpeak/ml` | [`picpeak/ml`](https://hub.docker.com/r/picpeak/ml) |
+
+Use Docker Hub when your platform only searches there — NAS container apps (Synology Container Manager, QNAP Container Station, UGREEN Docker) do by default. To switch a compose file, replace the `ghcr.io/picpeak/picpeak/` prefix with `picpeak/`.
+
 ## Supported architectures
 
-The pre-built images on GHCR ship as multi-arch manifests covering `linux/amd64` and `linux/arm64`. Docker pulls the variant matching your host automatically — no `platform:` flags or compose edits needed.
+The pre-built images on GHCR and Docker Hub ship as multi-arch manifests covering `linux/amd64` and `linux/arm64`. Docker pulls the variant matching your host automatically — no `platform:` flags or compose edits needed.
 
 | Host | Native variant |
 |---|---|

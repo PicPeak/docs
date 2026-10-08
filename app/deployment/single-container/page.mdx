@@ -7,7 +7,7 @@ The all-in-one image runs PicPeak as **one container and one Node process**, wit
 ```bash
 docker run -d --name picpeak -p 3000:3000 \
   -v picpeak:/data \
-  ghcr.io/picpeak/picpeak/aio:main
+  ghcr.io/picpeak/picpeak/aio:stable
 ```
 
 Open **http://localhost:3000/admin** and follow the setup wizard.
@@ -19,7 +19,7 @@ Back up the volume, not just the database. The JWT secret sits in `/data/db/jwt.
 </Callout>
 
 <Callout type="info">
-The all-in-one image publishes **`:main` only** today. It landed after the current stable release, so `:stable` and `:latest` appear for this image once the build reaches the `stable` branch — until then `aio:stable` cannot be pulled at all.
+The image is published to both **GitHub Container Registry** (`ghcr.io/picpeak/picpeak/aio`) and **Docker Hub** (`picpeak/aio`), for `linux/amd64` and `linux/arm64`. The two are the same image — use whichever your host pulls from more easily. Tags follow the [release channels](/deployment/release-channels): `stable` (also `latest`) for releases, `beta` for the beta channel, and `main` for the newest build.
 </Callout>
 
 ## Is this the right install for you?
@@ -117,7 +117,7 @@ docker run -d --name picpeak -p 3000:3000 \
   -e DB_USER=picpeak \
   -e DB_PASSWORD=… \
   -e DB_NAME=picpeak \
-  ghcr.io/picpeak/picpeak/aio:main
+  ghcr.io/picpeak/picpeak/aio:stable
 ```
 
 The container waits for the database to accept connections before starting, and logs which engine it resolved. If both a populated SQLite file and a populated PostgreSQL are present it refuses to start rather than guessing.
@@ -128,7 +128,7 @@ The image serves plain HTTP and does not terminate TLS. For anything reachable f
 
 ## NAS installs [#nas-installs]
 
-Synology, QNAP and UGREEN can all run this from their container UI: create the container from `ghcr.io/picpeak/picpeak/aio:main`, map port `3000`, and mount **one** volume at `/data`. No environment variables are needed.
+Synology (Container Manager), QNAP (Container Station) and UGREEN (Docker app) can all run this from their container UI. Their image search looks at **Docker Hub**, so search for **`picpeak/aio`** and pick the **`stable`** tag; if your NAS lets you add a registry or enter an image name directly, `ghcr.io/picpeak/picpeak/aio:stable` works the same. Then map port `3000` and mount **one** volume at `/data`. No environment variables are needed.
 
 For the full version of this — a UGREEN NAS reachable from the internet on its own domain with a Let's Encrypt certificate, including DynDNS and router port forwarding — see [Example: NAS at Home](/deployment/nas-example).
 
@@ -155,12 +155,12 @@ Do not point the volume at an SMB or CIFS share. The container adjusts ownership
 ## Updating
 
 ```bash
-docker pull ghcr.io/picpeak/picpeak/aio:main
+docker pull ghcr.io/picpeak/picpeak/aio:stable
 docker rm -f picpeak
 # re-run the same `docker run` command
 ```
 
-Migrations run automatically on start. Back up first — see [Backup & Restore](/guides/backup-restore). Tags follow the same channels as the other images: `stable` for releases, `main` for the beta channel. See [Release Channels](/deployment/release-channels).
+Migrations run automatically on start. Back up first — see [Backup & Restore](/guides/backup-restore). Tags follow the same channels as the other images: `stable` for releases, `beta` for the beta channel. On a NAS, use the container UI's update or re-pull action instead — the `/data` volume carries over. See [Release Channels](/deployment/release-channels).
 
 ## Limits
 
