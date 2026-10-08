@@ -104,7 +104,7 @@ In the UGREEN **Docker** app, go to `Projekt → Erstellen`. Give the project a 
 ```yaml
 services:
   picpeak:
-    image: ghcr.io/picpeak/picpeak/aio:main
+    image: picpeak/aio:stable
     container_name: picpeak
     restart: unless-stopped
     volumes:
@@ -140,7 +140,7 @@ The `7080`/`7443`/`7081` mappings on the left of each colon are the NAS-side por
 
 Three more details worth understanding rather than copying:
 
-- **`aio:main`** is the all-in-one image on the beta channel. From v3.132.1 the all-in-one image also publishes `:stable` and `:latest` alongside `:main` / `:beta`, so on a stable install use `aio:stable`. See [Release Channels](/deployment/release-channels).
+- **`picpeak/aio:stable`** is the all-in-one image from Docker Hub on the stable channel. The same image is on GitHub Container Registry as `ghcr.io/picpeak/picpeak/aio:stable` — either works, Docker Hub is simply what NAS container apps search by default. Use `:beta` to follow the beta channel. See [Release Channels](/deployment/release-channels).
 - **`COOKIE_SECURE: auto`** lets the same instance serve public HTTPS *and* direct LAN HTTP with correctly-flagged session cookies. Without it you get one or the other. See [Reverse Proxy → Mixed HTTPS + LAN HTTP access](/deployment/reverse-proxy#mixed-https--lan-http-access).
 - **`FRONTEND_URL`** is the public address PicPeak puts into gallery links and emails. Set it to the HTTPS domain, not the LAN IP, or the links you send clients point somewhere they cannot reach.
 
