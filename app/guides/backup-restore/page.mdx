@@ -41,7 +41,7 @@ Configure under **Admin → Backup & Restore**.
 | `backup_manifest_path` | `/backup/manifests` (seeded) | Directory for the manifests of local backups. Empty, or not writable, means the manifest is written into the restore point itself (`backup-<uuid>/manifests/`). |
 | `backup_manifest_format` | `json` | `json` or `yaml`. Manifest is the file index for the backup. |
 | `backup_retention_count` | `7` | How many complete restore points a local or S3 destination keeps (0–1000, `0` keeps all). Older ones are deleted after each successful backup. See [Retention & rotation](#retention--rotation). |
-| `backup_retention_days` | `30` | Shown as **Retention Period** and recorded in each manifest. Automatic deletion of restore points follows `backup_retention_count`, not this value. |
+| `backup_retention_days` | `30` | Only recorded in each manifest; it deletes nothing. Automatic deletion of restore points follows `backup_retention_count`. Older versions still show it as **Retention Period**; newer releases drop the input. |
 | `backup_include_archived` | `true` | Include `events/archived/` in the file scan. |
 | `backup_include_database` | `true` | Include a `pg_dump` (or SQLite copy) in the backup. |
 | `backup_max_file_size_mb` | `5000` | Files above this size are skipped (with a warning) — prevents one corrupt huge file from blocking a backup. |

@@ -2,12 +2,12 @@ import { Callout } from 'nextra/components'
 
 # Image Security Settings
 
-The **Image Security** tab sets the protection defaults that new galleries start with: the protection level, the image quality value, DevTools detection and canvas rendering.
+The **Image Security** tab sets the protection defaults that new galleries start with: the protection level, DevTools detection and canvas rendering.
 
 This page is the reference for what each protection level *actually does*. See [Photo Protection](/features/photo-protection) for the overview and the caveats (no protection stops a determined visitor from capturing the screen).
 
 <Callout type="info">
-All four settings are **creation defaults**. A new gallery copies them when it is created; changing them later does not touch existing galleries. DevTools detection and canvas rendering can be changed per gallery afterwards (event page → **Settings** → **Downloads**); the protection level and image quality cannot be changed in the admin UI after creation — only through the admin API (`PUT /api/admin/events/:id` accepts `protection_level` and `image_quality`).
+All of them are **creation defaults**. A new gallery copies them when it is created; changing them later does not touch existing galleries. DevTools detection and canvas rendering can be changed per gallery afterwards (event page → **Settings** → **Downloads**); the protection level cannot be changed in the admin UI after creation — only through the admin API (`PUT /api/admin/events/:id` accepts `protection_level`).
 </Callout>
 
 ## Default protection level
@@ -50,9 +50,9 @@ On the stable channel (v3.134.x) `maximum` has no server-side cap: the full-size
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Default image quality** | `85` | Value from 1–100, copied into a new gallery's `image_quality` field. |
+| `default_image_quality` | `85` | Value from 1–100, copied into a new gallery's `image_quality` field. |
 
-The value is stored on the gallery and returned with its settings, but no rendition is currently encoded with it. Thumbnail and preview quality come from [Thumbnails](/guides/admin-settings/thumbnails); the `maximum` cap always uses quality 60.
+The value is stored on the gallery and returned with its settings, but no rendition is encoded with it. Older versions show it as **Default image quality** in this tab; newer releases drop the input because it has no effect, and keep the stored value and the API field. Thumbnail and preview quality come from [Thumbnails](/guides/admin-settings/thumbnails); the `maximum` cap always uses quality 60.
 
 ## DevTools detection
 
