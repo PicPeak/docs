@@ -49,16 +49,41 @@ The backend's runtime user needs read access to files and permission to traverse
 
 Reference folders remain local filesystem paths even when `STORAGE_BACKEND=s3`. A mounted NAS library can therefore be watched on an S3-backed installation too; this is separate from the [S3 prefix walker](/features/storage-backends#s3-auto-import-drop-folder-workflow).
 
-## Importing photos manually
+## Who may use which folder
+
+On stable from v3.134.2 and on the beta channel from v3.167.2-beta.0 ([PicPeak PR #1880](https://github.com/PicPeak/picpeak/pull/1880)), the mount is not a shared library for every administrator. The SuperAdmin assigns source folders to accounts in the folder picker's **External source owners** section: choose a folder, choose an account, then **Assign selected folder to this owner**.
+
+- An account browses only the folders assigned to it and their subfolders, and can point a gallery only at a folder inside them. Unassigned folders and the mount itself are SuperAdmin-only. Gallery-wide permissions such as `events.manage_all` do not grant folder access.
+- Assigning a folder to another account transfers it. Source folders must not overlap, so assign separate folders rather than a parent to one account and its child to another.
+- **Revoke access** stops browsing and new bindings. It deletes no files and no gallery photos.
+- A gallery keeps working with the folder it already points at, without a grant: whoever may manage the gallery can rescan it, and its watcher keeps running even when its creator is deactivated. Galleries set up before the upgrade therefore need no grants. To detach one, switch it to managed uploads or point it elsewhere.
+
+The API is `GET`/`PUT /api/admin/external-media/sources` and `DELETE /api/admin/external-media/sources/:sourceId`. Review the assignments after restoring a backup onto an instance with a different mount.
+
+## Setting up a gallery on a folder
+
+On the beta channel from v3.155.0-beta.0 ([PicPeak PR #1747](https://github.com/PicPeak/picpeak/pull/1747)) it is one step:
+
+1. On the create form, choose **Reference external folder** in the photo source card and pick the **External Folder**.
+2. Leave **Import right after creating** ticked to import at once, and tick **Watch folder for new files** if new files should follow by themselves. Both need `photos.upload`.
+3. Create the gallery. The import runs in the background and you land on the **Photos** tab.
+
+For an existing gallery, change the photo source under **Settings → Photo source** on the gallery page.
+
+The **Photos** tab of a gallery on an external folder shows a source bar: the folder, whether it is watched, the last scan, **Rescan** (imports the stored folder again, needs `photos.upload`) and **Change folder** (needs `events.edit`). A failed import shows its reason ("the folder can no longer be found", "PicPeak is not allowed to read the folder") with **Try again**.
+
+On stable:
 
 1. Create or open an event and edit its information.
 2. Set **Source Mode** to **Reference external folder**, choose an **External Folder**, and save.
 3. Open the event's **Photos** tab and select **Import from External Folder**.
 4. Confirm the folder and choose **Import from selected folder**.
 
-The import includes subfolders and accepts `.jpg`, `.jpeg`, `.png` and `.webp` files. Hidden files and folders are skipped. Files already imported into the event are skipped on later passes; the existing duplicate-name rules also apply, so use distinct filenames within each photo type.
+## What an import takes
 
-Videos are imported too, but only for the extensions on the [Allowed File Types](/guides/admin-settings/general#allowed-file-types) list. The default list holds no video type, so a library that has always had clips next to its photos is not changed by an upgrade; add `mp4`, `mov` or `webm` to the list and the next manual import, or the next pass over a watched folder, brings the clips in. An imported video gets a poster frame and its runtime, codec and dimensions from FFmpeg, the same as an uploaded one; it is not scanned for faces. Builds containing [PicPeak PR #1738](https://github.com/PicPeak/picpeak/pull/1738).
+The import includes subfolders and accepts `.jpg`, `.jpeg`, `.png` and `.webp` files. Camera RAW files in an external folder are not imported. Hidden files and folders are skipped. Files already imported into the event are skipped on later passes; the existing duplicate-name rules also apply, so use distinct filenames within each photo type.
+
+On the beta channel from v3.153.0-beta.0, videos are imported too, but only for the extensions on the [Allowed File Types](/guides/admin-settings/general#allowed-file-types) list; stable imports photos only. The default list holds no video type, so a library that has always had clips next to its photos is not changed by an upgrade; add `mp4`, `mov` or `webm` to the list and the next manual import, or the next pass over a watched folder, brings the clips in. An imported video gets a poster frame and its runtime, codec and dimensions from FFmpeg, the same as an uploaded one; it is not scanned for faces ([PicPeak PR #1738](https://github.com/PicPeak/picpeak/pull/1738)).
 
 Wait until your copy has finished before starting a manual import. Automatic watching adds the settling checks described below.
 
@@ -74,7 +99,7 @@ In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/
 Automatic external-folder watching requires a build that includes [PicPeak PR #1345](https://github.com/PicPeak/picpeak/pull/1345). Earlier builds support the manual import above but do not have the watch checkbox.
 </Callout>
 
-Watching is **off for each event by default**. To enable it:
+Watching is **off for each event by default**. On the beta channel, tick **Watch folder for new files** on the create form, or later under **Settings → Photo source** on the gallery page. On stable:
 
 1. Edit the event's information and select **Reference external folder** under **Source Mode**.
 2. Choose the folder you want this event to follow.
@@ -82,7 +107,7 @@ Watching is **off for each event by default**. To enable it:
 
 <img src="/images/external-media/watch-checkbox.png" alt="Event edit form showing reference-folder source mode, the folder picker and Watch folder for new files enabled" width="452" height="418" style={{ maxWidth: '100%', height: 'auto', marginTop: '1rem', marginBottom: '1rem' }} />
 
-The saved view shows **Folder is watched — new files are imported automatically.**
+On stable the saved view shows **Folder is watched — new files are imported automatically.** On the beta channel the source bar on the Photos tab shows **Watching for new files**.
 
 <img src="/images/external-media/watched-status.png" alt="Event information showing the external folder and Folder is watched status" width="520" height="96" style={{ maxWidth: '100%', height: 'auto', marginTop: '1rem', marginBottom: '1rem' }} />
 
@@ -98,9 +123,26 @@ Each pass checks the selected folder and its subfolders, imports new photos and 
 
 The manual import remains available while watching is on. Only one import for an event runs at a time, including across backend replicas; if another pass is busy, wait for it to finish before using the button again.
 
+### Files edited in place
+
+On the beta channel from v3.174.0-beta.0 ([PicPeak PR #2052](https://github.com/PicPeak/picpeak/pull/2052)), a scan notices a file that was overwritten at the same path, for example a Lightroom re-export over the proof. It re-reads the file's dimensions, capture date, camera details and credit, rebuilds the thumbnail at once and the preview, hero and watermarked copies on first view, and drops the prebuilt Download All zip. Faces and scene tags are scanned again where the gallery has them on. A credit or category you set by hand is kept.
+
+- A file counts as changed when its size differs, and from v3.174.1-beta.0 also when its modification time differs, so an edit that keeps the byte count (a rating or keyword written into the file) is noticed too. Photos imported before that version have their modification time recorded on the first scan without being refreshed.
+- From v3.174.2-beta.0 an edited video gets a new poster frame, browser-playable copy and stream, and files of a type that has since been removed from the allowed list are still refreshed (never imported new).
+- A file still being written is left for the next pass, as for new files.
+- Photos replaced by an upload no longer read the share and are not refreshed.
+
+Stable keeps the picture a file had when it was imported.
+
 ### Deletions and stopping the watcher
 
-Removing a file from the source folder **does not remove its gallery record**. This prevents a disconnected mount or folder reorganisation from silently deleting gallery entries. A missing original may still be unavailable for viewing or download; restore the file or mount, or deliberately remove the photo in PicPeak.
+Removing a file from the source folder **does not delete its gallery record**. This prevents a disconnected mount or folder reorganisation from silently deleting gallery entries.
+
+On the beta channel from v3.174.2-beta.0 ([PicPeak PR #2127](https://github.com/PicPeak/picpeak/pull/2127)) the scan marks such a photo as missing and hides it from guests: it leaves the gallery, the counts and every download. In the admin it carries a **File missing** pill, and the source bar offers "N files missing" to filter the grid to those photos. A photo comes back by itself once the file returns and has settled; a photo you hid yourself stays hidden. A photo is only marked after a complete scan of a folder that answered and listed files, so an unmounted or empty share marks nothing. Delete the photo in PicPeak if the file is gone for good.
+
+A renamed file is followed: when one photo vanishes and one new file appears in the same pass with the same size, modification time, extension and dimensions, plus the same capture date (photos) or runtime (videos), the existing photo moves to the new path and keeps its feedback, folder and thumbnail. Without those details, for example a photo without a capture date, a rename shows up as a missing photo plus a new import.
+
+On stable a missing original stays in the gallery and may be unavailable for viewing or download; restore the file or mount, or deliberately remove the photo in PicPeak.
 
 Photos deliberately deleted **in PicPeak** are excluded from subsequent automatic imports for that event and source path, even if the file is still on the share. A manual **Import from selected folder** can bring those photos back; it clears the exclusion for files it imports. Turning watching off and on does not reset those exclusions.
 
@@ -127,7 +169,8 @@ For all options and defaults, see [Environment Variables → External-folder wat
 
 | Symptom | What to check |
 |---|---|
-| The checkbox is missing | Use a build containing PR #1345, edit the event and select **Reference external folder**. |
+| The checkbox is missing | Use a build containing PR #1345 and select **Reference external folder** as the photo source. |
+| A folder is not listed in the picker | It is not assigned to your account. Ask the SuperAdmin to assign it under **External source owners**. |
 | The unchecked checkbox is disabled | The role needs `photos.upload` as well as event-edit permission. |
 | The folder picker is empty or the directory cannot be read | Check the host-to-container mount, the container-side `EXTERNAL_MEDIA_ROOT`, and the backend user's read/traverse permissions. |
 | “Folder is watched” is shown, but no photos arrive | That line reflects the saved setting, not a live health check. Confirm the event is active and not archived, the mount is readable, and the global `EXTERNAL_MEDIA_WATCH` is not `false`. Allow for the one-minute configuration check, file settling and, on a share without notifications, the fallback scan. |

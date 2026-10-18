@@ -38,6 +38,8 @@ Every expense is booked to one of:
 
 Booking to an event is what enables **re-billing the customer** through the event's CRM chain — see the same workflow as incoming invoices.
 
+You can book an expense only to a gallery you created; a super admin can book to any gallery. Any other gallery is refused with `403 EVENT_NOT_YOURS`. An admin who sees an expense only because it is booked to their gallery cannot move it to the company (`409 ACCESS_THROUGH_EVENT_ONLY`). See [Accounting → Tenancy model](/features/accounting#tenancy-model).
+
 ## Categories
 
 Expense categories (`expense_categories`) bucket expenses for reporting:
@@ -80,4 +82,4 @@ Internal expenses default to `disposition='eigener_aufwand'` (your company's cos
 - `accounting.view` — see the ledger, open detail views
 - `accounting.manage` — create / edit / delete expense entries, attach proofs, re-bill to clients
 
-Both granted to `super_admin` and `admin` by default.
+Both granted to `super_admin` and `admin` by default. An admin who is not a super admin sees only the expenses they recorded and those booked to galleries they created — see [Accounting → Tenancy model](/features/accounting#tenancy-model).

@@ -7,7 +7,7 @@ Quotes are the entry point of the CRM lineage. You build a quote with line items
 ## Prerequisites
 
 - **Feature flag**: `quotes` enabled in **Settings → Features**.
-- **Customer**: at least one customer in **Clients → Accounts**. Quotes always target an existing customer record (one-off shoots for unknown emails aren't supported — create the customer first, send the quote second).
+- **Customer**: at least one customer in **CRM → Accounts**. Quotes always target an existing customer record (one-off shoots for unknown emails aren't supported — create the customer first, send the quote second).
 - **Business profile**: complete (`Settings → CRM → Business profile`) with at least your business name, address, and a bank account on the issuer block. Quotes refuse to render without these.
 
 ## Quote lifecycle
@@ -25,7 +25,7 @@ Status transitions are validated server-side — you can't jump from `draft` dir
 
 ## Creating a quote
 
-From **Clients → Quotes**, click **New quote**. The editor surfaces:
+From **CRM → Quotes**, click **New quote**. The editor surfaces:
 
 - **Customer + business** — picks the customer record, the language for the rendered PDF (DE / EN), the currency, and which of your bank accounts the issuer block uses (relevant if you maintain CHF + EUR accounts).
 - **Issue date / valid until** — the customer can respond up to `valid_until`. After that the scheduler flips the quote to `expired` automatically.
@@ -73,6 +73,18 @@ When a quote is `accepted`, the detail page exposes a **Convert** action with th
 | Invoice | On | One invoice if no installment plan, or N sibling invoices if the quote has an installment plan |
 
 All spawned documents inherit the quote's `deal_uuid` so the lineage card shows the chain. The quote transitions to `converted` (terminal) and can no longer be re-sent or re-edited.
+
+### When the contract ends unsigned
+
+If the contract made from a quote ends without being signed, the quote is released and you can create a replacement contract from it; otherwise converting again would only return the dead contract. Which endings release the quote depends on the channel:
+
+| Contract ends as | Beta | Stable |
+|---|---|---|
+| `cancelled` (you cancelled it) | releases the quote | releases the quote (from v3.133.4) |
+| `declined` (the customer declined it while signing) | releases the quote | status does not exist on stable |
+| `expired` (its signing deadline passed) | releases the quote | status does not exist on stable |
+
+The contract keeps its link to the quote it came from, so the deal's lineage card lists both the dead and the replacement contract.
 
 ## Editing after send
 

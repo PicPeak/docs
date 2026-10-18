@@ -94,6 +94,21 @@ The sequence counter is **per-document-type per-year**, gap-free, atomic. Storno
 **Changing the format string mid-year is safe** — the sequence counter advances regardless of how it's formatted. But your customers will see the format change, which can confuse them. Pick a format and stick with it for the year.
 </Callout>
 
+## Invoice PDF text
+
+Two settings in the **Invoices** card of **CRM behaviour** change what an invoice PDF prints.
+
+| Setting | Default | What it does |
+|---|---|---|
+| **VAT / free-text note on invoices** (`crm_invoices_vat_note_text`) | empty | Printed directly under the VAT line on every invoice PDF. If the business is not VAT-registered (Settings → Accounting), it replaces that line on invoices without VAT. Use it for wording such as a small-business exemption or reverse charge. Quotes never print it: an offer is not the tax document. Leave empty to print nothing. |
+| **Service date equal to the invoice date** (`crm_invoices_service_date_mode`) | State it in words | What the service-date row shows when the service date falls on the invoice date: **State it in words ("same as invoice date")**, **Print the date again**, or **Leave the row out**. A service period always prints. |
+
+<Callout type="warning">
+Tax law in CH/LI and DE/AT wants the time of supply on the invoice. Leaving the service-date row out is a decision to confirm with your tax advisor, as is the exact wording of the VAT note.
+</Callout>
+
+There is no seed row for the service-date setting, so on upgrade an invoice whose service date equals its issue date switches from printing the date twice to the words "same as invoice date". Choose **Print the date again** to keep the old output. The service-date setting is on the beta channel from v3.144.2-beta.0; stable (v3.134.x) has neither the setting nor a service-date row on the invoice PDF.
+
 ## Reminder defaults (invoice dunning)
 
 When `crm_invoices_reminders_enabled` is true, configures the dunning ladder.

@@ -6,11 +6,34 @@ From an event's admin view, use the upload area to add photos:
 
 - **Drag and drop** files or folders directly.
 - **Click to browse** and select files.
-- Supported formats: JPEG, PNG, WebP.
-- Maximum file size: 50 MB per image.
-- Videos: MP4, WebM, MOV, AVI up to 10 GB (see [Video Support](/features/video-support)).
+- Supported formats: JPEG, PNG and WebP by default. **Settings → General → Allowed File Types** decides what every upload path accepts; GIF, HEIC/HEIF, camera RAW and videos (MP4, MOV, WebM, AVI) can be added there. See [General settings](/guides/admin-settings/general).
+- Maximum file size: **Max File Size (MB)**, 50 MB by default. Videos have their own **Max Video Size (MB)**, 500 MB by default (see [Video Support](/features/video-support)).
 
 Thumbnails are generated automatically during upload using Sharp (for images) or FFmpeg (for videos).
+
+### Upload progress
+
+On the beta channel from v3.147.0-beta.0 ([PicPeak PR #1691](https://github.com/PicPeak/picpeak/pull/1691)) the upload dialog is only the picker: it closes when you click **Upload**, and a progress bar under the admin header takes over. It shows the transfer progress, then the processing count once the files are on the server, then the outcome. A clean finish clears itself after a few seconds; failed files stay listed with the reason until you dismiss the list. The bar stays while you move around the admin and links back to the gallery. One upload runs at a time, and closing the tab mid-upload asks for confirmation.
+
+### Content check
+
+Every photo upload path checks the file content, not just its name: the file's signature must match its type, and an image Sharp can decode must decode. A text file renamed to `.jpg` is rejected and no photo is created. HEIC/HEIF and camera RAW get the signature check only. On the beta channel the check covers guest uploads, the chunked large-file upload and the v1 API upload from v3.174.2-beta.0 ([PicPeak PR #2084](https://github.com/PicPeak/picpeak/pull/2084)); before that only the regular admin upload was checked.
+
+### Duplicate files
+
+On the beta channel from v3.171.0-beta.0 ([PicPeak PR #1950](https://github.com/PicPeak/picpeak/pull/1950)) the admin uploader skips a file whose bytes the gallery already holds. The upload bar lists such files as **Duplicate**, with **Upload anyway** per file and **Upload all anyway** for several, to store a second copy on purpose.
+
+- Only byte-identical files match, and only within the same gallery.
+- Guest uploads, API uploads and photo replacement are never refused.
+- Photos imported from a watch folder, an external folder or S3, and photos uploaded before this version, have no stored hash and never match.
+
+### Camera RAW
+
+Camera RAW files are opt-in: add their extensions to **Allowed File Types**. On the beta channel from v3.162.0-beta.0 ([PicPeak PR #1783](https://github.com/PicPeak/picpeak/pull/1783)) the uploader accepts these extensions even though browsers report no file type for them:
+
+`dng`, `arw`, `sr2`, `srf`, `cr2`, `nef`, `nrw`, `orf`, `pef`, `srw`
+
+Canon CR3, Fujifilm RAF and Panasonic RW2 are not accepted for upload. PicPeak builds thumbnails and previews from the JPEG preview embedded in the RAW file and keeps the original for download.
 
 **Dropping a folder** (beta channel from v3.161.0-beta.0, [PicPeak PR #1795](https://github.com/PicPeak/picpeak/pull/1795)): the uploader reads the folder and its subfolders and adds the files it accepts, in name order per folder. Files of other types, such as XMP sidecars, are skipped. The **Upload** button waits until the folder has been read. The usual limits apply: if the folder holds more than **Max files per upload** allows, the first files up to the limit are added and a notice says how many fit. For a very large folder the scan stops early and says so; drop its subfolders one at a time.
 
@@ -31,8 +54,29 @@ Click a photo to select it, then **Shift-click** another to select the whole run
 Select multiple photos to perform batch actions:
 
 - **Move** to a different category.
-- **Delete** selected photos.
+- **Delete** selected photos (they go to the [trash](#trash)).
 - **Download** selected photos as a ZIP archive.
+
+## Trash
+
+On the beta channel from v3.172.0-beta.0 ([PicPeak PR #1986](https://github.com/PicPeak/picpeak/pull/1986)) a photo you delete goes to the gallery's trash instead of being removed at once. The **Trash** button on the Photos tab shows how many photos it holds and opens a list with the deletion date, who deleted it, the time left and the size. From there you can **Restore** photos or **Delete permanently**, one at a time or as a selection.
+
+- **Retention:** **Settings → General → Trash retention (days)**, 30 by default, 0 to 365. When it runs out an hourly job deletes the photo for good. `0` deletes photos at once, as before the trash existed.
+- **Disk space:** photos in the trash still use storage. A delete no longer frees space until the photo is purged.
+- **Guests** see a trashed photo as if it did not exist: it is gone from the gallery, downloads, ZIPs, the slideshow and the API.
+- **Photo limit:** trashed photos do not count against the gallery's photo limit. A restore that would go over the limit is refused.
+- **Restoring** brings the photo back with its id, ratings, comments and other feedback. A photo that was waiting for review when it was deleted comes back still waiting.
+- The `photo.deleted` webhook fires once, when the photo goes to the trash.
+- **Not trashed:** deleting a whole gallery, files removed from a watched folder and external-folder removals delete outright. [Archiving](/guides/archiving) a gallery empties its trash first.
+
+## Review queue
+
+Uploads can be held back until someone approves them:
+
+- **Guest uploads**, when the gallery's **Approve guest uploads before they are published** setting is on (beta channel from v3.171.0-beta.0). See [Moderation](/guides/admin-settings/moderation).
+- **Team members' uploads**, when **Review team members' uploads before they are published** is on and the uploader's role lacks the **Review Team Uploads** permission (beta channel from v3.167.0-beta.0). See [Multi-Admin](/features/multi-admin).
+
+Held uploads stay hidden from guests and clients. The Photos tab says how many uploads are waiting and offers the filters **Pending review** and **Rejected**; select photos there and **Approve** or **Reject** them. Rejected uploads stay hidden. Uploads that are waiting count towards the photo limit.
 
 ## Filtering and sorting
 
@@ -40,7 +84,9 @@ The admin photo view supports:
 
 - Filter by likes, ratings, comments, or favorites.
 - Search by filename.
-- Sort by date, name, size, or rating.
+- Sort by upload date (**Sort by Date**), **Capture Date**, **Name**, **Size** or **Rating**, ascending or descending.
+
+**Sort by Name** uses natural order, so `IMG_9` comes before `IMG_10`, and sorts by the original filename the photo was uploaded with (beta channel from v3.174.2-beta.0; from v3.158.0-beta.0 by stored filename). **Sort by Capture Date** uses the EXIF date, and the upload date for photos without one. In the list view, the **Photo**, **Uploaded**, **Feedback** and **Size** column headers sort the same way. Capture-date sort, natural name order and a working rating sort are on the beta channel from v3.158.0-beta.0 ([PicPeak PR #1773](https://github.com/PicPeak/picpeak/pull/1773)).
 
 ## Export for post-processing
 
@@ -64,12 +110,16 @@ cp /path/to/photos/*.jpg storage/events/active/<event-slug>/
 ```
 
 The file watcher will automatically:
-- Detect new files (with a 2-second stability delay)
+- Detect new files (once a file has stopped growing for 2 seconds; operators can change this with `FILE_WATCHER_STABILITY_MS`, see [Environment Variables](/deployment/environment-variables))
 - Create database records for each photo
 - Generate thumbnails
 - Classify photos in `collages/` or `individual/` subfolders by type
 
-Supported formats: `.jpg`, `.jpeg`, `.png`, `.webp`
+Supported formats:
+
+- Images: `.jpg`, `.jpeg`, `.png`, `.webp`
+- Videos: `.mp4`, `.mov`, `.webm` and other files recognised as video. They get a placeholder thumbnail.
+- Camera RAW (beta channel from v3.170.0-beta.0, [PicPeak PR #1968](https://github.com/PicPeak/picpeak/pull/1968)): `dng`, `cr2`, `cr3`, `nef`, `nrw`, `arw`, `sr2`, `srf`, `raf`, `rw2`, `orf`, `pef`, `srw`, `raw`, `3fr`, `dcr`, `kdc`, but only extensions listed in **Allowed File Types**. A RAW file whose extension is not listed stays in the folder and is skipped with a log warning.
 
 When files are deleted from the folder, the file watcher removes the corresponding database records.
 

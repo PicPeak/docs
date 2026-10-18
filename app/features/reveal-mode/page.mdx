@@ -12,7 +12,7 @@ Available on **stable from v3.132.1**, and on beta before that. See [Release Cha
 
 ## Turning it on
 
-Open the event, then the Information card, and tick **Reveal mode (hide gallery until reveal)**.
+On the gallery page, open **Settings → Guest interaction** and tick **Reveal mode (hide gallery until reveal)**. On stable it is in the event's Information card.
 
 <Callout type="warning">
 The option only appears when **guest uploads are enabled** for that event, and it is cleared if you later turn guest uploads off. Reveal mode was built around the upload-during-the-event flow, so a gallery with no upload channel cannot use it. If you only want to withhold a gallery entirely, use [draft mode](/features/draft-mode) instead.
@@ -32,7 +32,7 @@ The following are all blocked while hidden, each with a clear refusal rather tha
 
 ## Revealing
 
-Either press **Reveal now** on the event's overview, or let the scheduled time arrive. The check is made per request against the scheduled time, so the reveal is exact even if the background job is running late.
+Either press **Reveal now** on the event's overview (on the beta channel under **Help the client**, which needs `events.edit`), or let the scheduled time arrive. The check is made per request against the scheduled time, so the reveal is exact even if the background job is running late.
 
 A guest with the page already open does not need to do anything: the gallery refetches at the scheduled moment and polls every minute after that.
 
@@ -77,7 +77,7 @@ Sizes are an upper bound. Aspect ratio is preserved and photos are never enlarge
 
 ## Per gallery
 
-The event's Overview tab has a **Download resolution** card that overrides the site-wide settings for that gallery alone. Each option can be left on **Inherit**, which follows Settings. The card shows what the gallery currently hands out.
+A gallery can override the site-wide settings for itself alone: under **Settings → Downloads → Download resolution** on the gallery page, or in the **Download resolution** card on the event's Overview tab on stable. Each option can be left on **Inherit**, which follows Settings and shows the value it currently inherits.
 
 ## What guests experience
 
@@ -91,13 +91,17 @@ Downloads are gated in this order: the event's **allow downloads** setting, then
 
 Videos, HEIC and HEIF files are never resized. Changing the standard resolution invalidates cached archives, including those of galleries that inherit it.
 
-Capped files are re-encoded, so they carry no EXIF metadata and have orientation baked in. Files that already fit inside the box are returned byte-identical, metadata included. Archives built through the picker are named with the chosen size, ordinary downloads keep your usual filename rules.
+Capped files are re-encoded with the orientation baked in. They keep the original's EXIF, XMP and IPTC metadata (stable from v3.133.6, beta channel from v3.144.1-beta.0, [PicPeak PR #1678](https://github.com/PicPeak/picpeak/pull/1678)); older builds stripped it. Files that already fit inside the box are returned byte-identical, metadata included. Archives built through the picker are named with the chosen size, ordinary downloads keep your usual filename rules.
 
 <Callout type="warning">
-**The cap controls download size; it is not a guarantee that originals never leave the server.** Two routes still serve stored originals: the gallery's photo display route under basic protection, and a legacy secure-download link that the current interface no longer uses but which remains reachable. If full-resolution files must never be obtainable, pair the cap with [watermarking and a higher protection level](/features/photo-protection) rather than relying on it alone.
+**The cap controls download size; it is not a guarantee that originals never leave the server.** The gallery's photo display route still serves the stored original under basic protection. (A legacy secure-download link that did the same was removed on the beta channel in v3.142.2-beta.0 and on stable in v3.134.7.) If full-resolution files must never be obtainable, pair the cap with [watermarking and a higher protection level](/features/photo-protection) rather than relying on it alone.
 </Callout>
 
-The presigned "Download All" option does not lift the cap — it serves the same archive built at the standard resolution. It does bypass watermarking, which is why it requires watermarks to be off.
+## Keeping prepared downloads
+
+With the size picker on, archives are prepared on demand and deleted after a while. On the beta channel from v3.171.0-beta.0 ([PicPeak PR #1951](https://github.com/PicPeak/picpeak/pull/1951)) **Keep prepared downloads for (hours)** on **Settings → Download resolutions** sets how long: 1 to 168 hours, default 1 (the fixed value before the setting). Each prepared download takes about as much disk space as the photos in it, and the value applies to downloads prepared after the change. Archives that nobody can receive any more (gallery expired, archived, deleted or downloads switched off) are removed early.
+
+Guests whose email address PicPeak has verified, and customer-portal users, can ask to be emailed when their download is ready. See [Gallery Interface → Prepared downloads](/features/gallery-interface#prepared-downloads).
 
 ## Related
 

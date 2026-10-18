@@ -31,7 +31,7 @@ Two things, and nothing else:
 
 | | |
 |---|---|
-| **Feature flags** | 87 booleans from a fixed catalog — is CRM on, is face recognition on, is SMTP configured, is OIDC configured, and so on. The catalog is shipped in the image (`backend/src/usage/features.v5.json`) and is readable before you consent. |
+| **Feature flags** | 87 booleans from a fixed catalog — is CRM on, is face recognition on, is SMTP configured, is OIDC configured, and so on. The catalog is shipped in the image (`backend/src/usage/features.v6.json` on beta, `features.v5.json` on stable) and is readable before you consent. |
 | **Two counts** | The number of gallery records and the number of non-video photo records on the installation. One total each, for the whole install. |
 
 What is **not** collected: no gallery, event, customer, guest or photo names; no
@@ -42,6 +42,15 @@ from a fixed allowlist of keys, not from request logging.
 The wire format is versioned and consent is versioned with it. A new schema
 version cannot widen what is sent under a consent you already gave — it asks
 again.
+
+The current schema is `usage.v6` on the beta channel (from v3.154.0-beta.0) and
+`usage.v5` on stable. `usage.v6` is `usage.v5` with one changed description: a
+webhook counts as used when any outbound webhook is delivered successfully (HTTP
+2xx), whether an event triggered it or an admin sent a test or replay. Under v5
+only an admin test or replay counted, and only when it was queued. Neither
+version sends destinations, event types, payloads, timestamps or counts. An
+installation that consented to v5 keeps reporting under v5 until an administrator
+accepts the v6 upgrade offered under **Settings → Usage**.
 
 ## Where it goes
 

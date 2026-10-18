@@ -6,20 +6,26 @@ PicPeak provides extensive customization options so galleries can match your stu
 
 ## Gallery layout templates
 
-Multiple gallery layouts are available:
-
-- Grid
-- Masonry
-- Carousel
-- Timeline
-- Hero
-- Mosaic
+Seven gallery layouts are available: Grid, Masonry, Carousel, Timeline, Mosaic, and the beta layouts Gallery Premium and Gallery Story. See [Gallery Interface → Layout variants](/features/gallery-interface#layout-variants). The header above the photos (**Hero Image**, Standard, Banner, Minimal or none) is a separate setting.
 
 Each layout can be further customized with CSS. PicPeak also includes starter templates (such as "Apple Liquid Glass") for complete visual customization.
 
 ## Theme presets
 
-PicPeak ships with built-in theme presets that control the gallery color scheme and typography. Select a preset from the admin panel under event settings, or set a site-wide default.
+PicPeak ships with built-in theme presets that control the gallery color scheme and typography. Select a preset for the global theme under **Branding**, or for a single gallery that uses custom styling (below). The list is on the [Branding](/features/branding#theme-presets) page.
+
+## Global theme and custom gallery styling
+
+On the beta channel from v3.155.0-beta.0 ([PicPeak PR #1747](https://github.com/PicPeak/picpeak/pull/1747)), every gallery uses the **global theme** from **Branding** — layout, header, colours, fonts, CSS template and custom CSS — and follows every later change made there, unless its own **Custom gallery styling** is switched on.
+
+- The switch is on the create form and under **Settings → Appearance** on the gallery page. It is off by default; picking a gallery type that has its own preset switches it on.
+- Switched on, the gallery's own theme overrides the global one for that gallery only.
+- Switching it off keeps the gallery's own values, so switching it on again restores them.
+- The global theme can carry a CSS template too, picked under **Branding**.
+
+The upgrade changes no gallery's look: galleries with their own CSS template, a preset, a theme that differs from the current Branding theme, or their own header or divider style get custom styling switched on. Galleries without a theme, and exact copies of the Branding theme, follow the global theme from then on.
+
+On stable, each gallery created in the admin stores its own copy of the Branding theme, so later Branding changes do not reach it.
 
 ## Custom CSS
 
@@ -29,6 +35,29 @@ For full control, add custom CSS at two levels:
 - **Per-event custom CSS** --- applied only to a specific gallery.
 
 See [Custom CSS Guide](/guides/custom-css) for details and examples.
+
+## Status colours, documents and emails
+
+On the beta channel from v3.168.0-beta.0 ([PicPeak PR #1896](https://github.com/PicPeak/picpeak/pull/1896)) every colour in the admin, the customer portal and the gallery comes from **Branding → Colours**:
+
+- **The admin follows the Branding accent.** On a default install the admin's green moves to the brand colour; a custom accent colours the whole admin.
+- **Status colours.** A **Status** group with five colours — **Success**, **Warning**, **Danger**, **Info** and **Cancelled (Storno)** — each with a way back to its default. They are site-wide (not per gallery theme) and apply to badges, notices and status chips in the admin too.
+- **Readability warnings** under the pickers flag text, borders, button labels or status colours that are hard to read, and a preview next to the pickers shows a gallery card, status chips and admin badges in the palette being edited.
+- **PDF documents.** The PDF theme card sits directly under Colours and saves with the Branding save bar. A document whose theme sets no accent takes the brand's filled accent for its title and headings when it reads on white paper (at least 3:1); the neutral colours stay print-tuned.
+- **Emails.** The button and link colour is the **Primary** colour from **Settings → Email** when set, otherwise the brand's filled accent (same 3:1 floor), otherwise the old green. An empty Primary shows as "Follows Branding › Colours".
+- **Force color mode** on Branding no longer saves on click; it goes through the save bar like every other setting.
+
+Existing installs keep their look on upgrade: an install that already has quotes, invoices or contracts gets black pinned as the PDF accent, and one that has sent mail gets the old green `#5C8762` pinned as the email Primary. Fresh installs follow the brand. Sent documents are stored files and never change.
+
+## Watermark text per gallery
+
+On the beta channel from v3.174.2-beta.0 ([PicPeak PR #2106](https://github.com/PicPeak/picpeak/pull/2106)), **Watermark text** under **Settings → Downloads** on the gallery page replaces the company name in that gallery's text watermark. Empty uses the company name. A watermark logo set under **Branding** still wins over any text. Earlier builds stored the per-gallery text but always drew the company name, and a company name containing `<` or `&` could make the watermark fail silently.
+
+Changing the text changes the watermarked image addresses, so browsers do not keep the old image, and re-cuts the gallery's stored watermarks in the background.
+
+From the same release ([PicPeak PR #2090](https://github.com/PicPeak/picpeak/pull/2090)) the gallery's **Add watermark to downloads** switch also applies to the gallery's full-size photo route (`/photo/:id`), not only to downloads, so a gallery watermarked on its own (not globally) no longer serves the unwatermarked original there.
+
+See [Branding → Watermark](/features/branding#watermark) for the watermark logo, position, opacity and size.
 
 ## White-label admin and login
 
@@ -79,7 +108,7 @@ A markdown-authored banner shown above (default) or below the gallery footer ---
 | Alignment | Left / Center (default) / Right |
 | Content | Markdown --- bold, italic, links, lists, headings |
 
-Per-event override: each event editor has a three-way switch under **Edit Event > Promotional Banner**:
+Per-event override: each gallery has a three-way switch under **Settings → Appearance → Promotional Banner** on the gallery page (**Edit Event > Promotional Banner** on stable):
 
 - **Inherit** (default) --- use the global content as-is.
 - **Custom** --- override with this event's own markdown for that gallery only.
@@ -93,7 +122,7 @@ When a gallery URL is shared on WhatsApp, Facebook, Slack, Telegram, Discord, Li
 
 By default the `og:image` is your branding logo. Each event has an opt-in to use the **hero photo** as the preview image instead:
 
-1. Open the event editor.
+1. Open the gallery's **Settings → Appearance** (the event editor on stable).
 2. Pick a hero photo (the toggle is disabled until one is selected).
 3. Tick **Use hero photo as social-share preview**.
 4. Save.

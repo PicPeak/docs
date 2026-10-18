@@ -10,11 +10,13 @@ A photo belongs to at most one category. Photos with no category are "uncategori
 
 | | Global categories | Event-specific categories |
 |---|---|---|
-| Managed in | **Settings → Categories** | the event's **Categories** tab |
+| Managed in | **Settings → Categories** | the event's categories (see below) |
 | Available to | every event | that one event |
 | Shown in the event tab as | marked **Shared** | plain |
 
 Global categories save re-typing the same names for every wedding. Event-specific ones cover the parts that only exist for that job.
+
+An event's categories are managed in a **Categories** panel on the gallery's **Photos** tab on the beta channel (from v3.155.0-beta.0; links with `?tab=categories` still open it), and in the event's **Categories** tab on stable. This page says "the event's categories" for either.
 
 Event-specific categories can only be created, renamed, given a cover photo or deleted by an account that can open that event (builds containing [PicPeak PR #1483](https://github.com/PicPeak/picpeak/pull/1483)). Guest uploads and chunked uploads can only file photos under the event's own categories or global ones (builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495)).
 
@@ -36,7 +38,7 @@ A global category can therefore have a different cover photo and a different pos
 Folders are available on **stable from v3.132.1**, and on beta from v3.117.0-beta.0. See [Release Channels](/deployment/release-channels).
 </Callout>
 
-Each event-specific category carries a folder toggle, shown as a folder icon next to its name in the event's Categories tab.
+Each event-specific category carries a folder toggle, shown as a folder icon next to its name in the event's categories.
 
 **Filter** (the default, and what every category did before folders existed):
 
@@ -52,7 +54,7 @@ Each event-specific category carries a folder toggle, shown as a folder icon nex
 - Inside a folder the guest gets a "back to gallery" control and a **Download folder** button, subject to the event's download rules.
 - Folders do not appear as filter chips — a folder is a place, not a filter.
 
-Folders are one level deep. There are no folders inside folders.
+On stable, folders are one level deep: there are no folders inside folders. On the beta channel folders nest up to three levels; see [Nested folders](#nested-folders).
 
 <Callout type="warning">
 **A folder is organisation, not access control.** Its photos are hidden from the main grid, but they are still delivered to the browser in the same gallery response, so a determined guest can reach them. To genuinely withhold photos use [hidden photos or a reveal window](/features/gallery-management), not a folder.
@@ -63,9 +65,47 @@ Folders are one level deep. There are no folders inside folders.
 - **Filter** when guests plausibly want to see everything, and the category is just a way to jump around. Most weddings.
 - **Folder** when a set is a separate thing that would clutter the main gallery — "Raw selects", "Group shots", a second shooter's set, or the parts most guests will skip.
 
+## Nested folders
+
+Beta channel only, from v3.164.0-beta.0 ([PicPeak PR #1826](https://github.com/PicPeak/picpeak/pull/1826)), with limits and fixes from v3.170.0-beta.0 ([PicPeak PR #1931](https://github.com/PicPeak/picpeak/pull/1931)). Stable (v3.134.x) has one level of folders and none of what follows.
+
+Folders nest up to **three levels**. A folder is still an event category with **Show as folder** on, so it keeps its cover photo, its download toggle and its `?folder=` link, but a photo's folder and its filter category are now separate: a photo inside a folder can also carry a filter category such as "Portraits". Folders are always event-specific; global categories cannot be folders.
+
+**Managing folders.** The **Folders** bar on the gallery's **Photos** tab browses the tree (**All photos**, **Gallery root**, each folder with its count) and creates, renames, moves and deletes folders. **Move to folder…** moves selected photos. Deleting a folder moves its photos and subfolders up to its parent; no photo is deleted. Two folders under the same parent cannot share a name (case is ignored). A gallery holds at most 1,000 folders.
+
+**Downloads per folder.** A folder that blocks downloads blocks them in every folder below it; the most restrictive setting wins on every download path, including the prebuilt Download All zip.
+
+**Folders from uploads and imports.** With **Mirror folder structure on upload and import** on (**Settings → Folders & delivery** on the gallery page), uploading a whole folder (drop it, or use **Choose folder** in the upload dialog) or importing an [external folder](/features/external-media) recreates its subfolders as gallery folders. The upload dialog previews the result and can switch it off per upload. The outer folder you picked is not created, and anything deeper than three levels lands in its third-level folder. The setting defaults to on for new galleries and off for galleries that existed before the upgrade; for an external folder imported before it was on, **Apply folder structure** in the source bar sorts the existing photos into folders. Folders are matched by their source path, so a folder you renamed in the admin ("Freitag") keeps receiving uploads of "Friday".
+
+The managed drop folder watcher and the S3 auto-import do not mirror folders: they file every photo at the gallery root.
+
+**Who may create folders.** Creating, renaming, moving and deleting folders needs the `folders.manage` permission. The upgrade gives it to every role holding `settings.edit`, so no role loses anything. When a role without it (the Team Photographer preset, for example) uploads into folders that do not exist yet, PicPeak opens a **folder request** instead: the photos wait in the closest existing folder, and the **folder requests** panel on the Photos tab lets an admin **Approve** (creates the folder and moves the photos), **Approve as…** (moves them into an existing folder instead, for example "Samstag" into "Saturday") or **Reject** (the photos stay where they are). A gallery holds at most 200 open folder requests; an upload that would pass either limit is held in the upload dialog with a warning.
+
+**What guests see.** Guests browse one level at a time with a breadcrumb, can switch between **Folders** and **All photos**, and get a folder tree in sidebar layouts. Folder tiles count the photos of their subfolders too, and **Download folder** includes the subfolders. Filter categories now also filter inside a folder and in **All photos**.
+
+## Two-stage delivery (first look)
+
+Beta channel only, from v3.164.0-beta.0 ([PicPeak PR #1826](https://github.com/PicPeak/picpeak/pull/1826)).
+
+A gallery can deliver a first look now and the complete gallery later. Under **Settings → Folders & delivery → Two-stage delivery** on the gallery page, set the status to **First look, more to come** (the default is **Complete**). Then:
+
+- Photos delivered so far carry a badge (**Badge label**, default "First look"). The badge stays on them after the full gallery lands.
+- Guests see a note that more photos are coming and placeholder tiles after the grid, sized from **Expected number of photos** (approximate).
+- **Complete gallery promised by** is the promised date. Left empty, it is the event date plus **Full gallery due after (days)** from **Settings → Event Creation** (default 7 days, 1 to 365), and the form marks it "default".
+- The gallery header, the events list and the dashboard show galleries awaiting their full delivery: amber within two days of the promised date, red once it has passed. The events list has an **Awaiting full gallery** filter.
+- You get a `delivery_due_reminder` email when the promised day is about to end (within the last 24 hours) and again once it has passed. It goes to the business profile email, else the gallery's admin email.
+
+**Full gallery is ready** (in the gallery page header and in the delivery settings, needs `events.edit`) completes the delivery. It sends the `gallery_completed` email to the customer email and every assigned customer account (on unless you untick it) and fires the `gallery.completed` workflow trigger. It can also remove first-look photos that arrived again in the full set; the full-set copies then take over the badge. A pair needs the same filename, unique on both sides, and the same capture time to the second, or without capture times the same width, height and file size. That checkbox starts unticked. Saving **Complete** in the settings instead only removes the note and the placeholders: no email is sent.
+
+**When the promised day ends.** From v3.174.0-beta.0 ([PicPeak PR #2050](https://github.com/PicPeak/picpeak/pull/2050)) a promised day ends at the end of that day in the instance time zone (the business profile time zone, else the server's), the same rule a date-only gallery expiry follows. Earlier betas ended it at the end of the UTC day, so a studio west of UTC got the overdue reminder during the promised day. Changing the business profile time zone moves the end of every open promise with it. The guest note and the reminder name the promised calendar day.
+
+**Keyword folders.** A top-level folder whose name *contains* one of the keywords (`FirstLook` and `Sneak Peek` by default; case, spaces, dashes and underscores are ignored) is not created as a folder when you upload or import it: its photos are badged and the gallery switches to two-stage delivery. A gallery already completed is never re-opened by it. The keywords and the switch **Start a first look from keyword folders** are under **Settings → Event Creation**.
+
+Anyone who may upload can start a first look this way; the delivery settings and completing need `events.edit`. Duplicating a gallery copies its folder tree, folder setting and badge label, and the copy starts complete.
+
 ## Cover photos
 
-Any category can carry a cover photo, set from **Set Cover Photo** in the event's Categories tab. It is used as the folder tile image and wherever the category is presented as a card.
+Any category can carry a cover photo, set from **Set Cover Photo** in the event's categories. It is used as the folder tile image and wherever the category is presented as a card.
 
 If a category has no cover photo the event's own hero photo is used instead.
 
@@ -89,7 +129,7 @@ Category ordering is available on **stable from v3.132.1**, and on beta before t
 
 Categories have a default order set once in **Settings → Categories**, using the up/down arrows. Every gallery follows it.
 
-Any single gallery can override that order from its own Categories tab under **Gallery order**. Once you do, the tab shows that the gallery uses a custom order, and **Reset to default** puts it back to following the global list.
+Any single gallery can override that order from its own categories under **Gallery order**. Once you do, the tab shows that the gallery uses a custom order, and **Reset to default** puts it back to following the global list.
 
 Ordering drives the filter chips, the folder tiles, and anywhere else categories are listed for guests.
 

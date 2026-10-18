@@ -6,22 +6,41 @@ This page documents what guests actually see and can do when they open a gallery
 
 For the admin-side configuration of these features see [Themes & Branding](/features/themes-branding) and [Creating Events](/guides/creating-events).
 
+Many features below are on the **beta channel only** and name the first beta release that has them. Stable (v3.134.x) does not have those. See [Release Channels](/deployment/release-channels).
+
 ## Layout variants
 
-PicPeak ships seven gallery layouts. Each has its own configuration tokens (gutter size, columns, row height, etc.) that the admin sets via the Theme Customizer.
+PicPeak ships seven gallery layouts. Each has its own configuration (gutter size, columns, row height, etc.) that the admin sets in the theme customizer, either in the global theme under **Branding** or in a gallery's own styling.
 
 | Layout | Best for | Distinguishing feature |
 |---|---|---|
-| **Classic Grid** | Mixed content, mobile-first | Equal-size tiles in 2–4 responsive columns |
-| **Modern Masonry** | Variable aspect ratios | Pinterest-style columns, no cropping |
-| **Justified** | Editorial galleries | Photos stretched to fill rows of equal height (Flickr-style) |
-| **Carousel** | Single-photo focus | Auto-advancing slideshow with optional thumbnail strip |
+| **Grid** | Mixed content, mobile-first | Equal-size tiles in 2–4 responsive columns |
+| **Masonry** | Variable aspect ratios | No cropping. **Layout Mode** picks Columns (Pinterest-style), Rows, Flickr, or Google Photos (rendered as rows) |
+| **Carousel** | Single-photo focus | Full-screen slideshow with navigation |
 | **Timeline** | Multi-day events | Photos grouped by day / week / month with date headers |
-| **Moments Mosaic** | Lifestyle, magazine layouts | Mixed-size tiles in a structured pattern |
-| **Story Mode** | Reveal-style storytelling | Vertical full-screen scroll, one photo per viewport |
-| **Gallery Premium** | High-end product showcase | Carousel + lightbox hybrid with custom transitions |
+| **Mosaic** | Lifestyle, magazine layouts | Mixed-size tiles in a structured pattern |
+| **Gallery Premium** (beta layout) | High-end showcase | Light theme with a hero and masonry, its own lightbox |
+| **Gallery Story** (beta layout) | Storytelling | Dark, cinematic theme with scene sections |
 
-The active layout is set per-event via the theme preset or by overriding the layout key explicitly.
+The justified rows that older versions of this page listed as a separate "Justified" layout are Masonry's **Rows**, **Flickr** and **Google Photos** modes.
+
+<Callout type="warning">
+On stable (v3.134.x) the Masonry mode **Google Photos (Knuth-Plass algorithm)** shows no photos at all. Pick **Rows** instead. On the beta channel from v3.171.0-beta.0 ([PicPeak PR #1967](https://github.com/PicPeak/picpeak/pull/1967)) a gallery set to that mode is drawn as Rows, with no change to its settings.
+</Callout>
+
+A gallery uses the global theme from **Branding** unless its own **Custom gallery styling** is switched on. See [Themes & Branding](/features/themes-branding#global-theme-and-custom-gallery-styling).
+
+### Gallery Story
+
+The layout is called `gallery-story` in the theme customizer, and the built-in preset is **Gallery Story (Beta)**. Its settings in the theme customizer:
+
+| Setting | What it does | Beta from |
+|---|---|---|
+| **Photo Framing** | **Fixed tiles (crop to fill)**, the default, or **Natural (keep every aspect ratio)**: each scene is laid out in rows from the stored photo dimensions, so portrait photos are shown whole. A photo without stored dimensions gets a square box. | v3.148.2-beta.0 |
+| **Show filenames on hover** | Off by default, existing galleries included. On, the hover caption shows the original filename when the gallery is set to show original filenames, otherwise the stored name. | v3.174.0-beta.0 |
+| **Footer title** / **Footer text** | Plain text, up to 80 / 300 characters. Empty title shows "Thank You"; empty text shows the welcome message, or a default thank-you line when there is none. | v3.174.0-beta.0 |
+
+The fixed navigation bar carries **Download All** (v3.148.2-beta.0) and **Select** (v3.149.0-beta.0). In selection mode each card gets a checkbox, clicking a card toggles it instead of opening the lightbox, and a second bar offers **Select All** (the photos the current search shows), **Favourite selected**, **Download selected** and **Cancel**. **Favourite selected** likes only the photos not yet liked; when every selected photo is already liked it removes them instead. It is not offered when the gallery has likes switched off.
 
 ## Lightbox
 
@@ -32,12 +51,29 @@ Opening any photo opens the lightbox — full-screen viewer with navigation, zoo
 - Single-finger swipe left/right — mobile (50 px threshold, dominant over vertical, < 600 ms)
 - Keyboard: ←, →, Esc
 
+**Film strip and hold-to-scrub** (beta channel from v3.171.0-beta.0, [PicPeak PR #1956](https://github.com/PicPeak/picpeak/pull/1956)):
+- A strip of thumbnails sits above the toolbar, ten each side of the open photo. Clicking one jumps to it. It is shown only in windows at least 768 px wide and 600 px tall with a mouse or trackpad; phones and tablets do not get it.
+- Holding ← or → scrubs through the gallery at about nine photos a second, showing thumbnails as it goes. The photo you land on when you let go is loaded at full quality and counted as one view; the photos passed over are not counted, and feedback controls stay on the starting photo until you release.
+- The Gallery Premium layout's own lightbox has no film strip.
+
 **Zoom:**
 - Pinch-to-zoom on touch devices (2-finger gesture)
 - Click or use the +/- buttons on desktop
 - Mouse wheel over the photo zooms toward the cursor, no modifier key needed. Trackpad two-finger scroll works the same way. Videos are excluded.
-- **Double-click the photo** — or the "Fit to screen" button beside the zoom controls — snaps straight back to 100% and re-centres, rather than clicking out step by step.
-- Zoom range: 1× to 3×, with the current percentage shown in the lightbox
+- **Double-click the photo** — or the "Fit to screen" button beside the zoom controls — snaps straight back to fit and re-centres, rather than clicking out step by step.
+- Zoom range: 1× to 3× of the fitted size, with the current percentage shown in the lightbox
+
+**Zoom to original pixels** (beta channel from v3.171.0-beta.0, [PicPeak PR #1958](https://github.com/PicPeak/picpeak/pull/1958)): in a gallery where the viewer could download the unwatermarked original anyway, zooming past fit loads the original ("Loading full resolution…") and the zoom goes up to one image pixel per screen pixel instead of stopping at 3×. The readout then counts against the original, so a 6000 px photo reads about 21 % at fit, and 100 % is the original size, pixel for pixel. Double-click or double-tap toggles between fit and 100 %. Zooming is a view: it does not count as a download.
+
+The server refuses the original for zooming, and the lightbox keeps the 1×–3× behaviour, when any of these applies:
+
+- downloads are off, or a watermark is applied to downloads or display (globally or on the gallery)
+- the gallery has a download limit
+- downloads are held to a reduced resolution
+- the protection level is enhanced or maximum, or canvas rendering is on
+- it is a slideshow, a video, or a format browsers do not render (camera RAW, HEIC)
+
+On a phone or tablet originals above 50 megapixels, or of unknown size, are not loaded.
 
 **Toolbar (bottom):**
 - Photo counter (`3 / 12`)
@@ -46,6 +82,7 @@ Opening any photo opens the lightbox — full-screen viewer with navigation, zoo
 - Like (if feedback enabled)
 - 5-star rating (if ratings enabled)
 - Comment / Open feedback panel (if comments enabled)
+- Approve / Reject (beta channel, if per-photo decisions are enabled, see [Feedback](/features/feedback#approve--reject-per-photo))
 
 **Link to a photo** (beta channel from v3.161.0-beta.0, [PicPeak PR #1799](https://github.com/PicPeak/picpeak/pull/1799)): while a photo is open the address bar carries `?photo=<id>`. Copying the address gives a link that opens the gallery on that photo, the browser's Back button closes the lightbox, and stepping through photos keeps the address in step. The parameter is carried through short links (`/s/…`). A link to a photo in another folder opens that folder, and active filters are cleared if they would hide it. A link to a photo the visitor has no access to (hidden from guests, removed) opens the gallery without it.
 
@@ -57,7 +94,7 @@ Opening any photo opens the lightbox — full-screen viewer with navigation, zoo
 
 A short message can sit at the top of the gallery, above the photos — arrival instructions, a print-ordering deadline, a thank-you.
 
-Set the site-wide default under **Settings → Branding → Gallery Info Banner**. Each event's Information card can then choose **Inherit global default**, **Custom override for this event**, or **Off (hide for this event)**.
+Set the site-wide default under **Settings → Branding → Gallery Info Banner**. Each gallery can then choose **Inherit global default**, **Custom override for this event**, or **Off (hide for this event)** under **Settings → Appearance → Info Banner** on the gallery page.
 
 Markdown is supported for bold, italic, links, lists and headings. HTML is stripped. Guests cannot dismiss it, and an empty default renders nothing at all.
 
@@ -69,9 +106,20 @@ Previews and grid thumbnails are generated in several sizes, and the browser pic
 
 None of this is configurable and there is nothing to switch on. Worth knowing for storage planning: each size that gets requested is cached on disk alongside the original, so preview storage grows beyond the originals themselves.
 
+## Live refresh
+
+Beta channel only, from v3.171.0-beta.0 ([PicPeak PR #1946](https://github.com/PicPeak/picpeak/pull/1946)).
+
+With **Live refresh (tell guests about new photos)** switched on in the gallery's **Settings → Guest interaction** (off by default), an open gallery checks for new photos every 20 seconds while its tab is visible. When photos arrive it shows an "N new photos" button at the bottom of the screen; clicking it reloads the list. Nothing is inserted on its own.
+
+- Only photos the viewer is allowed to see count: hidden, held and still-processing photos never trigger the button.
+- After an error, including a rate-limit refusal, the interval doubles up to 5 minutes, silently.
+- It pauses during reveal mode, while the viewer's own upload is processing, and during a people scan.
+- The setting is on the gallery's settings page only; there is no field on the create form and no global default.
+
 ## Feedback
 
-If the event has feedback enabled (per-event setting in the Edit Event → Feedback panel):
+If the event has feedback enabled (per-gallery setting under **Settings → Guest interaction** on the gallery page):
 
 | Control | Persistence | Visible to other guests? |
 |---|---|---|
@@ -86,22 +134,40 @@ If the event has feedback enabled (per-event setting in the Edit Event → Feedb
 
 The setting lives on the event, not globally — different events can use different identity modes.
 
+The selection counter, **Finish selection**, **Approve edited photos**, per-photo approve / reject and drawing on a photo are described on the [Feedback](/features/feedback) page.
+
 ### Rating from the grid
 
 On the beta channel from v3.161.0-beta.0 ([PicPeak PR #1796](https://github.com/PicPeak/picpeak/pull/1796)) a guest can rate without opening the lightbox: hovering or focusing a tile shows the five stars under the tile's action buttons. Clicking the star already given clears the rating, as in the lightbox. The name prompt, if the event asks for one, appears once and is then used for every tile.
 
-- Available in the Grid, Justified, Mosaic, Timeline and Masonry (columns mode) layouts. The Masonry modes rows, Flickr and quilted have no tile feedback buttons and therefore no tile rating.
-- Tiles lower than 104 px — panoramic crops in Mosaic or Masonry — show the action buttons only; rate those in the lightbox.
+- Available in the Grid, Mosaic, Timeline and Masonry layouts. In Masonry, v3.161.0-beta.0 had tile buttons in the Columns mode only; from v3.171.0-beta.0 ([PicPeak PR #1942](https://github.com/PicPeak/picpeak/pull/1942)) the Rows, Flickr and quilted modes have the like, comment and rating buttons too.
+- Tiles lower than 104 px — panoramic crops in Mosaic or Masonry — show the action buttons only; rate those in the lightbox. A Rows or Flickr tile narrower than 168 px wraps its buttons onto a second line and also leaves the rating to the lightbox.
 - The instance-wide rating limit is 2,000 per hour so a proofing session is not cut off. An install that still had the old seeded limit of 100 is raised by the upgrade; a limit you set yourself is kept.
+
+### Rating the selection
+
+Beta channel only, from v3.171.0-beta.0 ([PicPeak PR #1944](https://github.com/PicPeak/picpeak/pull/1944)).
+
+With photos selected, **Rate selected** gives the whole selection the same stars in one click, or clears them. It sits in the gallery sidebar (in its own section, so it is there even with downloads off) and in the inline toolbar. Selections above 200 photos are sent in parts of 200.
+
+- The rating limit is checked for the whole request: a selection the remaining budget does not cover is refused as a whole, with nothing rated.
+- Photos that are hidden from the viewer or belong to another gallery are skipped.
+- The Gallery Story and Gallery Premium layouts do not have the control.
+
+### Selected photos in the sidebar
+
+Beta channel only, from v3.171.0-beta.0 ([PicPeak PR #1943](https://github.com/PicPeak/picpeak/pull/1943)). In the sidebar controls style, a collapsible **Selected (N)** section lists the selected photos with a thumbnail, the filename and a remove button each. The list shows the whole selection, including photos the current folder or filter hides. Galleries with the inline toolbar keep the plain count.
 
 ## Search & filter
 
 The filter bar (toggleable globally; default on) gives guests:
 
-- **Search** — full-text on filename
-- **Sort** — by upload date, capture date (EXIF DateTimeOriginal), filename, size, rating
+- **Search** — on the filename. It matches the original camera filename (`0V3A1139.jpg`) as well as the name PicPeak stored the file under.
+- **Sort** — by upload date, capture date (EXIF DateTimeOriginal), filename, size, rating. Sorting by filename uses the original camera filename, falling back to the stored name for uploads that have none.
 - **Sort direction** — toggle ascending/descending (defaults match the per-event `default_photo_sort` setting)
 - **Date Taken** picker — filter to a specific day or range based on EXIF capture date
+
+Name sort and search on the original filename are on stable from v3.133.9 and on the beta channel from v3.152.0-beta.0 ([PicPeak PR #1702](https://github.com/PicPeak/picpeak/pull/1702)). Earlier builds sorted by the stored name, which follows upload order.
 
 When feedback is enabled, additional filter chips appear:
 
@@ -112,6 +178,8 @@ When feedback is enabled, additional filter chips appear:
 - **Commented** — only photos with at least one approved comment
 
 On the beta channel from v3.161.0-beta.0 ([PicPeak PR #1800](https://github.com/PicPeak/picpeak/pull/1800)) a **My rating** chip row filters by the guest's own stars: `1+` to `5`, one at a time, click the active chip to clear it. It only offers thresholds the guest has actually reached, appears only while ratings are on for the event, and narrows whatever the other filters leave. In the sidebar layout, **Select all (N)** selects exactly the photos the active filters leave on screen.
+
+Galleries with automatic scene tags get a **Tags** chip row as well; see [Automatic scene tags](/features/face-recognition#automatic-scene-tags).
 
 ### Copy filenames for the RAW editor
 
@@ -131,21 +199,57 @@ If the per-event "Allow downloads" setting is off, the bulk-download button is h
 
 At most two streamed archives are built at the same time per server, with eight more waiting; beyond that a download request is answered with `429` and `Retry-After: 10`, and the gallery asks the guest to try again shortly (builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809)).
 
+### What a download contains, and the 500-photo limit
+
+On the beta channel from v3.174.0-beta.0 ([PicPeak PR #2028](https://github.com/PicPeak/picpeak/pull/2028), [#2033](https://github.com/PicPeak/picpeak/pull/2033), [#2046](https://github.com/PicPeak/picpeak/pull/2046)):
+
+- **Only what the gallery shows.** Download All, selected downloads, prepared downloads and single downloads leave out photos that are still processing or failed. While any photo of the gallery is unfinished, guests get the streamed archive rather than the cached zip.
+- **A selection is never cut.** One selected download takes at most 500 photos. A larger selection is refused with `400 TOO_MANY_PHOTO_IDS`, the gallery says so, and the selection is kept so the guest can trim it. Older builds silently delivered the first 500.
+- **Download All in Gallery Premium and Gallery Story** downloads the whole gallery. When a category with downloads turned off forces it to send photo ids instead, a set above 500 photos is downloaded as one ZIP per 500 photos, one after another (`<slug>-selected-1-of-3.zip` …), at the standard size without the size picker.
+- **People filter.** **Download these N** for a person with more than 500 photos is split the same way. See [People in Galleries](/features/face-recognition#what-guests-see).
+- **Folders.** **Download folder** still hands back the first 500 photos of a larger folder and tells the guest so. See [Photo Categories & Folders](/features/photo-categories#what-guests-see).
+- With a download limit, the whole selection is checked against what is left before anything is sent, and a refusal keeps the selection.
+
+### Prepared downloads
+
+With the download size picker on (see [Download Resolutions](/features/reveal-mode#download-resolutions)), bulk downloads are prepared on the server and then offered with **Download**.
+
+On the beta channel from v3.171.0-beta.0 ([PicPeak PR #1951](https://github.com/PicPeak/picpeak/pull/1951)):
+
+- **Keep prepared downloads for (hours)** under **Settings → Download resolutions** sets how long a prepared download stays available: 1 to 168 hours, default 1. Each prepared download takes about as much disk space as the photos in it. The value applies to downloads prepared after the change.
+- Prepared downloads nobody can receive any more (gallery expired, archived, deleted, or downloads switched off) are removed by the cleanup job.
+- **Email me when it is ready** appears in the preparing dialog for a guest whose email address PicPeak has verified, and for a customer signed in through the customer portal. An address typed at guest registration is not enough, and client PIN sessions do not get the option. The mail (template `download_ready`, English and German, other languages fall back to English) links to the gallery, not to the file, so normal gallery access applies; the gallery then opens "Your prepared download". At most 5 requests per address per hour.
+- A link from the mail to a download that has since been removed shows "This download is no longer available. Please request it again."
+
+## Guest uploads
+
+When guest uploads are on for the gallery, guests upload from a dialog in the gallery. On phones and tablets a **Take a photo** button opens the camera directly, for Android builds whose photo picker has no camera entry (beta channel from v3.145.0-beta.0, [PicPeak PR #1687](https://github.com/PicPeak/picpeak/pull/1687)).
+
+**Longest edge of guest photos (px)** (beta channel from v3.171.0-beta.0, [PicPeak PR #1947](https://github.com/PicPeak/picpeak/pull/1947)), in the gallery's **Settings → Guest interaction**: when set (1024 to 16384), the guest's browser scales larger JPEG, PNG and WebP photos down to that edge before upload and keeps the filename. Empty, the default, sends originals.
+
+- Photos are never scaled up. If scaling fails or does not make the file smaller, the original is sent.
+- HEIC, RAW, videos, GIFs and animated PNG/WebP are always sent as they are.
+- The capture date survives: the browser sends the original's EXIF date with the upload.
+- The server does not enforce the edge; it saves bandwidth and storage, it is not a limit.
+- The per-file size limit is checked on the original, so a file over the limit is refused even when scaling would bring it under.
+
+Galleries can hold guest uploads until they are approved; see [Moderation](/guides/admin-settings/moderation#holding-guest-uploads).
+
 ## Language
 
-The language toggle in the gallery header offers any of: English, German (Deutsch), Dutch (Nederlands), Brazilian Portuguese (Português), Russian (Русский).
+The language toggle in the gallery header offers English, German (Deutsch), Russian (Русский), Brazilian Portuguese (Português), Dutch (Nederlands), French (Français), Spanish (Español) and Slovenian (Slovenščina).
 
 The choice persists in `localStorage` per origin. If the guest hasn't picked one, the gallery falls back to the global default set in [General Settings](/guides/admin-settings/general).
 
-## EXIF metadata display
+## Camera details (EXIF)
 
-For each photo in the lightbox, the metadata panel (toggleable) shows:
+Beta channel only, from v3.171.0-beta.0 ([PicPeak PR #1948](https://github.com/PicPeak/picpeak/pull/1948)). Stable shows no camera details in the gallery.
 
-- Capture date + time
-- Camera make + model (if EXIF present)
-- Lens model (if EXIF present)
-- Aperture, shutter speed, ISO (if EXIF present)
-- GPS — **stripped** at upload time for privacy. Never displayed.
+PicPeak reads camera, lens, focal length, aperture, shutter speed and ISO from each photo when it is imported, and shows them as an info row in the lightbox (a second caption line in the Gallery Premium lightbox) and in the admin photo viewer. Guests see them only when **Show camera details to guests** is on in the gallery's **Settings → Guest interaction**; it is off by default. The slideshow and the client PIN view follow the same switch.
+
+Only those seven values are stored. GPS position, serial numbers, owner and artist names never reach the stored details. Shutter speeds print as `1/250 s` or `2 s`; missing values are left out.
+
+Photos imported before the upgrade get their details from the capture-date job on the Status page, which an admin starts by hand. It opens each original once; on S3 that downloads every original.
 
 ## Client access mode
 

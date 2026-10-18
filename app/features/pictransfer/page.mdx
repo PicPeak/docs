@@ -2,12 +2,19 @@ import { Callout } from 'nextra/components'
 
 # PicTransfer
 
-PicTransfer is the "just send them the files" tool. You bundle original files — photos picked from any of your events, plus anything you upload from your computer — into one transfer, and the recipient gets a link that downloads the lot. Optionally the same transfer opens a second, separate link the client can use to send files back to you.
+PicTransfer is the "just send them the files" tool. It does two separate jobs:
+
+- **Send files** bundles original files — photos picked from any of your events, plus anything you upload from your computer — into one transfer, and the recipient gets a link that downloads the lot.
+- **Request files** gives a client an upload link they use to send files to you, such as logos or reference images.
+
+A transfer is one or the other. A send has no upload link and a request has no download link.
 
 It is not a gallery. There are no thumbnails, no password page, no feedback, no watermarks. It is a delivery pipe for originals.
 
 <Callout type="info">
 Available on **stable from v3.132.1** (and on beta before that), **off by default** on both. See [Release Channels](/deployment/release-channels).
+
+The split into **Send files** and **Request files**, the **Settings → PicTransfer** page, the files-per-upload limit, the received-files ZIP, link previews and the "finished photos only" rule are on the beta channel only (from v3.152.0-beta.0 onward; versions per section below). On stable a transfer is a send that can optionally open an upload link, as described under [Stable: upload link on a send](#stable-upload-link-on-a-send).
 </Callout>
 
 ## Turning it on
@@ -24,9 +31,11 @@ No new permission was added. PicTransfer reuses the event permissions you alread
 
 Admins who are not super-admins see only their own transfers, and can only pick photos from events they own.
 
-## Creating a transfer
+The transfers list has **All**, **Sent** and **Requested** tabs. For a request the **Files** column counts the files the client sent, and **Downloads** shows `—`.
 
-**PicTransfer** in the admin sidebar, then **New transfer**.
+## Sending files
+
+**PicTransfer** in the admin sidebar, then **Send files**.
 
 | Field | Notes |
 |---|---|
@@ -34,11 +43,10 @@ Admins who are not super-admins see only their own transfers, and can only pick 
 | **Message (optional)** | Free text shown on the download page. |
 | **Link active for (days)** | Defaults to 14. |
 | **Max downloads (0 = unlimited)** | The link stops working once the cap is hit. |
-| **Also give the client an upload link** | Opens the return channel described below. |
-| **Files** | **Select images from other events** opens a picker you can browse event by event — one transfer can span several events. **Upload your own files** takes anything from your computer. |
+| **Files** | **Select images from other events** opens a picker you can browse event by event — one transfer can span several events. **Upload your own files** takes files from your computer. |
 | **Delivery** | **Share a link** hands you the URL to send yourself, or **Send by email** collects recipient addresses and mails them the link. |
 
-Uploads from your own computer are capped at 50 files per request and 50 MB per file by default.
+Files you upload from your own computer are capped at 50 files per request, and follow the same type and size rules as client uploads (see [Settings → PicTransfer](#settings--pictransfer)). A file of a type that is not allowed is skipped and named in a notice; the rest are kept. A send must contain something: if every picked photo is unusable (not found, or from an event you cannot access) and no file was uploaded, creation fails with `NOTHING_TO_SEND`, or `TYPE_REJECTED` when the uploaded files were all of a type that is not allowed.
 
 The ZIP is built as the recipient downloads it, so there is no wait while a large transfer is packed. A transfer drawn from a single event produces a flat ZIP; one spanning several events is foldered by event name.
 
@@ -46,7 +54,7 @@ The ZIP is built as the recipient downloads it, so there is no wait while a larg
 
 The download link looks like `https://your-site/transfer/<64-character token>`.
 
-The page lists **filenames and sizes only**. No thumbnails and no image URLs are exposed, so nothing can be scraped from the page without downloading it. The recipient can take the whole ZIP or individual files.
+The page lists **filenames and sizes only**. On the beta channel (from v3.174.0-beta.0) only photos that have finished processing are listed, downloadable or put in the ZIP; a photo still being processed appears once it is done. No thumbnails and no image URLs are exposed, so nothing can be scraped from the page without downloading it. The recipient can take the whole ZIP or individual files.
 
 Three end states have their own screens: the link expired, the download cap was reached, or the link is unknown.
 
@@ -54,27 +62,68 @@ Three end states have their own screens: the link expired, the download cap was 
 **There is no password.** The token in the URL is the entire secret, so treat the link like a password: anyone who has it can download the files. Send it over a channel you trust, set a download cap when the transfer is sensitive, and keep the active window short.
 </Callout>
 
+When a link is pasted into a chat app or social network (WhatsApp, Slack, iMessage), the preview card shows the transfer's title with your company name, your branding tagline as the description, and your logo (beta channel from v3.158.1-beta.0). Nothing else about the transfer — message, filenames, sizes — is exposed. A disabled, expired or capped link, a short upload code, and every link while the feature is off get a generic card with your company name.
+
 Downloads are logged. Each one records a timestamp and the caller's IP, and the transfer shows a running download count.
 
 A download counts against **Max downloads** when it starts, so a download the recipient abandons halfway still uses one. Downloads that start at the same moment cannot exceed the cap, and a file that no longer exists does not use up a download. (Builds containing [PicPeak PR #1486](https://github.com/PicPeak/picpeak/pull/1486).)
 
-## Getting files back from the client
+## Requesting files
 
-Tick the upload option when creating the transfer, or hit **Enable upload link** afterwards. You then get a **six-character code** and a matching link at `https://your-site/transfer-upload/<code>`. The code is meant to be readable over the phone, so it avoids the characters people confuse: no `0`, `O`, `1`, `I` or `L`.
+On the beta channel (from v3.152.0-beta.0): **PicTransfer** in the admin sidebar, then **Request files**.
 
-The client drags files onto the page. Up to 25 files per upload, the same 50 MB per-file cap, and only these types are accepted: JPEG, PNG, WebP, GIF, TIFF, PDF and ZIP.
+| Field | Notes |
+|---|---|
+| **Title** | Shown to the client on the upload page. |
+| **What do you need from them? (optional)** | Free text shown on the upload page. |
+| **Accept uploads for (days)** | The upload deadline. Defaults to 14. |
+| **Max files per upload** | Leave at **Default** to follow the global value from Settings, or set a number from 1 to 1000 for this request alone. Can be changed afterwards in the request's detail panel (**Use the default** goes back to the global value). Beta channel from v3.169.0-beta.0. |
+| **Delivery** | **Share a link**, or **Send by email**: each address gets the upload link. |
 
-Their files appear in the transfer's **Client upload** section, where you download them individually.
+The upload link looks like `https://your-site/transfer-upload/<64-character token>` — the same strength as a download link. **Send again** in the detail panel re-mails the request.
+
+**Short upload code.** A new request also gets an optional short code for reading out over the phone, which opens the same upload page at `https://your-site/transfer-upload/<code>`. The code is 10 characters long (14 in the rare case a generated code clashes with an existing one) and avoids the characters people confuse: no `0`, `O`, `1`, `I` or `L`. In the detail panel, **New code** replaces a code that has leaked and **Withdraw** removes it; the 64-character link keeps working either way.
 
 <Callout type="warning">
-A six-character code is much weaker than the download token. It is protected by rate limits and a per-IP lockout rather than by length, so enable the upload channel when you need it and leave it off when you do not.
+The short code is much weaker than the 64-character link. It is protected by rate limits and a lockout: 20 wrong codes within 15 minutes lock out the sender's network for the rest of that window. IPv4 is counted per address and IPv6 per `/64` network, so rotating addresses inside one allocation does not reset the count. Withdraw the code when you do not need it.
 </Callout>
+
+**On the upload page** the client drags files onto the page, up to the files-per-upload limit and the per-file size limit, and can upload again afterwards with **Upload more**. A file of a type that is not allowed is skipped and named back to the client rather than failing the whole batch.
+
+**Received files** appear in the request's detail panel, where you download them individually or all at once as one ZIP with **Download all** (beta channel from v3.169.0-beta.0; needs `photos.download`). PicPeak stores them exactly as received and never opens, renders or scans them — check them before you use or pass them on.
+
+When files arrive, the admin who created the request gets a `transfer_files_received` email — at most one per 15 minutes per request. **Close request** stops further uploads.
+
+### Upgrading to the send/request split
+
+Migration 257 (v3.152.0-beta.0) converts existing transfers. A transfer that only sent files stays a send. One that also had an upload link is split in two: the send keeps its photos and download link, and a new request takes over the upload code, the upload deadline and any files the client had already sent. Both links keep working.
+
+### Upload codes from older releases
+
+Older releases issued six-character upload codes. New codes are 10 characters long from v3.142.1-beta.0 (stable v3.134.2). Migration 272 on beta (v3.167.2-beta.0) and migration 241 on stable (v3.134.2) replace every stored code shorter than 10 characters, and the upload page then rejects the old format. **Upload links and codes you sent before the update stop working**; the migration logs the affected transfers so you can send new ones.
+
+## Settings → PicTransfer
+
+On the beta channel (from v3.152.0-beta.0), **Settings → PicTransfer** (in the Communication group, shown while the feature is on) sets what clients may send you. It applies to file requests and to files you attach to a send. It does not change what may be uploaded to a gallery.
+
+| Setting | Default | Notes |
+|---|---|---|
+| **Accept all file types** | off | Any file is accepted; the size limit, file count and link expiry still apply. |
+| **Allowed file types** | JPEG, PNG, WebP, GIF, TIFF, PDF, ZIP | Each row is a file type with optional extensions. A file is accepted when its extension is listed; a type listed without extensions matches on the type the browser reports. |
+| **Maximum file size (MB)** | 50 | Per file, not per upload. |
+| **Maximum files per upload** | 25 | 1 to 1000. How many files a client selects in one go; a single request can have its own value. Beta channel from v3.169.0-beta.0. |
+
+Changing these needs `settings.edit`. Every transfer file is delivered as a download, never displayed in the browser, whatever its type.
+
+## Stable: upload link on a send
+
+On stable there is no **Request files**. Instead, tick **Also give the client an upload link** when creating a transfer, or use **Enable upload link** afterwards. You get a 10-character code (from v3.134.2; six characters before) and a matching link at `https://your-site/transfer-upload/<code>`, guarded by the same lockout as above. The client can send up to 25 files per upload, 50 MB each. The default allowlist names JPEG, PNG, WebP, GIF, TIFF, PDF and ZIP, but stable checks uploads against the gallery's media registry, which has no entry for TIFF or ZIP, so those two are refused; beta's separate PicTransfer policy fixes this. Their files appear in the transfer's **Client upload** section, where you download them individually.
 
 ## Expiry, retention and deletion
 
 A transfer runs on a two-stage clock:
 
-1. **Expiry.** At the end of its active window the link stops working. An hourly job disables it and emails your admins once to say so. You can put it back with **Re-activate**, which gives it another 14 days and restarts the retention clock.
+1. **Expiry.** At the end of its active window the link stops working. An hourly job disables it and sends one `transfer_link_expired` email (see [Emails](#emails)). You can put it back with **Re-activate**, which gives it another 14 days and restarts the retention clock.
 2. **Deletion.** A grace period after expiry — 7 days by default — the transfer's own files are deleted for real: the files you uploaded to it, the files the client uploaded, and the transfer record itself.
 
 <Callout type="info">
@@ -87,28 +136,34 @@ Turning the feature flag off immediately kills every existing recipient link, in
 
 | Template | Goes to | When |
 |---|---|---|
-| `transfer_ready` | the recipients you listed | on creation, when delivery is **Send by email** |
-| `transfer_link_expired` | every active admin | once, when a transfer expires |
+| `transfer_ready` | the recipients you listed | on creation of a send, when delivery is **Send by email** |
+| `transfer_request` | the addresses you listed | on creation of a request, when delivery is **Send by email** (beta) |
+| `transfer_files_received` | the admin who created the request | when a client uploads files, at most once per 15 minutes (beta) |
+| `transfer_link_expired` | the admin who created the transfer (beta); every active admin (stable) | once, when a transfer expires |
 
-Both are editable under **Settings → Email → Templates** like any other template. Recipient delivery is best-effort: a mail that fails to send does not fail the transfer, and the recipient list is recorded either way, so check your email queue if someone says the link never arrived.
+On beta, transfers created before ownership was recorded send the last two to every active admin.
+
+On the beta channel (from v3.174.1-beta.0) the `transfer_ready` mail waits until the transfer holds something the recipient can download: a finished photo or a file you uploaded. Until then the recipient is listed as **Not sent yet** in the detail panel, and the mail goes out on its own once the first photo finishes processing. **Send again** on a transfer with nothing ready yet answers that the email goes out once a photo finishes.
+
+All are editable under **Settings → Email → Templates** like any other template. Recipient delivery is best-effort: a mail that fails to send does not fail the transfer, and the recipient list is recorded either way, so check your email queue if someone says the link never arrived.
 
 ## Defaults you can change
 
-These live in the database and are settable through the settings API, but have **no editor in the admin UI** today. The per-transfer fields in the create form are the intended way to control expiry and download caps.
+These live in the database and have **no editor in the admin UI** today. The per-transfer fields in the create form are the intended way to control expiry and download caps.
 
 | Setting | Default |
 |---|---|
 | `transfer_default_expiry_days` | 14 |
 | `transfer_default_grace_days` | 7 |
 | `transfer_default_max_downloads` | 0 (unlimited) |
-| `transfer_max_upload_size_mb` | 50 |
-| `transfer_upload_allowed_mime` | JPEG, PNG, WebP, GIF, TIFF, PDF, ZIP |
+
+On stable, `transfer_max_upload_size_mb` (50) and `transfer_upload_allowed_mime` (JPEG, PNG, WebP, GIF, TIFF, PDF, ZIP) have no editor either; on beta they are set under [Settings → PicTransfer](#settings--pictransfer).
 
 ## Good to know
 
 - Transfer files are stored outside the publicly served upload directories, so they are only reachable through the token routes.
 - A source photo that has gone missing from disk is skipped silently while the ZIP streams, rather than failing the whole download.
-- Both public routes are rate limited per IP: 60 page views and 20 downloads per minute on the download side, 30 and 10 on the upload side.
+- Both public routes are rate limited per IP: 60 page views and 20 downloads per minute on the download side; 30 page views and 30 uploads per minute on the upload side.
 - Disabling uploads, deleting the transfer or reaching its expiry also stops an upload that is already in progress: the request is checked again once the files have arrived, and nothing is stored if it no longer qualifies (builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809)).
 
 ## Related

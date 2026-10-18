@@ -7,6 +7,12 @@ PicPeak uses customizable HTML email templates for all automated notifications.
 - **Gallery creation** --- sent to the customer with the gallery link.
 - **Expiration warning** --- sent before a gallery expires.
 - **Gallery link resend** --- sent when you manually resend the link.
+- **Download ready** (`download_ready`) --- sent to a gallery visitor who chose **Email me when it is ready** for a prepared download. Variables: `event_name`, `gallery_link`, `available_hours`. Beta channel from v3.171.0-beta.0.
+- **Selection submitted** (`selection_submitted`) --- sent to the gallery's admin email address when a guest finishes their selection or approves the edited photos. Variables: `event_name`, `guest_name`, `item_count`, `rejected_count`, `note`, `admin_link`, and the flags `is_selection` / `is_approval` for `{{#if}}` blocks. Beta channel from v3.171.0-beta.0.
+
+Both are added with English and German text when the backend starts; other languages fall back to English. A template you have already edited is never overwritten.
+
+Other features bring their own templates, for example [PicTransfer](/features/pictransfer#emails).
 
 ## Editing templates
 

@@ -1,25 +1,58 @@
+import { Callout } from 'nextra/components'
+
 # Admin Settings
 
 The **Settings** page (left rail in the admin panel) groups every system-wide knob in PicPeak. Settings live in the `app_settings` table as key/value pairs and most apply immediately on save — no restart needed.
 
-The settings are grouped into five categories:
+The settings are grouped into eight groups. A group only lists the tabs your role may open, and tabs for a feature that is switched off on the **Features** tab are hidden:
 
-| Group | What it controls |
+| Group | Tabs |
 |---|---|
-| **General** | Site URL, file-size limits, language, date format, maintenance mode |
-| **Display** | Photo categories, thumbnail rendering, custom CSS |
-| **Privacy & Security** | Password rules, 2FA, session timeout, image protection, SEO/robots, comment moderation |
-| **Integrations** | API tokens, webhooks |
-| **System** | Storage limits, capacity overrides, analytics, repair jobs |
+| **General** | Features, General, Event Creation, Event Types |
+| **People & access** | Users (only while user management is on) |
+| **Content & Appearance** | Branding, Categories, Thumbnails, Download resolutions, Custom CSS, CMS Pages, Slideshow |
+| **Communication** | Email Settings, Moderation, PicTransfer |
+| **Privacy & Security** | Security, Single Sign-On, Image Protection, SEO & Robots |
+| **Integrations** | API Tokens, Webhooks |
+| **CRM-Settings** | Business profile, CRM behaviour, Contracts, Accounting, WhatsApp |
+| **System** | Status, Health, Analytics, Product usage & feedback, Backup |
+
+**Status** shows what the instance is running right now (services, queues, storage, version); **Health** lists background failures that need attention, such as stuck emails and failed checks.
+
+## Finding a setting
+
+While you are on Settings, the admin sidebar shows the settings groups in place of the main menu. The **Search settings…** field at the top of it filters the tabs as you type. It matches tab names and also what a tab does, so "SMTP" finds Email Settings.
+
+To search the whole admin area, press **Ctrl K** (**⌘K** on a Mac) or click the search button in the header. The palette lists pages and settings tabs together.
+
+## Saving
+
+Each tab has one save bar at the bottom of the window. **Save changes** and **Discard** stay disabled until you change something; then the bar shows **You have unsaved changes**. Leaving the page or closing the browser tab with unsaved changes asks first (**Discard and leave** or **Stay**). Switches that save the moment you flip them are not part of the bar.
+
+## Moved pages
+
+Several pages that used to be top-level entries in the admin sidebar now live elsewhere. The old addresses redirect, so bookmarks and links in emails already sent keep working:
+
+| Old address | Now |
+|---|---|
+| `/admin/archives` | `/admin/events/archives` (Galleries → Archives) |
+| `/admin/users` | `/admin/settings?tab=users` |
+| `/admin/system-health` | `/admin/settings?tab=health` |
+| `/admin/workflows` | `/admin/automation/workflows` |
+| `/admin/email`, `/admin/branding`, `/admin/event-types`, `/admin/backup`, `/admin/cms` | the matching tab under `/admin/settings?tab=…` |
+
+<Callout type="info">
+The eight groups, the settings sidebar with its search, the Ctrl/⌘ K search, the save bar and the moved addresses are on the beta channel from v3.151.0-beta.0 (the save bar from v3.146.0-beta.0). Stable (v3.134.x) lists the groups in a navigation inside the Settings page, without the **People & access** group and without the PicTransfer and Health tabs; sections save with their own buttons, and Users, Archives and System Health are still top-level pages there. See [Release Channels](/deployment/release-channels).
+</Callout>
 
 ## Per-tab guides
 
-- [General](/guides/admin-settings/general) — site URL, upload limits, language, date format, maintenance mode, short URLs
-- [Event Defaults](/guides/admin-settings/event-defaults) — required fields toggles + the global phone-field gate
+- [General](/guides/admin-settings/general) — your account, site URL, upload limits, trash retention, video processing, admin and gallery language, date format, maintenance mode, short URLs
+- [Event Defaults](/guides/admin-settings/event-defaults) — required fields toggles, guest feedback defaults, folder and first-look defaults, the global phone-field gate
 - [Security](/guides/admin-settings/security) — password complexity, lockout, session timeout, 2FA, reCAPTCHA
-- [Image Security](/guides/admin-settings/image-security) — protection levels, rate limits, suspicious-activity blocking, fragmentation
+- [Image Security](/guides/admin-settings/image-security) — default protection level, image quality, DevTools detection, canvas rendering
 - [Thumbnails](/guides/admin-settings/thumbnails) — dimensions, quality, fit mode, format
-- [System Status](/guides/admin-settings/status) — storage soft limit, capacity overrides, dimension repair
+- [System Status](/guides/admin-settings/status) — storage soft limit, capacity overrides, dimension repair, tile placeholders
 - [Moderation](/guides/admin-settings/moderation) — banned-word filter for guest comments
 - [Analytics](/guides/admin-settings/analytics) — Umami integration
 - [CRM (Beta)](/guides/admin-settings/crm) — business profile, bank accounts, payment terms, document numbering, reminder defaults, ToS blurbs, customer-surface defaults

@@ -32,7 +32,7 @@ That single list governs the admin upload screen, the admin chunked-upload API a
 
 The gallery plays the file you uploaded. Browsers decode H.264 in an MP4 container; an HEVC (H.265) recording from a recent phone plays in Safari and nowhere else, a QuickTime `.mov` is unreliable outside Safari, and an MP4 whose index sits at the end of the file has to download whole before the first frame. For those files the guest sees "This video format cannot be played in this browser" and a download link.
 
-**Browser-playable copies of videos** in [General settings](/guides/admin-settings/general) fixes this at ingest. It is off by default. Switched on, a background worker checks every video and, for anything a browser will not play, writes an H.264/AAC MP4 (streamable, at most 1920 px on the long edge) next to the original. The gallery then streams that copy; the download stays the original file. A video that already plays as it is gets no copy.
+**Browser-playable copies of videos** in [General settings](/guides/admin-settings/general) fixes this at ingest. It is on the beta channel only, from v3.157.0-beta.0 ([PicPeak PR #1761](https://github.com/PicPeak/picpeak/pull/1761)); stable (v3.134.x) has no such setting and always plays the uploaded file. It is off by default. Switched on, a background worker checks every video and, for anything a browser will not play, writes an H.264/AAC MP4 (streamable, at most 1920 px on the long edge) next to the original. The gallery then streams that copy; the download stays the original file. A video that already plays as it is gets no copy.
 
 What to expect:
 
@@ -44,13 +44,44 @@ What to expect:
 - An HDR recording (HLG or PQ, the default on recent phones) is tone-mapped to SDR for its copy, so colours and highlights come out as on the phone rather than dark and flat. This needs FFmpeg's `zscale` and `tonemap` filters; the PicPeak images have them, and a build without them still gets a playable, untone-mapped copy. Builds containing [PicPeak PR #1766](https://github.com/PicPeak/picpeak/pull/1766).
 - Needs FFmpeg with the `libx264` encoder, which the PicPeak images include.
 
-Tunables for the worker are listed under [Environment Variables → Video copies](/deployment/environment-variables#video-copies). Builds containing [PicPeak PR #1761](https://github.com/PicPeak/picpeak/pull/1761).
+Tunables for the worker are listed under [Environment Variables → Video copies](/deployment/environment-variables#video-copies).
+
+## Location and device data in played videos
+
+Beta channel only, from v3.174.2-beta.0 ([PicPeak PR #2099](https://github.com/PicPeak/picpeak/pull/2099), [#2111](https://github.com/PicPeak/picpeak/pull/2111)). On stable, a guest who plays a video gets the uploaded file with all its metadata.
+
+A phone recording carries its location, the device and other tags. **Strip location and device data from played videos** in [General settings](/guides/admin-settings/general) is **on by default**:
+
+- A video that already plays in a browser gets a copy without metadata, made without re-encoding (a remux), and guests play that copy. It costs one extra file per such video, about the size of the original.
+- Browser-playable copies (above) and the adaptive stream (below) never carry the source's metadata, whatever this setting says.
+- The download is always the original file, metadata included, as for photos.
+- This setting works on its own. With it on and browser-playable copies off, a video that needs re-encoding is not re-encoded; its original keeps playing, and it is queued once you switch the copies on.
+- While a copy is still being made, or if making it failed, the original (with its metadata) plays.
+- Switching the setting off deletes nothing: copies already made keep playing, only videos processed afterwards are left as they are.
+
+After the upgrade, the first start queues every existing video once. Videos that need re-encoding are probed for that (on S3 the original is downloaded for the probe).
+
+## Adaptive streaming
+
+Beta channel only, from v3.171.0-beta.0 ([PicPeak PR #1959](https://github.com/PicPeak/picpeak/pull/1959)).
+
+**Adaptive video streaming** in [General settings](/guides/admin-settings/general), off by default, converts each video into an HLS stream in up to three qualities (480p, 720p, 1080p, never above the source). Playback starts quickly and adapts to the viewer's connection. With the setting off nothing is queued and no stream is served.
+
+- A background worker converts one video at a time and waits while uploads are processing. Videos longer than 30 minutes or larger than 4 GiB are skipped and keep playing as before.
+- The player uses the browser's own HLS support where there is one, otherwise a player loaded on demand, otherwise the original or browser-playable copy. A stream that fails during playback hands over to the file at the same position.
+- The download stays the original file. The stream follows the same access rules as the video itself, and on a gallery with a download limit, starting the stream uses the video's slot once.
+- Storage: up to about 70 MB per minute for a 1080p-or-larger source, roughly as much again as a typical 1080p phone video. HDR sources are tone-mapped as for browser-playable copies.
+- Deleting, replacing or archiving a video removes its stream.
+
+Limits and tunables (`VIDEO_HLS_*`) are listed in [Environment Variables](/deployment/environment-variables).
 
 ## Thumbnail generation
 
 Video thumbnails are automatically extracted from the first few seconds of each video using FFmpeg. The Docker images ship FFmpeg (`ffmpeg` and `ffprobe`); on a native installation, install it from your distribution and make sure it is on the backend's `PATH`.
 
-When FFmpeg cannot read a file, the video gets a neutral placeholder tile with a play icon instead of a poster frame. On the admin Media tab that tile carries a **No poster frame** note with FFmpeg's reason, and a **Retry** that takes the poster frame again — useful after installing or updating FFmpeg. Builds containing [PicPeak PR #1760](https://github.com/PicPeak/picpeak/pull/1760).
+When FFmpeg cannot read a file, the video gets a neutral placeholder tile with a play icon instead of a poster frame. On the beta channel from v3.156.1-beta.0 ([PicPeak PR #1760](https://github.com/PicPeak/picpeak/pull/1760)), that tile on the admin Media tab carries a **No poster frame** note with FFmpeg's reason, and a **Retry** that takes the poster frame again — useful after installing or updating FFmpeg. Stable shows the placeholder without the note.
+
+**Regenerate All Thumbnails** under **Settings → Thumbnails** also repairs video poster frames that are missing or unreadable (stable from v3.133.2, beta channel from v3.135.0-beta.0, [PicPeak PR #1557](https://github.com/PicPeak/picpeak/pull/1557)). A video that already has a valid poster frame is skipped, so the button does not re-read every video. The S3 size limit below does not apply to this admin job.
 
 ### Missing thumbnails repair themselves
 

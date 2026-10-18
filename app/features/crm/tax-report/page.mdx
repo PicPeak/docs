@@ -17,6 +17,7 @@ A per-period summary of invoice revenue (and, when the Accounting module is on, 
 - **Feature flag**: `taxReport` enabled in **Settings → Features**. The parent `accounting` flag must also be on (auto-enabled on upgrade if you had `taxReport=true` previously).
 - **Business profile**: complete (`Settings → CRM → Business profile`) — your name, tax ID, and default VAT rate appear on the export.
 - **VAT registration**: configured in **Settings → Accounting** if you want a VAT-payable number (otherwise the report shows "configure VAT registration" instead of guessing).
+- **A super admin account** (stable from v3.134.2, beta from v3.167.3-beta.0). The report covers every invoice of the studio, while other admins see only their own documents, so for anyone else it is refused with "This report covers every invoice of the studio. Your account only sees its own documents, so the report is not available to you." (`403 CRM_COMPLETE_VIEW_REQUIRED`). See [CRM → Tenancy model](/features/crm#tenancy-model).
 
 ## What the report includes
 

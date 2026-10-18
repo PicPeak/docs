@@ -4,6 +4,8 @@ import { Callout } from 'nextra/components'
 
 Guests can react to photos in six ways: likes, favourites, star ratings, comments, emoji reactions, and colour labels. Each type is switched on per gallery, and new galleries inherit defaults you set once.
 
+On the beta channel, galleries can also ask for an explicit approve / reject per photo, let guests draw on a photo, and let a guest hand in a finished selection. Stable (v3.134.x) has none of these three; see [Release Channels](/deployment/release-channels).
+
 ## Feedback types
 
 ### Likes and favourites
@@ -55,6 +57,44 @@ Enabled per event as **Color Labels**; **off by default**, unlike the other type
 Admins have their own private marks, separate from the client's. When you export XMP you choose which set to write out: **Client selections** or **Your marks**.
 </Callout>
 
+### Approve / reject per photo
+
+Beta channel only, from v3.167.0-beta.0 ([PicPeak PR #1858](https://github.com/PicPeak/picpeak/pull/1858)).
+
+**Approve / reject per photo** gives the lightbox toolbar an **Approve** and a **Reject** button, so the client gives an explicit verdict instead of a colour or a star. A rejection can carry an optional reason ("eyes closed"). One decision per guest per photo: the same button again withdraws it, the other one replaces it.
+
+- Off by default. New galleries take the default from **Settings → Event Creation → Approve / reject per photo**.
+- With **Show feedback to guests** on, other guests see each decision with the guest's name, but never someone else's reason.
+- In the admin, tiles carry a decision marker, the photo grid filters by **Approved**, **Rejected** or **Undecided**, the photo viewer lists each decision with name and reason, and the feedback exports carry decision and reason. The photo CSV gets `approved` / `rejected` columns at the end.
+- Decisions count against their own rate-limit bucket, 2,000 per hour.
+
+### Drawing on photos
+
+Beta channel only, from v3.171.0-beta.0 ([PicPeak PR #1963](https://github.com/PicPeak/picpeak/pull/1963)).
+
+With **Drawing on photos** on (off by default, and only available while comments are on), the comment form in the lightbox has **Draw on photo**: freehand pen and arrow in six fixed colours, with undo and clear. The drawing is attached to a comment, and the comment text is required, so moderation, notifications and every visibility rule of comments apply to the drawing too.
+
+- At most 20 strokes per drawing.
+- A posted comment with a drawing gets **Show drawing**, which lays it over the photo; it follows zoom and pan.
+- While drawing, the photo is reset to fit and swipe, zoom and the keyboard shortcuts are paused. Escape or Cancel leaves drawing mode.
+- You see drawings read-only on the gallery's feedback panel, in the moderation panel and in the photo viewer. CSV and JSON exports carry the comment text only.
+
+### Finish selection and Approve edited photos
+
+Beta channel only, from v3.171.0-beta.0 ([PicPeak PR #1960](https://github.com/PicPeak/picpeak/pull/1960)).
+
+**Finish selection** (off by default) lets each guest hand in their picks when they are done:
+
+- The gallery header shows a counter: "12 of 30 selected" when the gallery caps likes or favourites (favourites when both are capped), "12 selected" otherwise. The counter appears where a cap is set or the switch is on.
+- **Finish selection** asks for confirmation and an optional note, then locks that guest's likes and favourites, adding and removing alike, until you reopen the submission. Ratings, colour labels and comments stay open. A locked heart explains why it does not change.
+- An empty selection cannot be handed in. Photos the client has since hidden are not counted.
+
+**Approve edited photos** needs no switch of its own: it appears whenever **Approve / reject per photo** is on, and locks that guest's approve / reject decisions the same way. An approval without any per-photo decision is allowed.
+
+Both are per guest, keyed by the same identity as the guest's other feedback. When the gallery requires name and email, the guest is asked for them before handing over (from v3.174.0-beta.0, [PicPeak PR #2006](https://github.com/PicPeak/picpeak/pull/2006)).
+
+When a guest hands in, you get an entry in the notification bell, a `selection_submitted` email to the gallery's admin email address, and the `selection.submitted` [webhook](/features/webhooks). The gallery's **Guests & Feedback** tab lists the submissions under **Finished selections and approvals**, with the guest, the count, the note and a **Reopen** button (needs `events.edit` or `events.support`). Reopening lets the guest change their picks again; they then have to hand them in anew.
+
 ## Who the feedback belongs to
 
 <Callout type="info">The `shared` mode below is stable from v3.132.1; on beta before that. See [Release Channels](/deployment/release-channels).</Callout>
@@ -83,7 +123,9 @@ Sorting offers date, date taken, name, size and rating, with ascending and desce
 
 ## Admin moderation and review
 
-From the admin panel you can read every comment, like, rating and reaction per event, delete comments, see totals per type, and review activity as it comes in.
+From the admin panel you can read every comment, like, rating and reaction per event, delete comments, see totals per type, and review activity as it comes in. On the beta channel this lives on the gallery's **Guests & Feedback** tab.
+
+Comment moderation and the word filter are described under [Moderation](/guides/admin-settings/moderation). Photos can also wait for review before guests see them: uploads from gallery team members (beta channel from v3.167.0-beta.0) and, if the gallery asks for it, guest uploads (beta channel from v3.171.0-beta.0). See [Moderation → Holding uploads for review](/guides/admin-settings/moderation#holding-uploads-for-review).
 
 ## Export
 
@@ -91,13 +133,13 @@ Filtered selections export as a ZIP, or as file lists and XMP sidecars for Light
 
 ## Settings
 
-Per event, under the event's feedback settings: the master **Enable feedback** switch, the identity mode, which of the six types are on, the lightbox keyboard scheme, per-guest caps for likes and favourites, and privacy options — require name and email, moderate comments, and show feedback to guests. Guest feedback is limited by the instance-wide feedback rate limits; the per-event rate-limit switch was removed because it was never applied (builds containing [PicPeak PR #1489](https://github.com/PicPeak/picpeak/pull/1489)).
+Per gallery, under **Settings → Guest interaction** on the gallery page: the master **Enable feedback** switch, the identity mode, which of the six types are on (plus, on the beta channel, **Approve / reject per photo**, **Finish selection** and **Drawing on photos**), the lightbox keyboard scheme, per-guest caps for likes and favourites, and privacy options — require name and email, moderate comments, and show feedback to guests. Guest feedback is limited by the instance-wide feedback rate limits; the per-event rate-limit switch was removed because it was never applied (builds containing [PicPeak PR #1489](https://github.com/PicPeak/picpeak/pull/1489)).
 
 In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) the totals guests see (feedback summary, photo count) only count photos that guest can see, and a guest's own feedback list leaves out photos that were hidden afterwards. View, download and visitor totals are no longer sent to guests at all; they are on the admin [Analytics](/features/analytics) page.
 
 With **Show feedback to guests** off, guests also do not see a photo's average rating or its like, favourite and comment totals. Photos a client has hidden accept no feedback from guests and are left out of the feedback summary. (Builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495).)
 
-Globally, under **Settings → Events**, you set what new galleries start with. Ratings, likes, favourites, comments and reactions default on; colour labels default off. Changing a global default does not touch galleries that already exist.
+Globally, under **Settings → Event Creation**, you set what new galleries start with. Ratings, likes, favourites, comments and reactions default on; colour labels and approve / reject default off. Changing a global default does not touch galleries that already exist.
 
 ## Related
 

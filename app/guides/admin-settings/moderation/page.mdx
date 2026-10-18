@@ -1,34 +1,64 @@
 # Moderation
 
-The **Moderation** tab manages a server-side word filter applied to guest comments before they reach the database. Useful for blocking obvious slurs, spam terms, or competitor names without forcing every comment into a manual review queue.
+The **Moderation** tab under **Settings** (in the **Communication** group on the beta channel) manages a server-side word filter applied to guest comments before they are stored. Useful for blocking obvious slurs, spam terms, or competitor names without forcing every comment into a manual review queue.
 
 ## How it works
 
-When a guest submits a comment, the backend runs the comment text through the word-filter service. If any banned word is matched (case-insensitive, whole-word match), the comment is either:
+When a guest submits a comment, the backend checks the text against the word filter (case-insensitive, whole-word match). Each word carries a severity, and the most severe match decides what happens:
 
-- **Held for moderation** — visible to the admin in the Feedback Moderation panel, hidden from guests, until the admin approves or deletes it. This is the default when `moderate_comments` is on for the event.
-- **Rejected outright** — when `moderate_comments` is off but the global filter still matches, the comment is rejected with a generic "your comment couldn't be saved" message.
+| Severity | Effect |
+|---|---|
+| **Block** | The comment is rejected outright and never stored. The guest sees "Your comment contains words that are not allowed here." |
+| **High**, **Moderate** | The comment is stored but held for moderation: hidden from guests until an admin approves it, even when the gallery does not moderate comments. |
+| **Low** | The comment is let through and follows the gallery's own rule below. |
+
+A comment without a match goes through the gallery's own rule: with `moderate_comments` on it waits for approval, otherwise it is published at once. A comment that looks like spam (for example mostly capital letters, links, email addresses or phone numbers) is held as well.
+
+The same filter applies to the note a guest adds when finishing a selection, where a **Block** match refuses the note.
 
 ## Managing the filter
 
 The tab embeds the **Word Filter Manager** component:
 
-- Add a word — input field + **Add** button. Words are case-insensitive.
-- Remove a word — trash icon next to each entry.
-- Bulk import — paste a newline- or comma-separated list into the import box.
+- Add a word — input field, a severity (**Low**, **Moderate**, **High**, **Block**) and **Add**. Words are case-insensitive.
+- Edit a word or its severity, or delete it.
+- Search the list.
 
-Words are stored in the `app_settings` table under a single key (a JSON array) and are loaded once per process and cached for performance. Saving updates the cache automatically.
+Words are stored in the `feedback_word_filters` table. The backend caches the active list for five minutes, so a change can take that long to reach every comment check.
 
 ## Per-event override
 
-Per-event settings (in the Edit Event → Feedback panel) can layer on additional rules:
+Per-gallery settings (under **Settings → Guest interaction** on the gallery page) can layer on additional rules:
 
-- `moderate_comments: true` — every comment goes to the moderation queue regardless of the filter
+- `moderate_comments: true` — every comment goes to the moderation queue, unless the filter already blocks it
 - `require_name_email: true` — comments need a name (or name + email) before they can be posted
 - `allow_comments: false` — comments disabled entirely for this event
 
-## What's not in this tab
+Held comments are approved or deleted on the gallery's **Guests & Feedback** tab.
 
-This tab is comments-only. To moderate **photos** (hide individual photos from guests before public access), use the Client Access mode — see [Creating Events → Client Access](/guides/creating-events).
+## Holding uploads for review
 
-To configure email notifications when a comment lands in the moderation queue, see the per-event Feedback panel.
+This tab only covers comments. Photos can be held as well, per gallery, on the beta channel. Stable (v3.134.x) has neither switch. See [Release Channels](/deployment/release-channels).
+
+### Holding guest uploads
+
+Beta channel only, from v3.171.0-beta.0 ([PicPeak PR #1949](https://github.com/PicPeak/picpeak/pull/1949)).
+
+**Approve guest uploads before they are published**, under the guest upload settings in the gallery's **Settings → Guest interaction**, is off by default. Switched on:
+
+- Everything that comes in through the gallery's upload dialog stays hidden from guests and clients until you or a reviewer approve it. That includes uploads made from a client PIN session or your admin preview.
+- The guest sees a note after uploading that the photos appear once approved.
+- The notification bell gets one entry per gallery that counts up as uploads arrive.
+- Held uploads count towards the gallery's photo limit, so the limit cannot be bypassed.
+- The `photo.uploaded` webhook fires on approval, not on upload.
+- Switching the setting off leaves photos that are already waiting as they are.
+
+### Holding team uploads
+
+Beta channel only, from v3.167.0-beta.0 ([PicPeak PR #1858](https://github.com/PicPeak/picpeak/pull/1858)). **Review team members' uploads before they are published**, in the gallery's **Settings → General** next to the gallery team, holds uploads from team members whose role lacks the **Review Team Uploads** (`photos.review`) permission. See [Multi-Admin](/features/multi-admin).
+
+### Reviewing
+
+Held photos appear on the gallery's **Photos** tab with a **Pending review** badge that names the source (**Guest** or **Team**, with the uploader's name), and a review bar with **Pending review** and **Rejected** filters. **Approve** publishes a photo; **Reject** keeps it hidden as rejected, from where it can still be approved or deleted. Nothing is deleted automatically. Approving is the only way to publish a held photo: the hide/show toggle does not work on it. Client PIN sessions neither see nor approve held photos.
+
+To hide individual photos from guests without a review step, use the Client Access mode — see [Creating Events → Client Access](/guides/creating-events).

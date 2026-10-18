@@ -4,7 +4,7 @@ import { Callout } from 'nextra/components'
 
 The **Branding** page (left rail in the admin panel) controls how your PicPeak instance looks: company name, logo, colors, fonts, footer, and the public-facing landing page. Anything brand-related that isn't tied to a specific event lives here.
 
-For per-event theming (specific layout, presets, custom CSS), see [Themes & Branding](/features/themes-branding).
+For per-event theming (specific layout, presets, custom CSS) and how a gallery follows the global theme, see [Themes & Branding](/features/themes-branding).
 
 ## Identity
 
@@ -32,34 +32,42 @@ In builds containing [PicPeak PR #1478](https://github.com/PicPeak/picpeak/pull/
 
 ## Colors
 
-The color picker exposes four tokens that propagate through the entire UI as CSS variables:
+The color picker exposes eight colours in three groups that propagate through the UI as CSS variables:
 
-| Token | What it controls |
-|---|---|
-| **Primary** | Buttons, active nav state, links, focus rings |
-| **Accent** | Hover states, secondary buttons, badges |
-| **Background** | Page background |
-| **Text** | Body text |
+| Group | Colour | What it controls |
+|---|---|---|
+| Surfaces | **Background** | The page itself — every gallery, admin page and CMS page |
+| | **Surface** | Cards, sidebar, header bar and navigation |
+| | **Elevated** | Panels above cards: image placeholders, hover rows, modal headers |
+| | **Border** | Dividers, table lines, card outlines, input borders |
+| Text | **Text** | Headlines, body copy, table cells, form values |
+| | **Muted text** | Captions, helper text, column headers, dates |
+| Accent | **Accent Color** | Links, icons, focus rings, hover states |
+| | **Accent (filled)** | Filled buttons, active sidebar item, badges and tags |
 
-You can pick a hex value or click a preset swatch. Each preset is a coordinated palette designed by the PicPeak team — useful as a starting point.
+**Color Mode** (Auto, Light, Dark) and **Force color mode** decide whether visitors get the light or dark palette.
+
+On the beta channel from v3.168.0-beta.0 a fourth group, **Status**, sets the colours for success, warning, danger, info and cancelled documents site-wide, and readability warnings appear under the pickers. The colours then also drive the admin and the colour of PDF documents and emails; see [Themes & Branding → Status colours, documents and emails](/features/themes-branding#status-colours-documents-and-emails).
 
 ## Theme presets
 
 Theme presets bundle layout + color + typography choices into one click. The full list:
 
-| Preset | Layout | Vibe |
+| Preset | Key | Layout |
 |---|---|---|
-| `default` | Grid | Neutral, photographer-default |
-| `elegantWedding` | Masonry | Soft pastels, serif headings |
-| `modernMasonry` | Masonry (Flickr-style) | High-contrast, bold |
-| `birthdayFun` | Mosaic | Bright, playful |
-| `corporateTimeline` | Timeline | Restrained, structured |
-| `classicJustified` | Justified | Magazine-grade rows |
-| `momentsMosaic` | Mosaic | Mixed-size blocks |
-| `storyMode` | Vertical scroll | Instagram Stories-style |
-| `galleryPremium` | Carousel + lightbox | High-end product showcase |
+| Classic Grid | `default` | Grid |
+| Elegant Wedding | `elegantWedding` | Grid |
+| Modern Masonry | `modernMasonry` | Masonry (columns) |
+| Birthday Celebration | `birthdayFun` | Carousel |
+| Corporate Timeline | `corporateTimeline` | Timeline |
+| Artistic Mosaic | `artisticMosaic` | Mosaic |
+| Dark Classic | `darkClassic` | Grid |
+| Dark Elegant | `darkElegant` | Grid |
+| Dark Modern | `darkModern` | Masonry (columns) |
+| Gallery Premium (Beta) | `galleryPremium` | Gallery Premium |
+| Gallery Story (Beta) | `galleryStory` | Gallery Story |
 
-Per-event theme override always wins over the global default — admins can change the look for an individual gallery without affecting the default for new events.
+A gallery's own theme wins over the global one for that gallery. On the beta channel a gallery follows the global theme until its **Custom gallery styling** is switched on; on stable each gallery keeps the copy of the theme it was created with. See [Themes & Branding](/features/themes-branding#global-theme-and-custom-gallery-styling).
 
 ## Hero divider
 
@@ -71,7 +79,7 @@ Style is controlled by the active theme preset but can be overridden per-event.
 
 ## Watermark
 
-The brand watermark applied to downloaded images (and optionally to thumbnails) when the per-event "Watermark downloads" toggle is on.
+The brand watermark applied to downloaded images (and optionally to thumbnails) when the per-event **Add watermark to downloads** toggle is on. Without a watermark logo, the watermark is text: the company name, or on the beta channel the gallery's own **Watermark text** (see [Themes & Branding → Watermark text per gallery](/features/themes-branding#watermark-text-per-gallery)).
 
 | Setting | What it does |
 |---|---|

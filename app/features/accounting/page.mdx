@@ -47,6 +47,29 @@ Two RBAC permissions ship with the module (migration 123):
 
 Both granted to `super_admin` and `admin` roles by default. Editor and viewer roles are intentionally locked out — booking expenses against real money is a write-class operation on the financial surface.
 
+## Tenancy model
+
+On stable from v3.134.6 and on beta from v3.171.0-beta.0 ([PicPeak PR #1934](https://github.com/PicPeak/picpeak/pull/1934)) internal expenses and incoming invoices follow a per-admin rule, like the [CRM's documents](/features/crm#tenancy-model). The permissions above decide whether an admin works with accounting at all; the rule decides which rows they reach.
+
+A **super admin** reaches everything. Every other admin reaches:
+
+- what they recorded themselves,
+- what is booked to a gallery they created, and
+- incoming invoices that belong to nobody yet: no recorder and no gallery, which is mailbox intake nobody has triaged. Whoever categorises or re-bills such an invoice becomes its owner.
+
+What follows from that:
+
+- **A row outside that answers as if it did not exist** (`404`), including its file, page previews, proof and history.
+- **Booking a cost to a gallery you did not create** is refused: `403 EVENT_NOT_YOURS` ("That event is not yours to link"), on create, edit, categorise and re-bill. The gallery picker can still offer a gallery you may open but not book to; saving then shows that message.
+- **An admin who reaches a row only through their gallery** (another admin recorded it) cannot take it off that gallery — moving the expense to the company, or categorising the invoice as own cost, duplicate, declined or without a gallery. That edit would put the row out of their reach, so it is refused with `409 ACCESS_THROUGH_EVENT_ONLY` and nothing is saved. The recorder or a super admin can make it.
+- **The duplicate check on upload stays studio-wide.** A duplicate is found even when the original belongs to another admin.
+- **The tax report and the journal export** cover every document of the studio, so only a super admin can produce them (`403 CRM_COMPLETE_VIEW_REQUIRED`).
+- **System jobs** (mail intake, retention, scheduled exports) are not narrowed.
+
+<Callout type="warning">
+**Behaviour change on upgrade.** Before this rule an admin with the accounting permissions saw and edited every other admin's expenses and incoming invoices. A studio that used the built-in `admin` role as a bookkeeper for everyone needs a super admin for that view. Incoming invoices that came in through the mailbox and were categorised before the upgrade have no owner and no gallery, so they stay visible to every accounting admin.
+</Callout>
+
 ## Data model
 
 | Table | What it holds |

@@ -19,8 +19,8 @@ The per-event-password and shareable-link flows continue to work unchanged --- c
 Customer accounts are gated behind a feature flag:
 
 1. Open **Settings > Features**.
-2. Enable the **Clients** card under the Clients section.
-3. The **Clients** entry appears in the admin sidebar; **Accounts** is the first sub-page.
+2. Enable the **Customer Accounts** card in the CRM section.
+3. The **CRM** entry appears in the admin sidebar; **Accounts** is one of its sub-pages.
 
 <Callout type="info">
 The `customerPortal` flag controls **admin UI visibility** (sidebar entry, /admin/clients pages), not access revocation. Existing customers keep working when the flag is off --- their `/customer/*` endpoints still respond, their gallery sessions stay valid. To revoke access for a specific customer, use one of the per-record tools below instead.
@@ -28,7 +28,7 @@ The `customerPortal` flag controls **admin UI visibility** (sidebar entry, /admi
 
 ## Inviting a customer
 
-From **Clients > Accounts**:
+From **CRM > Accounts**:
 
 1. Click **Invite customer**.
 2. Enter their email; optionally pre-fill name, company, address, and other profile fields.
@@ -60,7 +60,7 @@ Removing an assignment doesn't affect the per-event-password flow --- guests wit
 
 ## Documents
 
-Customers can exchange files with you in the portal: you share documents with them, they upload signed contracts and other files for you to review, and you can request specific documents with automatic reminders. See **[Customer Documents](/features/customer-accounts/documents)**.
+Customers can exchange files with you in the portal: you share documents with them, they upload signed contracts and other files for you to review, and you can request specific documents with automatic reminders. Beta channel only. See **[Customer Documents](/features/customer-accounts/documents)**.
 
 ## Customer dashboard
 
@@ -81,11 +81,13 @@ Three different actions, three different scopes:
 
 All four are on the customer detail page under **Account actions**.
 
+**Erasing a customer also cleans up their mail** (stable from v3.133.4, beta from v3.136.0-beta.0, [PicPeak PR #1598](https://github.com/PicPeak/picpeak/pull/1598)). Every email still queued for the customer's address — a quote reminder, a document request reminder, a newsletter — is cancelled and never goes out. On every queued, sent, failed or cancelled email to that address, the recipient and the template variables are replaced with a redaction marker; the row itself, its email type and its timestamps stay as the audit trail. The address is matched case-insensitively. On beta, earlier addresses the customer held are matched too, for the time they held them, and contract mail sent to a signer's own address is cleaned up for the unsigned contracts the erasure redacts.
+
 **Logging out of the portal** also ends the gallery sessions the customer opened from it (builds containing [PicPeak PR #1497](https://github.com/PicPeak/picpeak/pull/1497)). Gallery sessions opened from the portal before that update are not linked to the portal login; they expire on their own within 24 hours.
 
 ## Sub-features (in progress)
 
-The **Clients** sidebar section is shaped to host more than just Accounts --- the architecture supports per-customer Calendar, Quotes, Bills, and Messaging surfaces that ship as separate features. When a sub-feature is enabled in **Settings > Features**, its sub-nav entry appears automatically inside `/admin/clients`. Sub-features that are still off don't show.
+The **CRM** sidebar section is shaped to host more than just Accounts --- the architecture supports per-customer Calendar, Quotes, Bills, and Messaging surfaces that ship as separate features. When a sub-feature is enabled in **Settings > Features**, its sub-nav entry appears automatically inside `/admin/clients`. Sub-features that are still off don't show.
 
 ### Per-customer CRM toggles
 
@@ -108,9 +110,42 @@ Customer-related emails follow the same template system as the rest of PicPeak (
 
 - `customer_invitation` --- the invite-link email
 - `customer_password_reset` --- admin- or self-triggered reset
-- `customer_gallery_assigned` --- digest sent when an admin adds new gallery access (one email per save, not one per gallery)
+- `customer_gallery_assigned` --- digest sent when an admin adds new gallery access (one email per save, not one per gallery). It is not sent for a draft gallery; publishing the gallery announces it.
 
 All three carry hand-translated `en` + `de`; other locales are machine-translated and clearly flagged in the Templates editor. The document emails are listed on [Customer Documents](/features/customer-accounts/documents#email-templates).
+
+### Gallery emails reach assigned accounts
+
+<Callout type="info">
+Beta channel only: from v3.165.0-beta.0 ([PicPeak PR #1819](https://github.com/PicPeak/picpeak/pull/1819)), with the "complete gallery" mail from v3.166.0-beta.0 ([PR #1837](https://github.com/PicPeak/picpeak/pull/1837)) and the portal links from v3.168.3-beta.0 ([PR #1916](https://github.com/PicPeak/picpeak/pull/1916)). On stable the gallery email goes to the event's customer email, and to the assigned accounts only when that field is empty.
+</Callout>
+
+A gallery has two kinds of recipient: the customer email on the event, and the customer accounts assigned to it. Every gallery announcement — creating a live gallery, publishing a draft, **Send gallery email**, resending it, and "your complete gallery is ready" — reaches both:
+
+- The event's customer email gets the normal gallery email.
+- Every assigned account that can act on it gets `customer_gallery_assigned` (the complete-gallery mail in its own version), linking into its portal at `/customer/events/<slug>`, in the account's preferred language. An account can act on it when the customer portal is on, the account is active and it can sign in; a passive account (created in the CRM, never invited) is not mailed.
+- When the customer email belongs to one of the assigned accounts, that person gets one mail: the normal gallery email when it carries a welcome message or client access (link and PIN), otherwise the portal version.
+- Accounts are mailed only when the admin sending holds `customers.events`. Without it the accounts stay assigned but are not told, and the dialog says how many are not notified.
+- Accounts are not told about a draft, archived or expired gallery.
+
+**A gallery shared only through the portal needs no password.** When you create a gallery with assigned accounts, no customer email and no password, and at least one account can be mailed, PicPeak locks the share link with a generated password that is never shown, stored recoverably or mailed. Adding a customer email to such a gallery later asks you to set a password (`GALLERY_PASSWORD_REQUIRED`). A reachable account also satisfies **Require customer email** under [Event Defaults](/guides/admin-settings/event-defaults).
+
+**A CRM customer always gets their portal link.** Whenever a message with a gallery link goes to an address that belongs to an account assigned to that gallery (and the account can sign in), the link points into the portal, not at the direct gallery link: the gallery email, the gallery password reset mail, the expiry warning, the renamed-gallery mail, the complete-gallery mail and the WhatsApp message on create and publish. This holds whoever sends the message, including the hourly expiry job. A passive account keeps the direct link and the gallery password.
+
+### No administrative emails
+
+<Callout type="info">
+Beta channel only, from v3.173.0-beta.0 ([PicPeak PR #1989](https://github.com/PicPeak/picpeak/pull/1989)).
+</Callout>
+
+Some customers want the amount, not your mail. The **No administrative emails** switch on the customer's edit form (shown when Quotes, Contracts, Invoices or Customer documents are on) holds back every quote, contract, invoice, reminder, Storno and customer document email addressed to that customer. The documents are still issued as usual: numbered, stored, in the tax report and, with portal access, in the customer's portal. A badge on the customer header shows that the switch is on.
+
+- **Held back, not dropped.** Each held-back email is logged with the status **Suppressed** in the email log. Copies to other recipients of the same document, such as an accountant in CC, are held back with it. Emails already queued when you turn the switch on still go out.
+- **Only this customer's own addresses.** The switch applies when the mail goes to the customer's login or billing email. A co-signer at another address, your own notifications and another customer who shares a billing inbox are not affected.
+- **Not affected:** account mail (invitation, password reset), the contract signing code, gallery emails and PicTransfer emails.
+- **Send becomes Issue** on that customer's quotes, contracts and invoices, and **Resend** is hidden on an issued invoice.
+- **Reminders** become **Record reminder**: the reminder level and overdue status are recorded, but no late fee is added, since a fee nobody was told about cannot be charged.
+- **Contracts:** the customer's own signature is opened in the portal instead of sent by link, and the signing certificate says so. Resending the link, reminders, and asking the customer for missing details by email are refused (`409 NO_ADMIN_EMAILS`); enter the missing address on the customer instead. Without portal access the contract is signed on paper and uploaded.
 
 ## Permissions (RBAC)
 

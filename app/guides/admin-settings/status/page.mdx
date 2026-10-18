@@ -53,6 +53,16 @@ New photos get their [credit](/features/gallery-management#uploader-names-and-ph
 
 The card counts photos with a credit and photos not read yet. Files that carry no name stay in "not read yet", so the button stays available; running it again only re-reads them. Needs the `system.manage` permission, like the other maintenance jobs on this tab.
 
+## Tile placeholders
+
+While a gallery tile's thumbnail loads, the tile shows a blurred placeholder of the photo (average colour and rough shapes) instead of an empty box. New uploads get their placeholder when the thumbnail is generated. Photos added before placeholders existed have none until you run the backfill.
+
+The **Tile Placeholders** card counts photos with a thumbnail, how many have a placeholder and how many do not. **Compute Placeholders** fills the missing ones. It reads only the stored thumbnails, never the originals, and works in batches in the background. The last run's result shows how many were computed and how many thumbnails could not be read; an unreadable thumbnail stays counted as missing, so the button stays available. Needs the `system.manage` permission.
+
+<Callout type="info">
+On the beta channel from v3.171.0-beta.0; not on stable (v3.134.x). See [Release Channels](/deployment/release-channels).
+</Callout>
+
 ## Update notifications
 
 The dashboard shows the latest available beta or stable version (fetched from GitHub releases) and a **Update Now** button that downloads the latest Docker image and recreates the container. The check runs every 6 hours on the backend. There is nothing to configure on this tab — the version-check service is enabled in code.

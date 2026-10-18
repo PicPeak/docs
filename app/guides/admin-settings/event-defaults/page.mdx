@@ -8,25 +8,57 @@ The **Event Creation** tab controls which fields are required on the New Event f
 
 | Toggle | Default | Effect when off |
 |---|---|---|
-| **Customer name required** | on | Field still shown but accepts empty value. |
-| **Customer email required** | on | Field still shown. **Off breaks the gallery-created email**, the password-reset flow, and most automation that needs a recipient. |
-| **Admin email required** | on | Field still shown. Off means expiration warnings + archive notifications have nowhere to go. |
-| **Event date required** | on | Off means slugs are generated with a random hex suffix instead of the date. |
-| **Expiration required** | on | Off allows galleries that never expire (`expires_at = null`). Manual archive is the only cleanup path. |
+| **Require customer name** | on | Field still shown but accepts empty value. |
+| **Require customer email** | on | Field still shown. **Off breaks the gallery-created email**, the password-reset flow, and most automation that needs a recipient. |
+| **Require admin email** | on | Field still shown. Off means expiration warnings + archive notifications have nowhere to go. |
+| **Require event date** | on | Off means slugs are generated with a random hex suffix instead of the date. |
+| **Require expiration date** | on | Off allows galleries that never expire (`expires_at = null`). Manual archive is the only cleanup path. |
 
 <Callout type="warning">
-Disabling **Customer email required** or **Admin email required** is supported but the UI shows a banner — too many features assume there is somewhere to send a notification, and you will get silent failures rather than errors.
+Disabling **Require customer email** or **Require admin email** is supported but the tab shows a warning under the switch — too many features assume there is somewhere to send a notification, and you will get silent failures rather than errors.
 </Callout>
 
 ## Form behavior
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Default: require gallery password** | on | Pre-checks the "Require Password" box on the Create Event form. Per-event override still works. |
-| **Show filter bar in gallery** | on | When off, the search/sort/filter bar is hidden in the public gallery view. |
+| **Require password by default** | on | Pre-checks the "Require Password" box on the Create Event form. Per-event override still works. |
+| **Show filter bar in galleries** | on | When off, the search-by-filename and sort controls above grid-layout galleries are hidden. |
 | **Default download limit** | 0 (unlimited) | Pre-fills **Download Limit** on the Create Event form, and applies to events created through the v1 API without `download_limit`. See [Download limit](/features/gallery-management#download-limit). |
 | **Uploader names** | Off | Pre-selects the upload dialog's name step (Off / Optional / Required) for new events. See [Uploader names and photo credits](/features/gallery-management#uploader-names-and-photo-credits). |
 | **Show uploader names to guests** | off | Pre-checks the per-event switch that shows names in the gallery. It applies to uploads made while it is on. |
+
+## Guest feedback defaults
+
+**Enable Guest Feedback by default** (off) pre-checks **Guest Feedback** on new events. Under it, one switch per feedback type sets which types a new gallery starts with; they are greyed out while the master switch is off. Existing galleries are not affected, and each gallery can still be changed individually.
+
+| Type | Default |
+|---|---|
+| **Star ratings** | on |
+| **Likes** | on |
+| **Favourites** | on |
+| **Comments** | on |
+| **Emoji reactions** | on |
+| **Color labels** | off |
+| **Approve / reject per photo** | off |
+| **Default lightbox shortcuts** | Colors only — 1 green, 2 yellow, 3 red (alternative: Lightroom — 1-5 stars, 6-9 colors) |
+
+**Approve / reject per photo** is the default for guest decisions (`allow_decisions`), see [Feedback](/features/feedback). It is on the beta channel from v3.167.0-beta.0 and not on stable (v3.134.x).
+
+## Folders and first look
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Mirror folder structure in new galleries** | on | Subfolders of uploads and external folders become nested gallery folders. Existing galleries keep their own setting. |
+| **Start a first look from keyword folders** | on | A top-level folder whose name contains one of the keywords (e.g. `Wedding (FirstLook)`) is not created as a folder: its photos are badged and the gallery switches to two-stage delivery. |
+| **Keywords** | `FirstLook, Sneak Peek` | Comma-separated. Case, spaces, dashes and underscores are ignored, so `FirstLook` also matches `first-look`. Shown while keyword detection is on. |
+| **Full gallery due after (days)** | `7` | Range 1–365. When a first look starts without a promised date, the full gallery is due this many days after the event date. |
+
+See [Photo Categories](/features/photo-categories) for folders and two-stage delivery.
+
+<Callout type="info">
+Folder mirroring, first-look keywords and the delivery days are on the beta channel from v3.164.0-beta.0 and not on stable (v3.134.x). See [Release Channels](/deployment/release-channels).
+</Callout>
 
 ## Phone field
 
@@ -41,7 +73,7 @@ When disabled, the field is hidden, existing values stay in the database (so tog
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Enable phone field on event form** | off | Master toggle for the customer phone input. |
+| **Enable phone number field** | off | Master toggle for the customer phone input. |
 
 ## Where the validation lives
 

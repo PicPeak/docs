@@ -21,6 +21,7 @@ Common use cases:
 | `event.expired` | Expiration checker marks the gallery inactive (fires **before** `event.archived` in the cascade so receivers can react in order) |
 | `photo.uploaded` | Admin upload, API upload, guest upload, auto-import, or S3 prefix walker import |
 | `photo.deleted` | Single or bulk delete (NOT fired per-photo when an event is archived — receivers infer from `event.archived`) |
+| `selection.submitted` | A guest finished their selection or approved the edited photos (beta channel from v3.171.0-beta.0; see [Feedback](/features/feedback)) |
 
 ## Default payload shape
 
@@ -49,6 +50,21 @@ Common use cases:
 Every `event.*` payload uses the same canonical event sub-object. Fields you have not stored (or that the global phone-field toggle has disabled) come back as `null` — the keys are always present so receivers do not have to distinguish "field missing" from "field null".
 
 `event.archived` adds `archive_path`. `event.expired` adds `expires_at`.
+
+`selection.submitted` carries the same `data.event` object plus `data.submission`:
+
+```json
+"submission": {
+  "id": 42,
+  "kind": "selection",
+  "guest_name": "Jane",
+  "count": 37,
+  "note": "Please retouch the group shot",
+  "submitted_at": "2026-10-11T18:02:00.000Z"
+}
+```
+
+`kind` is `selection` (the guest finished their selection) or `approval` (the guest approved the edited photos). An `approval` also carries `rejected_count`. `guest_name` and `note` can be `null`.
 
 <Callout type="warning">
 Webhook payloads include customer contact info (name, email, phone) and the gallery share token. Only point webhooks at receivers you trust — anything that receives the payload has everything it needs to message the customer or open the gallery.

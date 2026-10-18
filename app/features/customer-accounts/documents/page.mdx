@@ -4,11 +4,15 @@ import { Callout } from 'nextra/components'
 
 The customer portal has a **Documents** area where you and your customer exchange files: you share offers, contract appendices or price lists with them, they send you signed contracts, ID copies or questionnaires. Every file belongs to exactly one customer and is never visible to anyone else.
 
+<Callout type="info">
+Customer documents are on the beta channel only: from v3.134.0-beta.0, with requests, notifications, file formats and the malware scanner from v3.139.0-beta.0 ([PicPeak PR #1578](https://github.com/PicPeak/picpeak/pull/1578)). Stable (v3.134.x) has no Documents area and no ClamAV scanner; its Compose files carry no `clamav` profile and `CLAMAV_HOST` is not read. See [Release Channels](/deployment/release-channels).
+</Callout>
+
 ## Enabling documents
 
 Documents are off by default.
 
-1. Open **Settings > Features** and enable **Customer documents** in the Clients section.
+1. Open **Settings > Features** and enable **Customer documents** in the CRM section.
 2. Every customer gets the Documents tab. To hide it for one customer, turn off **Documents** under **Customer features** on their record.
 3. Admins need the **Manage Customer Documents** permission (`customers.documents.manage`). It is granted to the `super_admin` and `admin` roles; other roles start without it.
 

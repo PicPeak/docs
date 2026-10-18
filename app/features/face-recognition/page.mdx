@@ -64,7 +64,7 @@ does not include.
 Two deliberate actions, and both default to off.
 
 1. **Settings → Features → People in galleries.** The global switch. While this is off, no face UI appears anywhere, no photo is scanned, and the backend never contacts the sidecar.
-2. **Per gallery: the People card** on the event page → **Detect people in this gallery**.
+2. **Per gallery:** **Detect people in this gallery** under **Settings → Faces** on the gallery page (the **People** card on the event page on stable).
 
 Enabling it on a gallery that already has photos queues a background scan. The gallery stays usable throughout — the people row fills in as clusters form, rather than making anyone wait.
 
@@ -76,7 +76,7 @@ A second per-gallery toggle, on by default once detection is enabled. Turn it **
 
 A row of circular face crops between the filters and the photo grid, ordered by how many photos each person appears in.
 
-- Tapping a face filters the gallery to that person, and a **Download these N** button appears.
+- Tapping a face filters the gallery to that person, and a **Download these N** button appears. On the beta channel from v3.174.0-beta.0 ([PicPeak PR #2046](https://github.com/PicPeak/picpeak/pull/2046)) a person with more than 500 photos is downloaded as one ZIP per 500 photos, one after another, at the standard size; older builds delivered a cut-short archive. With a download limit, the whole set is checked against what is left before anything is sent.
 - Tapping a second face narrows to photos containing **both**, with a toggle to switch to **either**.
 - The face filter combines with everything else — category, search, liked/saved/rated, photos vs videos.
 - Guests can dismiss the row; that choice is remembered per gallery.
@@ -91,7 +91,7 @@ The guest-facing wording never says "face recognition" or "biometric" — it say
 
 ## Managing people
 
-On the event's People card:
+In the gallery's **Settings → Faces** section (the People card on stable):
 
 - **Re-scan** — runs detection again over the gallery. Use after adding a lot of photos. This is the expensive one.
 - **Re-group people** — re-derives the groups from data already captured, without re-scanning. Cheap. Use this after changing the matching threshold.
@@ -150,7 +150,7 @@ PicPeak deliberately does **not** ship the InsightFace models that many comparab
 
 ## Troubleshooting
 
-**The People card doesn't appear on my event.**
+**The Faces section (People card) doesn't appear on my event.**
 The global feature switch is off — Settings → Features → People in galleries.
 If that switch is greyed out, you are running the all-in-one image, where this
 feature is unavailable (see above).
@@ -163,3 +163,26 @@ Detection works on a preview-sized copy of each photo. Galleries that never gene
 
 **Nobody is detected in obvious group shots.**
 Faces smaller than about 40 pixels are below the quality floor. Very wide crowd shots from the back of a room may genuinely fall under it.
+
+## Automatic scene tags
+
+Beta channel only, from v3.172.0-beta.0 ([PicPeak PR #1961](https://github.com/PicPeak/picpeak/pull/1961)). Stable (v3.134.x) has no scene tags.
+
+The same ML container can tag each photo by what it shows, from a fixed list of 42 event scenes such as ceremony, cake, dancing, outdoors or black & white. Guests then get a **Tags** chip row under the filter bar (a Tags section in sidebar layouts) that lists only the tags that occur in the gallery. Selecting several tags shows photos with **any** of them, and the row combines with the other filters.
+
+Tags describe the scene, never who is in it, so they are not biometric data and are switched on separately from face recognition:
+
+1. **Settings → Features → Automatic tags**, the global switch, off by default.
+2. Per gallery: **Tag the photos of this gallery automatically** under **Settings → Tags** on the gallery page, off by default. It shows progress and has **Re-run tagging**.
+
+Nothing runs unless both are on. Like face recognition, it is not available on the all-in-one image.
+
+<Callout type="warning">
+  **The published `picpeak-ml` image does not contain the tagging model yet.** Its encoder (about 370 MB) is not hosted anywhere the image build can fetch it. To use tags, export the encoder as described in `ml/README.md` in the PicPeak repository, host it, and build the sidecar yourself with `TAG_ENCODER_ONNX_URL` and `TAG_ENCODER_ONNX_SHA256` set (both build arguments, set together). Without the model, galleries with tagging on stay queued: "Photos stay queued until the ML container with the tagging model is reachable."
+</Callout>
+
+- Tagging reads the stored thumbnail, one photo at a time by default (`TAG_PROCESSOR_CONCURRENCY`). Uploads are never held up by it.
+- The model is loaded on the first tagging request, not at start-up, and adds about 370 MB of memory to the sidecar.
+- The tag list is not editable. The score threshold is provisional and was set on a small sample; expect missing tags rather than wrong ones.
+- Counts shown to guests follow the same visibility rules as the photo list.
+- A photo edited in place in an external folder is tagged again.

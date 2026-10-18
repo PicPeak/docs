@@ -12,7 +12,7 @@ Invoices are the financial endpoint of the CRM lineage. They get spawned from ac
 
 - **Feature flag**: `bills` enabled in **Settings → Features**. `quotes=false` forces `bills=false`.
 - **Business profile**: complete, including a bank account (`business_bank_accounts`). Invoices refuse to render without one — the issuer block needs an IBAN.
-- **Customer**: existing record in **Clients → Accounts**.
+- **Customer**: existing record in **CRM → Accounts**.
 
 ## Invoice lifecycle
 
@@ -32,7 +32,7 @@ Three paths to spawn an invoice:
 
 ### Standalone
 
-From **Clients → Bills**, click **New invoice**. Same editor shape as the quote editor — pick customer, line items, payment terms. Save as draft or send immediately. No quote / contract upstream → no `deal_uuid` lineage.
+From **CRM → Invoices**, click **New invoice**. Same editor shape as the quote editor — pick customer, line items, payment terms. Save as draft or send immediately. No quote / contract upstream → no `deal_uuid` lineage.
 
 ### From a quote
 
@@ -73,6 +73,20 @@ The Send action:
 4. Transitions to `sent`, stamps `sent_at`.
 
 Scheduled invoices use the same path automatically on `scheduled_send_at`.
+
+### An invoice is sent once
+
+On the beta channel from v3.170.0-beta.0 ([PicPeak PR #1982](https://github.com/PicPeak/picpeak/pull/1982)) only the **Resend** button on the invoice's detail page sends an invoice that is already `sent` or `overdue` a second time. Every automatic sender — the scheduler, a workflow's send step, delivery-triggered installments and a manually triggered monthly bill — sends an invoice once and skips one that is already out, without an email. Two quick clicks on **Send** queue one email. Storno documents are sent once in the same way.
+
+The built-in booking workflows prepare a draft invoice and stop at a review gate under **Approvals**. If you send or pay that invoice by hand, or cancel it before it was sent, PicPeak answers the gate for you: sending or paying it counts as a confirm, cancelling it as a deny, and the workflow carries on from there instead of mailing the invoice again. When a booking prepared several invoices (deposit and final), the gate stays open until every one of them has been handled. A gate whose confirm path does not lead to sending the invoice is never answered this way.
+
+On earlier builds and on stable, confirming such a gate after sending the invoice by hand mails it to the customer a second time.
+
+## Changing the customer or the gallery
+
+The customer of a saved invoice cannot be changed. On the beta channel from v3.168.2-beta.0 ([PicPeak PR #1909](https://github.com/PicPeak/picpeak/pull/1909)) the editor shows the customer read-only once the invoice exists, and the API answers `409 INVOICE_CUSTOMER_LOCKED`. Cancel the invoice and create a new one for the other customer: monthly drafts, quote lineage, installment siblings and re-billed costs all hang off the customer, so moving a single invoice would split them.
+
+An invoice can be linked only to a gallery you created; a super admin can link any gallery. Being able to open a gallery is not enough — the built-in `admin` role, a role with permission to manage all galleries, and an admin assigned to a gallery's team can see it but cannot link invoices to it. A link to a gallery that is not yours is refused (`403`), and the gallery page hides **Create invoice** for it. The gallery must also belong to the invoice's customer. The same PR makes an edit of a scheduled invoice save its VAT code and linked gallery; earlier builds dropped both.
 
 ## Email routing
 
@@ -153,13 +167,17 @@ When the Accounting module is off, the editor falls back to the legacy single-ra
 
 ## VAT / free-text note
 
-**Settings → CRM → Invoices → VAT / free-text note on invoices** prints one free-text line directly under the VAT row on every invoice PDF. Leave it empty to hide it.
+**Settings → CRM → Invoices → VAT / free-text note on invoices** prints one free-text line directly under the VAT row on every invoice PDF, or in place of that row on an invoice that carries no VAT. Leave it empty to hide it. Quotes do not print it: the note is a statement an invoice makes about itself.
 
 Nothing about it is jurisdiction-specific — you type the exact wording you need, whether that is the Austrian Kleinunternehmer clause, the German § 19 equivalent, a reverse-charge note, or something else. The totals block grows to fit, so a long note cannot collide with the figures.
 
 <Callout type="warning">
 Confirm the exact wording with your tax advisor. PicPeak prints what you type and does not check it against any jurisdiction's rules.
 </Callout>
+
+## Service date
+
+On the beta channel from v3.144.2-beta.0, the invoice PDF has a service-date row. When the service date falls on the invoice date, **Settings → CRM → Invoices → Service date equal to the invoice date** decides whether the row says so in words (the default), prints the date again, or is left out; a service period always prints. See [Admin Settings → CRM](/guides/admin-settings/crm). Stable (v3.134.x) has neither the setting nor the row.
 
 ## Per-customer feature override
 

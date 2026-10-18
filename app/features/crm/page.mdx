@@ -8,7 +8,7 @@ import { Callout } from 'nextra/components'
 
 PicPeak ships an integrated CRM module that lives alongside the gallery side of the product: quotes → contracts → invoices end-to-end, hour logging, a unified calendar, and a tax report. Every document in one engagement shares a `deal_uuid` so the lineage card on each detail page shows you the full chain at a glance.
 
-The CRM is designed for the same single-operator / small-studio mental model as the rest of PicPeak: every admin on one install shares CRM data, and `created_by_admin_id` is captured on every record for audit purposes. See [Tenancy model](#tenancy-model) below.
+Customers are shared by every admin on one install, but quotes, contracts and invoices belong to the admin who created them: other admins do not see them, and a super admin sees everything. See [Tenancy model](#tenancy-model) below.
 
 The CRM is the **sales-side** module — quotes, contracts, invoices issued to customers. The cost-side counterpart (supplier invoice capture, internal expenses, Treuhänder export) is the separate [Accounting module](/features/accounting). They share the same data model but the surfaces split: `/admin/clients/*` for CRM, `/admin/accounting/*` for accounting.
 
@@ -16,9 +16,9 @@ The CRM is the **sales-side** module — quotes, contracts, invoices issued to c
 
 | Module | What it does | Docs |
 |---|---|---|
-| Customer groups | Sort customers into groups, filter the customer list by them, change them in bulk, and target newsletters and workflows at them. | [Customer groups](/features/crm/customer-groups) |
+| Customer groups | Sort customers into groups, filter the customer list by them, change them in bulk, and target newsletters and workflows at them. Beta channel only. | [Customer groups](/features/crm/customer-groups) |
 | Quotes | Create, send, accept/decline, convert to event + contract + invoice. Public response page for the customer. | [Quotes](/features/crm/quotes) |
-| Contracts | Block-based composition, in-browser signing, countersign, integrity check on stored PDF. | [Contracts](/features/crm/contracts) |
+| Contracts | Block-based composition, in-browser signing, countersign, integrity check on stored PDF. Several signers and the signing lifecycle are beta channel only. | [Contracts](/features/crm/contracts) |
 | Invoices | Single-row and installment-spawned invoices, Storno (cancellation) for §14 / §11 UStG compliance, monthly drafts, payment-check token on the customer side. | [Invoices](/features/crm/invoices) |
 | Hours logging | Per-customer hourly rate, log entries against a customer, bill them into an invoice with one click. | [Hours logging](/features/crm/hours-logging) |
 | Calendar | Drag-create hour entries, calendar view of events + entries. | [Calendar](/features/crm/calendar) |
@@ -32,16 +32,15 @@ CRM admin settings live under **Settings → CRM** (see [Admin Settings → CRM]
 The CRM ships **completely off** on every install. To enable:
 
 1. Open **Settings → Features**.
-2. Enable the parent **Clients** card (gates the entire `/admin/clients/*` surface).
-3. Enable each CRM sub-feature you want to use:
+2. Enable each CRM sub-feature you want to use. There is no separate master switch: the **CRM** sidebar section (the `/admin/clients/*` surface) appears as soon as one of them, or **Customer Accounts**, is on, and disappears when all are off. Quotes, Contracts, Invoices and Hours logging are in the **Sales** section of the Features tab, Calendar under **Scheduling**:
    - **Quotes** — quote editor + public response page
-   - **Bills** — invoice editor + Storno + customer-side bills tab
+   - **Invoices** (`bills`) — invoice editor + Storno + customer-side bills tab
    - **Contracts** — block library + send + signing flow
    - **Hours logging** — per-customer hour entries + "Bill these hours" flow
    - **Calendar** — calendar view of events and hour entries
-4. Optional: enable **CRM developer tools** to access the in-app email-template tester (`/admin/clients/dev`). Strictly opt-in; useful when you want to preview a `quote_sent` or `invoice_paid_receipt` email without waiting for the real lifecycle event.
+3. Optional: enable **CRM developer tools** (under **Insights & Access**) to access the in-app email-template tester (`/admin/clients/dev`). Strictly opt-in; useful when you want to preview a `quote_sent` or `invoice_paid_receipt` email without waiting for the real lifecycle event.
 
-If you want the cost-side tracking (supplier invoices, expenses) and the Treuhänder export, also enable the **Accounting** module — see the [Accounting overview](/features/accounting). The Tax report sub-flag (`taxReport`) lives there now, not under Clients.
+If you want the cost-side tracking (supplier invoices, expenses) and the Treuhänder export, also enable the **Accounting** module — see the [Accounting overview](/features/accounting). The Tax report sub-flag (`taxReport`) lives there now, not under CRM.
 
 Dependency rules enforced server-side:
 - `quotes=false` forces `bills=false` (an invoice without a quote chain is still allowed, but the bills UI hides if quotes are off, and most paths assume both are present).
@@ -59,16 +58,25 @@ These are intentional UI surfaces for features that are designed but not yet bui
 
 ## Tenancy model
 
-**All admins on one install share CRM data.** Every quote, contract, invoice, hour entry, and customer is visible to every admin holding the relevant `*.view` permission. There is no per-admin scoping.
+**Quotes, contracts and invoices belong to the admin who created them.** On stable from v3.134.2 and on beta from v3.167.3-beta.0 ([PicPeak PR #1884](https://github.com/PicPeak/picpeak/pull/1884)) an admin sees and edits only the documents they created (`created_by_admin_id`), together with everything that hangs off them: line items, payments, PDFs, signers, history. A **super admin** sees every document. The `*.view` / `*.manage` permissions still decide whether an admin can work with a document class at all; the owner rule narrows that to their own documents.
 
-This matches how the rest of PicPeak works (galleries, customer accounts, events) — the mental model is a small studio team where any admin can pick up any customer's work.
+- **Another admin's document answers as if it did not exist** (`404`), on every read and write route, before any upload or other side effect.
+- **Ownership cannot be handed over.** A document's creator is fixed when it is created.
+- **Older documents without a creator** are reachable by the admin who created the gallery or project they are linked to, or who created another document in the same deal. A deal that holds a document created by a different admin is not reachable this way by anyone but a super admin.
+- **Linking a gallery** to an invoice needs the gallery's creator or a super admin — see [Invoices → Changing the customer or the gallery](/features/crm/invoices#changing-the-customer-or-the-gallery).
+- **The tax report and the journal export** cover every invoice of the studio, so only a super admin can produce them. Anyone else gets "This report covers every invoice of the studio. Your account only sees its own documents, so the report is not available to you." (`403 CRM_COMPLETE_VIEW_REQUIRED`).
+- **The calendar** shows the quotes and contracts the admin can see.
+- **Customer documents** (beta channel only) attached to a contract follow the contract.
+- **Customers and hour entries stay shared.** Every admin with the customer permissions sees every customer.
+- **Workflows** reach only the documents of the admin whose action started them; editing a workflow grants no access to anyone else's documents. The built-in scheduled jobs (scheduled sends, reminders, dunning) keep working on every document.
 
-What this means in practice:
-- **Audit trail is preserved.** Every record carries `created_by_admin_id`, and the `activity_log` table tracks every send / convert / countersign action. If you need to know who did what, the trail is there even though access isn't restricted by it.
-- **Use separate installs for genuinely separate operators.** If two photographers want to share infrastructure but not see each other's books, run two PicPeak installs.
-- **Future-proofed.** If per-admin scoping is added later, the `created_by_admin_id` data is already there from day one — no backfill needed.
+Internal expenses and incoming invoices in the [Accounting module](/features/accounting#tenancy-model) follow a similar rule.
 
-See the [PR #555 discussion](https://github.com/PicPeak/picpeak/pull/555) for the design conversation if you want the full background.
+<Callout type="warning">
+**Behaviour change on upgrade.** Earlier builds let every admin with a CRM permission see every quote, contract and invoice. A studio that used the built-in `admin` role to run the books for everyone needs a super admin for that view after the upgrade.
+</Callout>
+
+Every action is still recorded in the `activity_log` table (send, convert, countersign, ...), so the audit trail names who did what.
 
 ## Legal & financial defaults
 

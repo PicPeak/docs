@@ -12,7 +12,7 @@ Contracts are block-composed legal documents (booking confirmation, terms, cance
 
 - **Feature flag**: `contracts` enabled in **Settings → Features**.
 - **Business profile**: complete (`Settings → CRM → Business profile`) — the issuer block appears on every contract.
-- **Block library populated**: open **Clients → Contracts → Block Library** at least once after enabling the feature; the self-heal seed inserts the example block set on first access.
+- **Block library populated**: open **CRM → Contracts → Block Library** at least once after enabling the feature; the self-heal seed inserts the example block set on first access.
 
 ## Block library
 
@@ -22,13 +22,13 @@ A contract is composed from named blocks (e.g. "Booking Fee Clause", "Cancellati
 - A **body** in plain text or basic markdown — rendered into the PDF section.
 - An optional **language** filter — DE blocks won't appear in an EN contract picker and vice versa.
 
-You can edit the seeded blocks, add your own, or disable blocks you don't use. The library lives at **Clients → Contracts → Block Library**.
+You can edit the seeded blocks, add your own, or disable blocks you don't use. The library lives at **CRM → Contracts → Block Library**.
 
 When a contract includes a block, the body text is **snapshotted into `contract_block_inclusions`** at composition time. Editing the source block later does NOT alter contracts that already included it — the customer who signed yesterday's contract sees yesterday's wording on download, not today's edits.
 
 ## Composing a contract
 
-From **Clients → Contracts**, click **New contract**. The editor surfaces:
+From **CRM → Contracts**, click **New contract**. The editor surfaces:
 
 - **Customer + business + language + currency** — same shape as the quote editor.
 - **Title** — the contract title shown to the customer ("Booking Confirmation — Smith Wedding").
@@ -50,7 +50,7 @@ Send transitions the contract from `draft` → `sent`:
 ## Customer signing flow
 
 <Callout type="info">
-Signers, declarations, reminders, expiry, collecting missing details, the legal notice, what is kept and the itemised integrity report are described in **[Signing contracts](/features/crm/contract-signing)**.
+Signers, declarations, reminders, expiry, collecting missing details, the legal notice, what is kept and the itemised integrity report are described in **[Signing contracts](/features/crm/contract-signing)**. Those are on the beta channel only; stable (v3.134.x) signs contracts with the single-signer flow on this page.
 </Callout>
 
 The customer follows the link in the email to `/contracts/sign/<token>`. In builds containing [PicPeak PR #1465](https://github.com/PicPeak/picpeak/pull/1465), the page first shows only your company and a masked hint of the customer's email address, and asks for a **6-digit code** that PicPeak emails to the address on file. The code is valid for 15 minutes and allows five attempts, and sending is throttled to one code per minute and five per hour per link. Confirming it opens the contract in that browser for 30 minutes. Customers with a [portal account](/features/customer-accounts) can read and sign from the portal instead, without a code.
@@ -101,12 +101,12 @@ Contracts don't have a Storno path. To cancel a `fully_signed` contract:
 1. Issue a written cancellation outside PicPeak (the legal mechanism varies — your lawyer will know the right shape).
 2. Mark the contract `cancelled` on the admin detail page — this is a status change, not a re-signing event. The original signed PDF and integrity hash stay intact for audit.
 
-If you also need to refund money already invoiced under this contract, that's an [invoice Storno](/features/crm/invoices#storno-cancellation) on the related invoice(s).
+If you also need to refund money already invoiced under this contract, that's an [invoice Storno](/features/crm/invoices#storno--cancellation) on the related invoice(s).
 
 ## What erasing a customer keeps
 
 <Callout type="info">
-Available on the beta channel in builds containing PicPeak/picpeak PR 1545. Earlier builds anonymise the customer account but leave their contracts untouched.
+Available on the beta channel from v3.135.0-beta.0 (PicPeak/picpeak PR 1545), not on stable. Earlier builds and stable anonymise the customer account but leave their contracts untouched.
 </Callout>
 
 [GDPR-erasing a customer](/features/customer-accounts#locking-out-a-customer) anonymises their account. What happens to their contracts depends on whether anyone has signed them yet.

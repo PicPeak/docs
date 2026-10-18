@@ -37,6 +37,18 @@ SMTP_USER=apikey
 SMTP_PASS=your-sendgrid-api-key
 ```
 
+### Mail servers on a private network
+
+PicPeak refuses to connect over SMTP or IMAP to a host that resolves to a private, loopback or other internal address, and it checks the DNS answer each time it opens a connection. To use a mail server on your own network (a relay in the same Compose stack, MailHog, a NAS), approve it in the deployment environment:
+
+```env
+MAIL_PRIVATE_ENDPOINTS=smtp://mailrelay:25,imap://mail.lan:993
+```
+
+Each entry is one protocol, host and explicit port, with no credentials or path; entries are comma-separated, and a malformed entry approves nothing and is logged. The server named by `SMTP_HOST` / `SMTP_PORT` in the environment is approved without an entry. Cloud metadata and link-local addresses stay refused even when listed. A refused connection fails the test or send with a mail network policy error. See [Environment Variables](/deployment/environment-variables).
+
+On both channels: beta from v3.167.2-beta.0, stable from v3.134.2.
+
 ## Webhook transport instead of SMTP
 
 PicPeak can hand every outgoing message to a webhook rather than sending it itself, which suits an n8n / Make / self-hosted relay setup.
@@ -81,6 +93,10 @@ Edit email templates from the admin panel. The editor provides:
 - Test email sending to verify formatting.
 
 The email wrapper function (`wrapEmailHtml()`) in `emailProcessor.js` applies consistent styling and layout to all outgoing emails.
+
+### Email accent colour
+
+The header bar, headings, buttons and links use the **Primary Color** set under **Settings → Email**. On the beta channel (from v3.168.0-beta.0), when that field is empty the accent follows the filled accent from **Branding → Colours**, as long as it has at least 3:1 contrast against the white email card; a paler brand colour, or none, keeps the original green. The green that the built-in templates carry inline is replaced by the same accent, darkened where needed so links stay readable. When the accent comes from Branding and **Button text** is empty, the button label colour is chosen to read on it. Newsletters, test mails and other hand-written bodies keep their own colours.
 
 ## Email queue
 

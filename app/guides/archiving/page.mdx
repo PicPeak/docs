@@ -8,9 +8,23 @@ When a gallery has done its job, archiving it produces a single `.zip` of every 
 
 Three triggers, all run the same archive routine:
 
-1. **Manual** — admin clicks **Archive Event** on the Event Details page.
+1. **Manual** — admin clicks **Archive Gallery** on the gallery page (in the header, or in the **Danger zone** of the Settings tab).
 2. **Bulk manual** — admin selects multiple events on the Events table and clicks **Archive Selected**.
 3. **Auto on expiry** — the expiration checker (a cron job inside the backend) sees that `expires_at` has passed and archives the event automatically.
+
+### One archive job per gallery
+
+On the beta channel from v3.174.0-beta.0 ([PicPeak PR #2014](https://github.com/PicPeak/picpeak/pull/2014)) only one archive job runs per gallery at a time, across all backend replicas. A double click, a bulk archive and the expiry checker can no longer start a second job on the same gallery. While an archive runs:
+
+- Another archive request answers `409` with code `ARCHIVE_IN_PROGRESS`; the admin shows "This gallery is being archived right now. Try again once the archive has finished." Bulk archive lists the gallery as failed with that code.
+- Restoring, renaming, deleting the gallery or deleting its archive, extending the expiry, changing the expiry date in the settings and reactivating the gallery are refused the same way (expiry and reactivation from v3.174.0-beta.0, [PicPeak PR #2035](https://github.com/PicPeak/picpeak/pull/2035)). Other settings still save.
+- If the backend process dies mid-archive, the gallery is freed after 15 minutes.
+
+### Retry after a failed expiry archive
+
+When the archive started by the expiry checker fails, the gallery stays deactivated and is retried with a growing delay: 1 hour, 2 hours, 4 hours and so on, at most 24 hours apart. The gallery is not announced again on a retry. A gallery an admin has deactivated, reactivated, restored or extended in the meantime is left alone. Earlier builds and stable never retry such a gallery: it stayed inactive and unarchived until an admin acted. (Beta channel from v3.174.0-beta.0, [PicPeak PR #2035](https://github.com/PicPeak/picpeak/pull/2035).)
+
+### Notifications
 
 The auto path also fires:
 - A **7-day-out warning email** to the customer (one-time, deduplicated via `email_queue.email_type='expiration_warning'`).
@@ -19,7 +33,7 @@ The auto path also fires:
 
 ## What the archive contains
 
-Inside `events/archived/{slug}.zip`:
+Each archive run writes its own zip, `events/archived/{slug}-{12 hex characters}.zip` in storage (on the beta channel from v3.174.0-beta.0; earlier builds use `events/archived/{slug}.zip`). The suffix keeps a run from overwriting another run's zip; the download is still named `{slug}.zip`. Inside the zip:
 
 ```
 {slug}/
@@ -38,6 +52,8 @@ The feedback files are only included if the event has feedback enabled and at le
 EXIF data on the photos is preserved in the archive (originals unchanged). GPS is intact in the archive too — only the *displayed* thumbnails strip GPS.
 
 ## What's deleted from the active area
+
+Before the zip is written, the gallery's [photo trash](/guides/managing-photos#trash) is emptied: photos you deleted are purged for good and are not in the archive (beta channel from v3.172.0-beta.0).
 
 After the archive zip is written and verified:
 
@@ -58,7 +74,7 @@ Client-access URLs to archived events also show the expired state — the specia
 
 ## The Archives admin page
 
-`/admin/archives` lists every archived event with:
+The Archives page is a sub-page of Events at `/admin/events/archives` (the old `/admin/archives` address redirects there). It lists every archived event with:
 
 - Event name, original event date, archive date
 - Photo count, archive size on disk
@@ -70,8 +86,8 @@ Client-access URLs to archived events also show the expired state — the specia
 
 The Restore button on the Archives page reverses the archive:
 
-1. Downloads the zip from storage.
-2. Extracts the photos back to `events/active/{slug}/`.
+1. Reads the zip from the storage backend (a local backend reads it in place, S3 downloads it to a temp folder).
+2. Extracts the photos and puts each one back into the storage backend under `events/active/{slug}/`.
 3. Sets `is_archived=false` and `is_active=true` on the event.
 4. Regenerates thumbnails for every photo.
 
@@ -79,8 +95,8 @@ This is an O(n) operation in number of photos and runs in the foreground — for
 
 After restore the share link works again. Feedback rows are still there from before the archive, so likes/ratings/comments are preserved end-to-end.
 
-<Callout type="warning">
-Restore re-extracts to local disk. If your storage backend is S3, the photos are restored to local fs (your storage path) — not back into S3. You can re-archive after to push back to wherever your backups live.
+<Callout type="info">
+Restore, download, details and delete go through the [storage backend](/features/storage-backends), so on S3 the photos are restored back into the bucket. This applies on the beta channel from v3.142.1-beta.0 ([PicPeak PR #1659](https://github.com/PicPeak/picpeak/pull/1659)). Earlier beta builds and the stable channel read archives from local disk only: on an S3 backend restore, details and download answered 404.
 </Callout>
 
 ## Webhook payload
@@ -96,13 +112,13 @@ The `event.archived` webhook fires once per archive operation. Payload follows t
       "slug": "wedding-smith",
       "event_name": "Smith Wedding",
       "...": "...",
-      "archive_path": "events/archived/wedding-smith.zip"
+      "archive_path": "events/archived/wedding-smith-3f9a0c1b7d2e.zip"
     }
   }
 }
 ```
 
-For S3 backends, `archive_path` is the `s3://bucket/key` form.
+`archive_path` is the storage key of the zip, the same form on local and S3 backends.
 
 See [Webhooks](/features/webhooks) for the full payload reference.
 

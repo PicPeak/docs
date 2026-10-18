@@ -13,6 +13,7 @@ A **collective-journal export** (Sammelbuchungsjournal) you hand to your Treuhä
 - **Feature flags**: `accounting` + `taxReport` enabled (the export lives on the tax-report page).
 - **Settings → Accounting** complete: chart of accounts reviewed, VAT codes mapped, expense categories pointed at the right ledger accounts.
 - **Revenue / costs to export**: at minimum some `sent` invoices in the period; ideally also categorised inbound documents and expenses if you want the cost side.
+- **A super admin account** (stable from v3.134.2, beta from v3.167.3-beta.0). The export covers every invoice of the studio, while other admins see only their own documents, so for anyone else it is refused with "This report covers every invoice of the studio. Your account only sees its own documents, so the report is not available to you." (`403 CRM_COMPLETE_VIEW_REQUIRED`). See [CRM → Tenancy model](/features/crm#tenancy-model).
 
 ## Where to find it
 

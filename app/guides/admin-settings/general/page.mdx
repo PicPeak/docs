@@ -14,6 +14,10 @@ The **General** tab covers your instance's identity, upload limits, language, an
 | **Max Files per Upload** | `500` | Per-batch cap. Range: 1–2000. Hard-capped at the `MAX_ALLOWED_FILES_PER_UPLOAD` build constant — UI value can be lower but never higher. |
 | **Max Video Size (MB)** | `500` | Per-video upload cap, separate from the photo cap so photos can keep a smaller limit. |
 | **Browser-playable copies of videos** | off | Re-encodes videos a browser cannot play (HEVC, QuickTime, non-streamable MP4) into an H.264 MP4 that the gallery streams instead; the download stays the original. Switching it on queues the videos already uploaded. Costs CPU per video and a second file. See [Video Support → Browser playback](/features/video-support#browser-playback). |
+| **Strip location and device data from played videos** | on | Videos that already play in a browser get a copy without the recording location, camera and other metadata, made without re-encoding; guests play that copy and the original stays the download. Stores one extra file per such video, about the size of the original. Switching it on queues the existing videos; switching it off keeps the copies already made. |
+| **Adaptive video streaming** | off | Converts each video into a stream in up to three qualities (480p, 720p, 1080p), so playback starts quickly and adapts to the viewer's connection. The original stays the download. Costs CPU per video and roughly as much storage again; videos longer than 30 minutes keep playing as before. Switching it on queues the existing videos, including ones that failed before. See [Video Support](/features/video-support). |
+| **Max Upload Batch Size (MB)** | `95` | Maximum size per upload request. Lower it behind a reverse proxy with a request size limit (Cloudflare: 100 MB). |
+| **Trash retention (days)** | `30` | Photos deleted from a gallery stay in its trash this long and can be restored. Range: 0–365; `0` deletes photos at once. Photos in the trash still use storage. See [Managing Photos](/guides/managing-photos). |
 | **Allowed File Types** | `jpg,jpeg,png,webp` | Comma-separated extensions. One list for every upload path: the admin upload screen, the admin chunked-upload API, guest uploads and the v1 API. Videos are off by default — add `mp4,mov,webm` (and `m4v`, `avi` if needed) to accept them. See [Allowed file types](#allowed-file-types) below. |
 
 ## Allowed file types
@@ -26,8 +30,14 @@ even if you add them:
 |---|---|
 | `jpg`, `jpeg`, `png`, `webp`, `gif` | image |
 | `heic`, `heif` | image (iPhone) |
-| `dng` | camera RAW — the embedded preview is used for thumbnails |
+| `dng`, `arw`, `sr2`, `srf`, `cr2`, `nef`, `nrw`, `orf`, `pef`, `srw` | camera RAW (Adobe DNG / Apple ProRAW, Sony, Canon CR2, Nikon, Olympus, Pentax, Samsung) — the embedded preview is used for thumbnails and display, the original stays the download |
 | `mp4`, `m4v`, `webm`, `mov`, `avi` | video |
+
+None of the RAW extensions is on the default list; add the ones you need. Browsers send RAW files without a usable type, so for these PicPeak takes the type from the extension. Canon CR3, Fujifilm RAF and Panasonic RW2 are not accepted. An extension PicPeak does not know is dropped with a warning in the backend log that lists the supported ones. A change to the list applies to the next upload, without waiting for a cache to expire.
+
+<Callout type="info">
+RAW formats other than DNG are on the beta channel from v3.162.0-beta.0. Stable (v3.134.x) accepts `dng` only. The **Browser-playable copies of videos** switch is beta-only (from v3.157.0-beta.0), as are **Adaptive video streaming** (v3.171.0-beta.0), **Trash retention** (v3.172.0-beta.0) and **Strip location and device data from played videos** (v3.174.2-beta.0). See [Release Channels](/deployment/release-channels).
+</Callout>
 
 Where it is enforced:
 
@@ -50,9 +60,18 @@ Maintenance mode is enforced by middleware (`backend/src/middleware/maintenance.
 
 ## Language
 
-Sets the **default** language served to guests before they click the language toggle, and the language used for system emails when the event has no specific recipient locale.
+The **Language** card has two selectors:
 
-Supported: `en`, `de`, `nl`, `pt`, `ru` (Brazilian Portuguese, Russian).
+| Setting | Scope | What it does |
+|---|---|---|
+| **Your admin language** | You, on this device | Language of the admin area. Applies at once; no save needed. |
+| **Gallery & guest language** | Whole instance | Language shown to guests before they pick one with the language toggle, and the language of system emails when the event has no recipient locale. Saved with the tab. |
+
+Eight languages are available: English (`en`), German (`de`), Russian (`ru`), Brazilian Portuguese (`pt`), Dutch (`nl`), French (`fr`), Spanish (`es`) and Slovenian (`sl`). English and German are complete; the other six are partial, and a string missing there is shown in English.
+
+<Callout type="info">
+The admin language moved into this card on the beta channel in v3.151.0-beta.0. On stable (v3.134.x) the card has only the guest language, and you switch your admin language with the selector in the admin header.
+</Callout>
 
 ## Date & Time Format
 
@@ -67,4 +86,4 @@ The locale code derived from this setting is also passed to `date-fns` for relat
 
 ## Saving
 
-Each subsection has its own **Save** button — partial saves are fine. Cached settings are invalidated automatically; no restart needed.
+One save bar at the bottom of the window saves the whole tab, including your account details at the top (see [Saving](/guides/admin-settings#saving)). On stable (v3.134.x) each subsection has its own **Save** button. Cached settings are invalidated automatically; no restart needed.

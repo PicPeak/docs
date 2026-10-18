@@ -14,16 +14,39 @@ From the admin dashboard, create a new event by providing:
 - **Event name** --- displayed as the gallery title.
 - **Event date** --- the date of the event.
 - **Customer name and email** --- used for email notifications.
-- **Password** --- optional; when set, guests must enter it to view the gallery. The Information card can also **hide the logo on the password page** for a single event.
+- **Password** --- optional; when set, guests must enter it to view the gallery. A single gallery can also **hide the logo on the password page** (**Display logo on password page** under **Settings → Appearance** on the gallery page; the Information card on stable).
 - **Expiration** --- number of days until the gallery expires (default: 30 days).
 
 Each event receives a unique slug and a shareable gallery link.
+
+On the beta channel the create form also picks the photo source (upload, or an [external folder](/features/external-media#setting-up-a-gallery-on-a-folder) with an immediate import) and whether the gallery gets **Custom gallery styling** or follows the global theme (see [Themes & Branding](/features/themes-branding#global-theme-and-custom-gallery-styling)).
+
+## The gallery page
+
+On the beta channel from v3.155.0-beta.0 ([PicPeak PR #1747](https://github.com/PicPeak/picpeak/pull/1747)) a gallery has one page with four tabs and no separate edit mode:
+
+| Tab | What is on it |
+|---|---|
+| **Overview** | Share link with password show / reset and resend, short links, QR code, **Help the client** (send gallery email, extend +30 / +90 days, reveal now), client access, details including download-limit usage, and a setup summary linking into Settings. A draft gallery also gets the [Before you share](/features/draft-mode#before-you-share) card. |
+| **Photos** (**Media** once the gallery has videos) | Upload, the photo grid, the categories panel, the [folder bar](/features/photo-categories#nested-folders), the external-folder source bar, upload review. |
+| **Guests & Feedback** | The guest list and the feedback panel, including moderation and finished selections. |
+| **Settings** | Sections **General**, **Access**, **Downloads**, **Guest interaction**, **Appearance**, **Photo source**, **Folders & delivery**, plus **Pre-event reminder**, **Live Slideshow**, **Faces** and **Tags** when those features are on, and **Danger zone** (archive, delete). |
+
+Settings sections save together through one save bar, and leaving the page with unsaved changes asks first. Without `events.edit` (or on an archived gallery) the sections are read-only. The header carries **Preview**, **Send gallery email** and a ⋯ menu (rename, duplicate, create invoice, archive).
+
+On stable the same settings are spread over the event's **Information** card (edited with **Edit**) and separate cards for download resolutions, slideshow, reminder override and feedback. Where these docs name a Settings section, look for the matching field there.
+
+## Events list
+
+On the beta channel from v3.150.0-beta.0 ([PicPeak PR #1717](https://github.com/PicPeak/picpeak/pull/1717)) every column header of the events list opens a menu: name (A – Z / Z – A), date (newest or oldest first by event date, or recently / first created), photos (most / fewest), status (active / archived first) and expiry (soonest / latest). The type column filters by event type instead, including types that have since been deactivated. Sorting and filtering run on the server, so they cover every page of the list. Galleries without a date stay at the bottom in both directions. Stable lists events newest-created first.
+
+From v3.164.0-beta.0 the status column also marks galleries waiting for their full delivery, with an **Awaiting full gallery** filter; see [Two-stage delivery](/features/photo-categories#two-stage-delivery-first-look).
 
 ## Publishing
 
 When you publish, the dialog offers **Send the gallery email now**, ticked by default. Unticking it publishes quietly: the gallery goes live and nothing is sent — no gallery email, no customer notice, no WhatsApp message. Use it when you want the link live before the client hears about it, or when you will tell them yourself.
 
-Afterwards, **Send gallery email** on the event page sends the link whenever you are ready. You confirm the password first if the gallery has one. Re-sending to a gallery you already notified is allowed; drafts, expired and inactive events are not.
+Afterwards, **Send gallery email** on the event page (in the header, or under **Help the client** on the Overview tab) sends the link whenever you are ready. You confirm the password first if the gallery has one. Re-sending to a gallery you already notified is allowed; drafts, expired and inactive events are not.
 
 ## Previewing as a guest
 
@@ -71,11 +94,13 @@ Events can optionally allow guests to upload their own photos. This is useful fo
 
 Guest uploads respect the event's **Photo cap**: once it is reached, further uploads are refused and the uploader shows a message naming the limit. A guest upload is only filed under the event's own categories or global ones. (Builds containing [PicPeak PR #1495](https://github.com/PicPeak/picpeak/pull/1495).)
 
+On the beta channel the upload dialog has a **Take a photo** button on phones, the gallery can have guest photos scaled down in the browser before upload, and it can hold guest uploads until you approve them. See [Gallery Interface → Guest uploads](/features/gallery-interface#guest-uploads) and [Moderation](/guides/admin-settings/moderation#holding-guest-uploads).
+
 ### Uploader names and photo credits
 
 Available on the beta channel in builds containing PicPeak/picpeak PR 1569.
 
-At a wedding or a party with many uploaders, a name on each photo answers the first question everyone asks: who took this? **Uploader names**, next to the guest upload options on the event form, controls whether the upload dialog asks for one:
+At a wedding or a party with many uploaders, a name on each photo answers the first question everyone asks: who took this? **Uploader names**, next to the guest upload options on the create form and under **Settings → Guest interaction** on the gallery page, controls whether the upload dialog asks for one:
 
 | Mode | Upload dialog |
 |---|---|
@@ -96,17 +121,17 @@ In the admin, every photo carries its credit:
 - the photo viewer can edit or clear a name, and **Set name** does the same for a selection. A name set by hand is final: nothing read from EXIF replaces it.
 - the CSV and JSON photo exports and both feedback exports carry a `credit` column, and XMP sidecars write it as `dc:creator`
 
-Removing a guest (**Delete** on the Guests tab, or the guest's own "forget me") removes their name from the photos they uploaded, including a name you typed on those photos by hand; the photos stay. Merging duplicate guests moves their uploads to the kept guest's name.
+Removing a guest (**Delete** on the **Guests & Feedback** tab, or the guest's own "forget me") removes their name from the photos they uploaded, including a name you typed on those photos by hand; the photos stay. Merging duplicate guests moves their uploads to the kept guest's name.
 
 Photos you or an import add get their credit from the file: EXIF `Artist`, then XMP `dc:creator`, then the name inside `Copyright`. Guest uploads never read EXIF: phone metadata names the phone's owner, not the guest. Photos uploaded before this feature have no credit; [Settings → Status](/guides/admin-settings/status#photo-credits-from-exif) can read the EXIF credit for them.
 
 ## Bulk downloads
 
-Guests can download all photos from a gallery (or a filtered subset) as a ZIP archive with a single click.
+Guests can download all photos from a gallery (or a filtered subset) as a ZIP archive with a single click. What an archive contains and the 500-photo limit for selections are described under [Gallery Interface → Bulk download](/features/gallery-interface#bulk-download).
 
 ## Download limit
 
-A gallery can cap how many photos the client downloads, for packages such as "10 photos included". Set **Download Limit** on the Create Event or Edit Event form; empty or `0` means unlimited, which is the default. New events take their value from [Event Defaults](/guides/admin-settings/event-defaults).
+A gallery can cap how many photos the client downloads, for packages such as "10 photos included". Set **Download Limit** on the create form or under **Settings → Downloads** on the gallery page (the edit form on stable); empty or `0` means unlimited, which is the default. New events take their value from [Event Defaults](/guides/admin-settings/event-defaults).
 
 **What counts.** The limit counts distinct photos and videos. An item uses a slot the first time it is downloaded in any way: single download, *Download selected*, *Download all*, or a download at another resolution. Playing a video's original in the gallery also uses one slot; replays and seeking within that video are free, and a playback that fails gives the slot back. Downloading the same item again is free, so an interrupted or repeated download does not cost anything, and a browser revalidating its cached copy (HTTP 304) never uses a slot. A video used as the hero image shows its poster frame and costs nothing.
 
@@ -123,7 +148,7 @@ A download that does not fit is refused as a whole: a ZIP is never delivered wit
 
 **Full-size originals.** While a limit is set, the lightbox shows the preview version (at most 1920 px) of photos the client has not downloaded, not the original. Otherwise the original would be one "Save image as" away and the limit would not mean anything. Previews and thumbnails never count against the limit, so a photo whose original is no larger than 1920 px is viewable at full size without using a download. A video only loads when the client presses Play, which is what uses its slot; the Premium and Carousel layouts show the video's poster instead. The [live slideshow](/features/live-slideshow) cannot play videos that are not unlocked yet. If full-size access must be restricted further, cap the [download resolution](/features/reveal-mode#download-resolutions) or add a [watermark](/features/image-processing#watermarking).
 
-**Usage and reset.** The limit applies to the gallery as a whole, not per session. The event page shows the usage, for example **7 / 10 downloaded**, next to the download protection badges. To give the client more downloads, raise the limit in the edit form. **Reset** clears the usage: the client gets the full limit back, and photos they already downloaded count again. Lowering the limit below what is already used is allowed; the gallery then shows no downloads left, and nothing already downloaded is taken back. Duplicating an event copies the limit but not the usage. Admins who can see an event but do not own it see the usage but no **Reset**.
+**Usage and reset.** The limit applies to the gallery as a whole, not per session. The event page shows the usage, for example **7 / 10 downloaded** (in the details on the Overview tab on the beta channel, next to the download protection badges on stable). To give the client more downloads, raise the limit in the settings. **Reset** clears the usage: the client gets the full limit back, and photos they already downloaded count again. Lowering the limit below what is already used is allowed; the gallery then shows no downloads left, and nothing already downloaded is taken back. Duplicating an event copies the limit but not the usage. Admins who can see an event but do not own it see the usage but no **Reset**.
 
 The v1 API accepts `download_limit` on `POST /api/v1/events`.
 
@@ -134,6 +159,6 @@ Available on the beta channel in builds containing PicPeak/picpeak PR 1568.
 The gallery interface supports:
 
 - Filtering by likes, ratings, comments, or favorites
-- Searching by filename
-- Sorting by date, name, size, or rating
+- Searching by filename (the original camera filename as well as the stored name)
+- Sorting by date, name, size, or rating; name sorts by the original camera filename
 - Exporting filtered selections as ZIP or generating Capture One/Lightroom-compatible file lists
