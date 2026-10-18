@@ -1,6 +1,6 @@
 # Analytics
 
-PicPeak includes a built-in analytics dashboard and supports integration with Umami for privacy-focused external analytics.
+PicPeak includes a built-in analytics dashboard and can forward gallery page views and events to an [Umami](https://umami.is/) or [Rybbit](https://rybbit.io/) instance for privacy-focused external analytics.
 
 <img src="/images/screenshot-analytics.png" alt="Analytics Dashboard" style={{ borderRadius: '8px', marginTop: '1rem', marginBottom: '1.5rem', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }} />
 
@@ -13,18 +13,14 @@ The admin dashboard tracks:
 - **Downloads** --- total and per-photo download counts.
 - **Engagement** --- likes, ratings, comments, and feedback metrics.
 
-## Umami integration
+## Umami and Rybbit
 
-[Umami](https://umami.is/) is a privacy-focused, open-source analytics platform. To enable it, set these environment variables:
+Choose the collector under **Settings → Analytics**; see [Analytics settings](/guides/admin-settings/analytics). No tracker script is loaded in the browser: the gallery sends a small data-only event to PicPeak's own endpoint (`POST /api/analytics/tracker/events`), and the backend forwards it to the collector over HTTPS. Share tokens, query strings, page titles and referrers are removed before forwarding.
 
-```env
-VITE_UMAMI_URL=https://analytics.yourdomain.com
-VITE_UMAMI_WEBSITE_ID=your-website-id
-VITE_UMAMI_SHARE_URL=https://analytics.yourdomain.com/share/...
-```
+The `VITE_UMAMI_URL`, `VITE_UMAMI_WEBSITE_ID` and `VITE_UMAMI_SHARE_URL` build variables are no longer read, and custom tracker snippets are disabled (beta channel from v3.167.2-beta.0, stable from v3.134.2). Configure the collector in the settings instead.
 
-When configured, Umami tracking is added to gallery pages. The share URL can be embedded in the admin dashboard for a combined view.
+Nothing is forwarded from the admin area, the customer portal, short links or one-time-link pages. Visitors whose browser sends Global Privacy Control are never counted; Do Not Track visitors are not counted unless a Super Admin switches **Honour Do Not Track** off (that switch is on the beta channel only).
 
-The tracker is not loaded in the admin area, the customer portal, on short links or on one-time-link pages; see [Analytics settings](/guides/admin-settings/analytics#umami-settings) (builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809)).
+If you set a share URL, the Analytics page opens the collector's dashboard in a new tab, and embeds it when the dashboard runs on its own HTTPS host and the browser supports credentialless iframes.
 
-Umami is optional. The built-in analytics dashboard works without any external services.
+An external collector is optional. The built-in analytics dashboard works without any external services.

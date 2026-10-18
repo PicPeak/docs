@@ -1,0 +1,123 @@
+import { Callout } from 'nextra/components'
+
+# In-App Updates
+
+PicPeak can update itself when a super admin asks for it from the admin UI, with no terminal or SSH session. The updater does what the [routine upgrade](/deployment/upgrading#the-routine-upgrade) does, `docker compose pull && docker compose up -d`, but it checks the install before it changes anything and rolls back when the new version does not start.
+
+<Callout type="info">
+**Beta channel only.** The updater agent ships from v3.159.0-beta.0 and the admin UI for it from v3.165.0-beta.0. No stable release contains it yet. It is **off by default** and only works with the prebuilt images from `docker-compose.production.yml`.
+</Callout>
+
+## What it does
+
+An update always goes to the newest image of the channel the install already follows (`PICPEAK_CHANNEL`, so `stable` or `beta`). The updater has no version argument, never edits `.env` and never downgrades.
+
+1. **Checks the install.** It finds the Compose project from the running backend container and uses the same compose files the stack was started with. It refuses source builds: a backend image with no registry digest, or a `build:` section in the compose configuration.
+2. **Pulls** the images of every running service, retrying a failed pull (5 attempts). If every attempt fails, it reports the registry's error and restores the old local tags, so nothing has changed.
+3. **Checks the new backend image** before recreating anything: its version must not be older than the running one, and a release marked as needing manual steps refuses to install automatically (see [Releases that need manual steps](#releases-that-need-manual-steps)).
+4. **Recreates** the services and waits up to 10 minutes for all of them to be running and healthy, including the backend's migrations on first boot.
+5. **If the new version does not become healthy:** when the new backend ships no new migrations, the updater brings the old images back and reports `rolled_back`. When it does ship new migrations, they may already have run, so it stops and reports `migrations_may_have_run` instead of starting old code against a migrated database. See [Recovering](#recovering-after-migrations_may_have_run).
+
+## Updating from the admin UI
+
+When the feature is on and the updater is reachable, the **Update PicPeak** dialog (from the update notice) and the **Update available** dialog (from the version link in the sidebar) start with an **Update from here** section.
+
+1. A **super admin who signs in with a password** confirms with that password. Accounts that sign in only through SSO have no usable local password and are told to use a password-based super admin. Other admins see that a super admin can do it, and only the phase and state of a running update.
+2. The backend takes a **database dump** (the same one as **Settings → Backup**, written to the database backup destination). If the dump fails, nothing is requested and nothing changes.
+3. The backend files the request and the updater takes over. The dialog follows its steps through the restart, during which the site is unavailable for a minute or two, and ends on the result.
+
+While the request waits for the updater, the dialog offers **Cancel request**. If nothing takes it within 10 minutes (`PICPEAK_SELF_UPDATE_REQUEST_TTL_MINUTES`), the backend withdraws it. If the updater still finds a request older than 15 minutes (`PICPEAK_UPDATER_REQUEST_MAX_AGE`, for example after it was stopped for days), it discards it with `request_expired` instead of updating with a backup that old.
+
+Failed attempts (a wrong password, or a request refused because an update is running or the feature is unavailable) are limited to five per admin per 15 minutes. Every request, refusal, cancellation, expiry and result is recorded in the activity log.
+
+The manual commands stay available under **Update manually instead**. Their checklist belongs to that path only; the one-click path takes the backup itself.
+
+<Callout type="warning">
+The database dump is the updater's only backup. It does not copy your photos. Keep your regular [backups](/guides/backup-restore) running.
+</Callout>
+
+## Enabling it
+
+There are two packagings of the same updater. Both need `PICPEAK_SELF_UPDATE=true` in `.env`; anything else, including unset, keeps the feature off and the dialogs unchanged.
+
+### Host agent (recommended)
+
+For installs made with the [install script](/getting-started/simple-install) on a host where systemd is running (not WSL, and not inside a container). A systemd path unit starts one update run whenever a request appears. Nothing in a container holds the Docker socket.
+
+New install: answer **yes** to "Enable in-app updates?" in the wizard, or pass the flag:
+
+```bash
+sudo ./picpeak-setup.sh --docker --unattended --domain photos.example.com --enable-self-update
+```
+
+Existing install:
+
+```bash
+sudo ./picpeak-setup.sh --update --enable-self-update
+```
+
+This sets `PICPEAK_SELF_UPDATE=true` in `.env`, creates `update/request` (owned by UID 1001, the backend) and `update/status` (owned by root), copies the updater script to `/usr/local/lib/picpeak/` and enables `picpeak-updater.path`.
+
+Logs: `sudo journalctl -u picpeak-updater`
+
+The agent never downloads code to run as root by itself. Every `picpeak-setup.sh --update` refreshes it from the checkout it has just pulled. The admin UI says when the agent is older than the backend expects.
+
+### Container (hosts without a shell)
+
+For NAS and container-only hosts (Portainer stacks, ZimaOS/CasaOS and similar). Add this to `.env`:
+
+```dotenv
+PICPEAK_SELF_UPDATE=true
+COMPOSE_PROFILES=updater
+PICPEAK_PROJECT_DIR=/absolute/path/to/the/directory/with/docker-compose.production.yml
+```
+
+Then run `docker compose up -d`.
+
+<Callout type="warning">
+The `updater` service has no port and no network, but it holds `/var/run/docker.sock`, **which is root on the host**. Only enable it where the host agent is not an option.
+</Callout>
+
+`PICPEAK_PROJECT_DIR` must be the real host path. The project directory is mounted read-only at that identical path inside the container, because Compose resolves the stack's relative bind mounts (`./storage`, `./data`, …) against it; a different path would recreate PicPeak on empty storage. The updater checks the path against the running backend and refuses to run on a mismatch.
+
+The updater image is versioned separately: `ghcr.io/picpeak/picpeak/updater:1` follows the latest 1.x and updates itself after each run. To stay on one exact release, set `PICPEAK_UPDATER_TAG`, for example `PICPEAK_UPDATER_TAG=1.0.0`.
+
+### Turning it off
+
+- **Host agent:** `sudo ./picpeak-setup.sh --update --disable-self-update`. This removes the units and the script and sets `PICPEAK_SELF_UPDATE=false`. Only disabling the unit with `systemctl` does not last: the next `--update` refreshes an installed agent and enables it again. `--uninstall` also removes the agent.
+- **Container:** remove `updater` from `COMPOSE_PROFILES`, then `docker compose up -d --remove-orphans`.
+
+## The `update` folder
+
+The backend and the updater share no network path and no secret, only two folders under `update/` in the install directory (`APP_UPDATE`, default `./update`). The backend writes a request file into `update/request/` and only reads `update/status/`, which it mounts read-only. A compromised backend can therefore trigger exactly one thing: a legitimate update to the published channel tag.
+
+Both mounts are part of the production compose file from v3.165.0-beta.0. On the next `docker compose up -d`, Docker creates a root-owned `./update/` with `request/` and `status/` even where `PICPEAK_SELF_UPDATE` stays unset. Nothing reads them while the feature is off.
+
+## Results
+
+| Result | Meaning |
+|---|---|
+| `succeeded` | Updated from one version to the next |
+| `up_to_date` | The channel has nothing newer; nothing was changed |
+| `refused` | A check failed before anything changed. Reasons include `source_build` (built from source), `downgrade` (the channel tag points at an older version), `manual_required` (the release needs manual steps; follow its release notes) and `request_expired` |
+| `failed` | Reasons include `pull_failed` (nothing was changed), `not_found` (no running backend for this project), `migrations_may_have_run`, `rollback_failed`, `interrupted` (reboot, stopped service or container) and `internal_error` |
+| `rolled_back` | The new version did not start; the previous one is running again |
+
+## Recovering after `migrations_may_have_run`
+
+The new version did not start, and its migrations may have changed the database. Rolling back only the images is not safe, so the updater did not do it.
+
+1. Check the backend log: `docker compose logs backend`. Often the cause is environmental (a full disk, a missing mount), and `docker compose up -d` after fixing it is enough.
+2. If the new version has to go, restore the backup the backend took before the update from **Settings → Backup**. That needs a running backend.
+3. If the admin UI is not reachable, open an issue with the backend log. Do not start the old version against the migrated database.
+
+## Releases that need manual steps
+
+Some releases cannot be reached by `pull && up -d`: a compose file change, a new required environment variable, a PostgreSQL major upgrade. Such a release carries a minimum version in its backend image. The updater refuses installs older than that with `manual_required` and points at the release notes; installs that skip over the release later are refused as well. Follow [Upgrading](/deployment/upgrading) for those.
+
+## Limitations
+
+- **Source builds** are refused. That includes a plain `docker compose up -d` with `docker-compose.yml`, which builds the images locally. Switch to the prebuilt images in `docker-compose.production.yml` (or install with the install script).
+- **Native installs** and the **[all-in-one image](/deployment/single-container)** are not supported yet.
+- **The compose file is not updated.** The updater only changes images.
+- **Old images are kept.** Run `docker image prune` now and then to reclaim disk space.

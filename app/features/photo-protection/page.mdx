@@ -1,31 +1,41 @@
 # Photo Protection
 
-PicPeak includes an advanced download protection system to help prevent unauthorized use of photos.
+PicPeak has a few layers that make it harder for guests to save photos they were not meant to keep. Most of them run in the browser; one runs on the server.
 
 ## Protection layers
 
-### Canvas rendering
-
-Instead of serving images as standard `<img>` elements, PicPeak can render photos using HTML5 Canvas. This makes it harder to save images via right-click or browser extensions.
-
 ### Right-click prevention
 
-When enabled, right-click context menus are disabled on gallery pages, preventing the standard "Save image as" option.
+When **Block right-click menu** is on (the default for new galleries), the context menu is disabled on the gallery page and in the lightbox, which removes the standard "Save image as" option.
 
-### Invisible watermarking
+### Canvas rendering
 
-PicPeak can apply invisible watermarks to gallery images. These watermarks are imperceptible to viewers but can be detected if images are redistributed without authorization.
+With **Canvas rendering in the lightbox** on, the lightbox draws the photo into an HTML5 `<canvas>` instead of an `<img>` element, which defeats drag-to-save and "Save image as". At protection level `maximum` the lightbox always uses canvas rendering.
 
 ### DevTools detection
 
-The protection system detects when browser developer tools are open and can take action (such as displaying a warning or hiding content) to prevent image extraction through the browser inspector.
+With **Detect developer tools** on (the default), the gallery watches for open browser developer tools. At protection level `maximum` a detection closes the lightbox and navigates the gallery page away. At `enhanced` and `maximum` detection runs even when the switch is off.
+
+### Capped full-size view (maximum level)
+
+At protection level `maximum` the server never sends the original or the full preview for the gallery view: the photo and preview routes answer a copy that fits inside 1920 × 1080, at JPEG/WebP quality 60, without EXIF data. Downloads are not capped, so combine it with downloads off or a reduced download resolution. Available on the beta channel from v3.175.0-beta.0; stable has no server-side cap.
+
+### Watermarks
+
+A visible watermark can be applied to downloads and the full-size view. See [Branding → Watermark](/features/branding#watermark).
+
+### No full-resolution zoom
+
+Protection levels `enhanced` and `maximum`, and canvas rendering, also switch off the lightbox's zoom to original pixels.
 
 ## Configuration
 
-Photo protection settings are configured per-event from the admin panel. You can enable or disable individual protection layers depending on the client and event requirements.
+- The defaults for new galleries — protection level, DevTools detection and canvas rendering — are set under [Settings → Image Security](/guides/admin-settings/image-security). That page also has the per-level breakdown.
+- Per gallery, the event page → **Settings** → **Downloads** has the switches for right-click blocking, download watermark, DevTools detection and canvas rendering.
+- A gallery's protection level is taken from the default when the gallery is created. The admin UI has no control to change it afterwards; the admin API (`PUT /api/admin/events/:id` with `protection_level`) can.
 
 ## Important notes
 
 No client-side protection is foolproof --- a determined user can always capture screen content. These features raise the barrier for casual downloading and demonstrate professional image handling to clients.
 
-For stronger protection, consider using visible watermarks on preview images and delivering full-resolution files only through controlled download channels.
+For stronger protection, use visible watermarks, the `maximum` cap, and deliver full-resolution files only through controlled download channels.

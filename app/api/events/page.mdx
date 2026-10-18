@@ -1,8 +1,15 @@
 # Events API
 
-The public v1 API exposes the full event lifecycle: create, list, get, update, publish, archive, restore. All endpoints require a Bearer token created in **Admin → Settings → API Tokens**.
+Events are reachable through two APIs:
 
-For the OpenAPI spec, see `/api/openapi.json` on your instance — it's the authoritative reference and is generated from the same route definitions.
+| | Public API (`/api/v1`) | Admin API (`/api/admin`) |
+|---|---|---|
+| **Auth** | API token (`Authorization: Bearer pp_live_…`) created in **Admin → Settings → API Tokens** | Admin session JWT |
+| **Event endpoints** | Create, list, get, share link, list event types | Update, publish, archive, restore, delete, send the gallery email, and everything else |
+
+The public v1 API is intentionally narrow: it creates galleries, uploads photos and returns share links. Updating, publishing, archiving and deleting an event are admin API routes, which accept only an admin JWT — an API token sent to an `/api/admin/…` route is rejected.
+
+For the OpenAPI spec of the public API, see `/api/openapi.json` on your instance — it is generated from the same route definitions.
 
 ## Authentication
 
@@ -10,9 +17,9 @@ For the OpenAPI spec, see `/api/openapi.json` on your instance — it's the auth
 Authorization: Bearer <token>
 ```
 
-See [Authentication](/api/authentication) for token scopes and expiry.
+See [Authentication](/api/authentication) for API tokens, their scopes and the admin JWT.
 
-## Endpoints
+## Public API endpoints
 
 ### Create event
 
@@ -30,9 +37,11 @@ curl -X POST "$API_URL/v1/events" \
     "admin_email": "studio@example.com",
     "require_password": true,
     "password": "Shutter123",
-    "expiration_days": 45
+    "expires_at": "2026-07-22"
   }'
 ```
+
+Needs the `admin` scope and the `events.create` permission.
 
 **Response (201):**
 
@@ -45,56 +54,106 @@ curl -X POST "$API_URL/v1/events" \
 }
 ```
 
+A gallery created through the v1 API is **published immediately**: `is_draft` is ignored and the gallery email goes out on creation, as when publishing from the admin UI.
+
 **Required fields:**
 
 | Field | Type | Notes |
 |---|---|---|
-| `event_type` | string | One of the configured types (built-in or custom). |
+| `event_type` | string | Slug of an active event type. Discover the live values with [`GET /v1/event-types`](#list-event-types). |
 | `event_name` | string | Display name. |
 
-**Conditionally required fields** — controlled by [Event Defaults](/guides/admin-settings/event-defaults):
-
-| Field | Required when |
-|---|---|
-| `event_date` | `event_require_event_date` is on |
-| `customer_name` | `event_require_customer_name` is on |
-| `customer_email` | `event_require_customer_email` is on |
-| `admin_email` | `event_require_admin_email` is on |
-| `expiration_days` | `event_require_expiration` is on |
+The required-field switches in [Event Defaults](/guides/admin-settings/event-defaults) (`event_require_event_date`, `event_require_customer_name`, `event_require_customer_email`, `event_require_admin_email`, `event_require_expiration`) apply to the admin create form only. The v1 API does not enforce them.
 
 **Optional fields:**
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
+| `event_date` | string | (none) | ISO date. |
+| `customer_name` | string | (none) | |
+| `customer_email` | string | (none) | Receives the gallery email. |
 | `customer_phone` | string | (none) | Persisted only when `event_phone_field_enabled=true`. Max 32 chars. |
+| `admin_email` | string | (none) | |
 | `welcome_message` | string | (empty) | Markdown supported. |
 | `require_password` | boolean | from `event_default_require_password` | When `false`, gallery is accessible via the share-link token alone. |
-| `password` | string | (none) | Required when `require_password=true`. Min 6 chars, no all-numeric. |
-| `expiration_days` | integer | from `general_default_expiration_days` (30) | Sets `expires_at = now + N days`. Range 1–365. |
-| `photo_cap` | integer | `0` (unlimited) | Max number of photos. |
-| `theme_preset` | string | from event-type recommendation | One of the bundled preset keys. |
-| `header_style` | string | from theme preset | `hero` / `standard` / `minimal` / `none` |
-| `is_draft` | boolean | `false` | When `true`, event is created as draft (not yet published, no `event.published` webhook). |
+| `password` | string | (none) | Required when `require_password` resolves to `true`. Min 6 chars, checked against the gallery password rules. |
+| `expires_at` | string | (none: never expires) | See [Expiry](#expiry). `expiration_days` is ignored by the v1 API. |
+| `client_access_enabled` | boolean | `false` | Turns on the client access link. |
+| `client_password` | string | (none) | The client PIN. At least 6 characters on the beta channel from v3.142.1-beta.0; stable accepts shorter values. |
+| `photo_cap` | integer | (unlimited) | Max number of photos. |
+| `download_limit` | integer | from `event_default_download_limit` | Max distinct photos the gallery may download. `null` = unlimited. |
+| `color_theme` | string | (none) | Preset name or JSON-encoded theme. |
+| `header_style` | string | from theme | `hero` / `standard` / `minimal` / `none` |
+| `feedback_enabled` | boolean | from `event_default_feedback_enabled` | |
+| `protection_level` | string | from `default_protection_level` | `basic` / `standard` / `enhanced` / `maximum` |
+| `image_quality` | integer | from `default_image_quality` | 1–100. |
 | `allow_user_uploads` | boolean | `false` | Enables guest uploads. |
 | `upload_category_id` | integer | (none) | Required when `allow_user_uploads=true`. |
 | `default_photo_sort` | string | `upload_date_desc` | Sort guests see first. |
 
+On the beta channel from v3.155.0-beta.0 the create call also takes:
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `custom_theme_enabled` | boolean | see notes | `true` = the gallery uses its own `color_theme` / `css_template_id`; `false` = it follows the global Branding theme. When omitted, sending a `color_theme` or `css_template_id` makes it `true`, as before the field existed. |
+| `customer_account_ids` | integer[] | (none) | Customer accounts to assign. Ignored while the customer portal is off. Assigned accounts are only mailed, and only stand in for a missing `customer_email`, when the token owner holds `customers.events`. |
+| `source_mode` | string | `managed` | `managed` = photos are uploaded to PicPeak; `reference` = the gallery links the photos in a folder under `EXTERNAL_MEDIA_ROOT`. See [External Media](/features/external-media). |
+| `external_path` | string | (none) | Required with `source_mode: "reference"`. A folder relative to `EXTERNAL_MEDIA_ROOT` that must exist; the root itself (`""`, `"."`) is rejected with `400`. |
+| `external_watch` | boolean | `false` | With `reference`: import new files that appear in the folder automatically. The token owner needs `photos.upload` (`403` otherwise). |
+| `import_now` | boolean | `false` | With `reference`: start the folder's first import in the background right after the gallery is created. Needs `photos.upload` (`403` otherwise). Progress: `GET /api/admin/external-media/events/{id}/status`. |
+
+### Expiry
+
+`expires_at` takes an ISO 8601 value:
+
+- A date-time with a zone or offset (`2026-07-22T18:00:00+02:00`, `…Z`) is stored as that instant.
+- A date-time without a zone (`2026-07-22T18:00:00`) is read as **UTC**.
+- A bare date (`2026-07-22`) means the **end of that day** (23:59:59.999) in the instance time zone — the **Timezone (IANA)** field of the business profile, or the server's time zone when that is empty. On the beta channel from v3.174.0-beta.0. Stable builds store a bare date as midnight UTC at the start of that day.
+- Omitted or empty: the gallery never expires.
+
+A value that is not a readable date returns `400`.
+
+The admin create form, which works with a number of days instead, sets the expiry to the event date (or today, when there is none) plus that many days, ending at the end of that day in the same instance time zone (beta channel from v3.174.0-beta.0). The admin `GET /api/admin/events/:id` response carries the zone it uses as `expiry_time_zone`.
+
 ### List events
 
 ```bash
-curl "$API_URL/v1/events?limit=20&offset=0" \
+curl "$API_URL/v1/events?limit=20&page=1" \
   -H "Authorization: Bearer $TOKEN"
 ```
+
+Needs the `read` scope and `events.view`. Lists only the events the token's owner may see, newest first.
 
 Query parameters:
 
 | Param | Default | Notes |
 |---|---|---|
-| `limit` | `20` | Max 100. |
-| `offset` | `0` | For pagination. |
-| `is_archived` | (omit for all) | `true` / `false`. |
-| `is_draft` | (omit for all) | `true` / `false`. |
-| `event_type` | (omit for all) | Filter by type slug. |
+| `page` | `1` | 1-based page number. |
+| `limit` | `25` | Max 100. |
+
+There is no `offset` parameter (it is ignored) and no server-side filter: filter on `is_archived`, `is_draft` or `event_type` in the response.
+
+**Response:**
+
+```json
+{
+  "events": [
+    {
+      "id": 42,
+      "slug": "wedding-emily-jordan-celebration-2026-06-07",
+      "event_name": "Emily & Jordan Celebration",
+      "event_type": "wedding",
+      "event_date": "2026-06-07",
+      "expires_at": "2026-07-22T21:59:59.999Z",
+      "is_active": true,
+      "is_archived": false,
+      "is_draft": false,
+      "created_at": "2026-06-01T09:12:00.000Z"
+    }
+  ],
+  "pagination": { "page": 1, "limit": 20, "total": 57 }
+}
+```
 
 ### Get event
 
@@ -103,65 +162,119 @@ curl "$API_URL/v1/events/$EVENT_ID" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Returns the full event row plus aggregated stats (`photo_count`, `total_size`, `total_views`, `total_downloads`).
+Returns the event row with its password hashes and stored password copies removed. `404` for an unknown id.
+
+### Get share link
+
+```bash
+curl "$API_URL/v1/events/$EVENT_ID/share-link" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{ "slug": "wedding-emily-jordan-celebration-2026-06-07", "share_token": "abc123", "share_url": "https://picpeak.example.com/gallery/…" }
+```
+
+### List event types
+
+```bash
+curl "$API_URL/v1/event-types" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Returns `{ "eventTypes": [{ "slug_prefix": "wedding", "name": "Wedding", "emoji": "…" }, …] }`. The catalog is customisable under **Settings → Event Types**, so read the values from here instead of hardcoding them.
+
+## Admin API endpoints
+
+Everything below needs an **admin JWT** (see [Authentication](/api/authentication)), not an API token.
 
 ### Update event
 
 ```bash
-curl -X PATCH "$API_URL/v1/events/$EVENT_ID" \
-  -H "Authorization: Bearer $TOKEN" \
+curl -X PUT "$API_URL/admin/events/$EVENT_ID" \
+  -H "Authorization: Bearer $ADMIN_JWT" \
   -H "Content-Type: application/json" \
-  -d '{ "expiration_days": 60, "welcome_message": "Updated copy." }'
+  -d '{ "expires_at": "2026-09-30", "welcome_message": "Updated copy." }'
 ```
 
-Accepts any subset of the create-event fields. `password` change regenerates the share token.
+Permission: `events.edit`. Send only the fields you want to change. `expires_at` follows the [expiry rules](#expiry) above; send `null` or `""` to remove the expiry. `expiration_days` is not accepted here.
 
-On the admin API (`PUT /api/admin/events/:id`), builds containing [PicPeak PR #1793](https://github.com/PicPeak/picpeak/pull/1793) accept `""` or `null` for `customer_name` and `customer_email` to clear them, unless the field is required by the event defaults; `customer_email` must be a string or `null`. Builds containing [PicPeak PR #1788](https://github.com/PicPeak/picpeak/pull/1788) read an `expires_at` without a time zone as UTC, store it in ISO form, and answer `400` for a value that is not a readable date-time. Sending `customer_account_ids` needs the `customers.events` permission when it changes the assignment (builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809)).
+`customer_name` and `customer_email` accept `""` or `null` to clear them, unless the field is required by the event defaults; `customer_email` must be a string or `null`. A value for `expires_at` that is not a readable date-time answers `400`. Sending `customer_account_ids` needs the `customers.events` permission when it changes the assignment.
+
+On the beta channel, some fields are reserved to the gallery's owner — the admin who created it, a super admin, or a role that manages all galleries; another admin who reaches the gallery as a team member gets `403 EVENT_OWNER_REQUIRED` when the request would change them:
+
+- the gallery password, the client PIN, `regenerate_client_token` and switching `require_password` (from v3.167.0-beta.0);
+- who receives the gallery's emails: `customer_email`, `admin_email` and `customer_account_ids` (from v3.175.1-beta.0). Sending back the stored values unchanged is allowed.
+
+See [Multi-Admin](/features/multi-admin) for the gallery team.
 
 ### Publish (draft → live)
 
 ```bash
-curl -X POST "$API_URL/v1/events/$EVENT_ID/publish" \
-  -H "Authorization: Bearer $TOKEN"
+curl -X POST "$API_URL/admin/events/$EVENT_ID/publish" \
+  -H "Authorization: Bearer $ADMIN_JWT"
 ```
 
-Flips `is_draft=false`. Fires the `event.published` webhook.
+Permission: `events.edit`. Flips `is_draft=false` and fires the `event.published` webhook.
 
-### Archive
-
-```bash
-curl -X POST "$API_URL/v1/events/$EVENT_ID/archive" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-See [Archiving Events](/guides/archiving) for what this does.
-
-### Restore from archive
+### Send the gallery email
 
 ```bash
-curl -X POST "$API_URL/v1/events/$EVENT_ID/restore" \
-  -H "Authorization: Bearer $TOKEN"
-```
+# First send of a published gallery's email
+curl -X POST "$API_URL/admin/events/$EVENT_ID/send-gallery-email" \
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{ "password": "Shutter123" }'
 
-### Delete
-
-```bash
-curl -X DELETE "$API_URL/v1/events/$EVENT_ID" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-Hard delete: removes the event row, all associated photos, thumbnails, and feedback. Not recoverable.
-
-### Resend gallery email
-
-```bash
+# Re-send the gallery-created email
 curl -X POST "$API_URL/admin/events/$EVENT_ID/resend-email" \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $ADMIN_JWT" \
   -H "Content-Type: application/json" \
   -d '{ "password": "Shutter123" }'
 ```
 
-Re-sends the gallery-created email to the customer. Omit `password` to send the no-credentials variant.
+Omit `password` to send the variant without credentials (or the stored password, when [password storage](/guides/admin-settings/security) is on). `resend-email` answers `400` when the gallery has nobody to send to.
+
+On the beta channel from v3.165.0-beta.0 the gallery email reaches the inline customer email **and** every assigned customer account that can sign in to the portal (the accounts only when the caller holds `customers.events`). Publish, `send-gallery-email` and `resend-email` then answer with what was actually queued:
+
+```json
+{
+  "recipients": {
+    "email": "emily@example.com",
+    "account_count": 2,
+    "accounts": [{ "id": 7, "name": "Emily Carter", "email": "emily@example.com" }]
+  }
+}
+```
+
+`accounts` lists names and addresses only for callers holding `customers.view`; everyone else gets the count and an empty list.
+
+### Archive
+
+```bash
+curl -X POST "$API_URL/admin/events/$EVENT_ID/archive" \
+  -H "Authorization: Bearer $ADMIN_JWT"
+```
+
+Permission: `events.archive`; owner only on the beta channel. See [Archiving Events](/guides/archiving) for what this does.
+
+### Restore from archive
+
+```bash
+curl -X POST "$API_URL/admin/archives/$EVENT_ID/restore" \
+  -H "Authorization: Bearer $ADMIN_JWT"
+```
+
+Permission: `archives.restore`. The id is the event id. `409 ARCHIVE_IN_PROGRESS` while the gallery is still being archived.
+
+### Delete
+
+```bash
+curl -X DELETE "$API_URL/admin/events/$EVENT_ID" \
+  -H "Authorization: Bearer $ADMIN_JWT"
+```
+
+Permission: `events.delete`; owner only on the beta channel. Hard delete: removes the event row, all associated photos, thumbnails, and feedback. Not recoverable.
 
 ## Field naming notes
 

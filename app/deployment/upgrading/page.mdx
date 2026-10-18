@@ -111,6 +111,124 @@ Builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/180
 - **Building from source.** The frontend build needs Node.js 20 or newer and stops with a message on older versions. The Docker images are not affected.
 - **Installer.** `picpeak-setup.sh` writes `.env` readable by its owner only and accepts `--admin-password-file` and `--smtp-pass-file`. See [Simple Install](/getting-started/simple-install#options).
 
+### Beta: v3.165 to v3.175
+
+The security review tracked after the October 2026 release changed several deployment defaults on the beta channel. Most of these changes reached stable with v3.134.2 to v3.134.7; see [Stable: v3.133.3 to v3.134.7](#stable-v31333-to-v31347) for the stable numbers. The migrations run on their own; the ones that cannot be undone are listed under [One-way changes](#one-way-changes-on-beta).
+
+<Callout type="warning">
+**Do these before you pull.** Each one breaks a working install if it is missing.
+
+- **Compose behind another reverse proxy** (Traefik, Nginx Proxy Manager, Caddy, Cloudflare Tunnel in front of the frontend port) with no `TRUST_PROXY` in `.env`: add `TRUST_PROXY=2`. From v3.174.2-beta.0 the compose file defaults to `1`, and without the change every visitor shares the proxy's address — one rate-limit budget, and five failed logins from anyone lock out logins for everyone for 15 minutes. See [Reverse Proxy](/deployment/reverse-proxy#client-ip-rate-limiting-and-trust_proxy).
+- **All-in-one image behind a reverse proxy:** add `-e TRUST_PROXY=1` (one per proxy hop). From v3.174.2-beta.0 the image trusts no proxy by default; without it all visitors share one budget and every request counts as plain HTTP, so cookies lose their `Secure` flag. See [Single-Container Install → HTTPS](/deployment/single-container#https).
+- **Backend port reached from another machine** (`http://<host>:3001`): from v3.167.2-beta.0 the compose file publishes it on `127.0.0.1` only. Use the frontend port instead, or set `PICPEAK_BACKEND_BIND_ADDRESS=0.0.0.0` and a matching `TRUST_PROXY`.
+- **External PostgreSQL with `DB_SSL=true`:** from v3.167.2-beta.0 the certificate and host name are verified. With a private or self-signed CA, set `DB_SSL_CA` (or `DB_SSL_SERVERNAME` when `DB_HOST` is an IP address). See [Environment Variables → Database](/deployment/environment-variables#database).
+- **Mail server on a private address** that was entered in the admin UI (SMTP, IMAP or a mail account) rather than through `SMTP_HOST`/`SMTP_PORT`: list it in `MAIL_PRIVATE_ENDPOINTS` (for example `smtp://mail.lan:587,imap://mail.lan:993`), or sending and polling stop (v3.167.2-beta.0).
+- **Analytics or OIDC on a private address:** list the origin in `INTEGRATION_PRIVATE_ORIGINS`.
+- **Rsync backups:** put the destination's verified host key in a `known_hosts` file next to the SSH key, or point `BACKUP_SSH_KNOWN_HOSTS` at one. Unknown or changed host keys are refused, nothing is trusted on first use, the connection uses port 22 and ignores local SSH config aliases. See [Backup and Restore → SSH host keys](/guides/backup-restore#ssh-host-keys).
+</Callout>
+
+**Network and installer**
+
+- The compose file passes `COOKIE_SECURE=auto` and `ENABLE_HSTS=false` explicitly. `auto` was already the production default; an unrecognised `COOKIE_SECURE` value now means `auto` with a warning. Set `COOKIE_SECURE=true` and `ENABLE_HSTS=true` once the site is only reached over HTTPS.
+- The installer writes `PICPEAK_BIND_ADDRESS=127.0.0.1`, `TRUST_PROXY=2`, `COOKIE_SECURE=true` and `ENABLE_HSTS=true` in its reverse-proxy mode. An unattended install without a domain needs `--allow-insecure-http`; an interactive one asks you to confirm plain HTTP. See [Simple Install](/getting-started/simple-install#unattended-install).
+- `/health` answers only `{"status":"ok"}` (v3.175.1-beta.0). Monitoring that read `pid` or `uptime` from it needs another source.
+- `RATE_LIMIT_NETWORK_MULTIPLIER` is no longer read (v3.175.0-beta.0), and the image-security tab's rate limiting and auto-block are gone. Remove the variable.
+- The compose file mounts `./update/request` and `./update/status` for [in-app updates](/deployment/self-update) (v3.165.0-beta.0). Docker creates a root-owned `./update/` on the next `docker compose up -d`, even while the feature stays off.
+
+**Analytics** (v3.167.2-beta.0)
+
+- Custom tracker snippets are disabled and PicPeak no longer loads the Umami or Rybbit script; its own client sends page views through `/api/analytics/tracker/events`. Select Umami, Rybbit or None under **Settings → Analytics** and save to clear an old snippet.
+- Production collectors must use HTTPS. An analytics dashboard is only embedded when it runs on a host outside PicPeak's cookie scope (not the same host on another port); otherwise it opens in a new tab.
+- Visitors whose browser sends Global Privacy Control are not counted; Do Not Track is honoured unless you switch that off (v3.169.0-beta.0). See [Analytics](/guides/admin-settings/analytics).
+
+**Backups**
+
+- **Manifests are signed** (v3.167.2-beta.0). Compose generates the key in the `picpeak-secrets` volume; native and all-in-one installs create `backup-manifest.key` in the data directory with the first backup. **Copy the key off the host**: without it no backup can be authenticated on a new host. `BACKUP_MANIFEST_REQUIRE_KEYED` is gone — every manifest needs a valid signature.
+- Backups made before the upgrade are not authenticated and are refused by a normal restore. Take a new backup right after upgrading. To restore an old one, use the one-time `BACKUP_MANIFEST_RECOVERY_SHA256` / `BACKUP_MANIFEST_RECOVERY_REASON` approval on an isolated host. See [Backup and Restore → Manifest signing key](/guides/backup-restore#manifest-signing-key).
+- **Every run is a complete, standalone copy** (v3.167.3-beta.0); plan the disk space for full copies. Full and file restores from a legacy incremental run are refused; database-only and selective restores still work.
+- With S3 as primary storage, backups copy the media through the storage adapter (v3.167.6-beta.0). Configure the target bucket before restoring onto a fresh host.
+- `.picpeak` imports run as a coordinated maintenance restore (v3.168.1-beta.0). They need Linux, the native build (in the Docker images) and `STORAGE_PATH` on a local filesystem; elsewhere only the import is switched off. Restart every backend instance after a committed restore.
+
+**Access changes**
+
+- **Client links** need the current private link token together with the client PIN (v3.167.2-beta.0). Send clients the current client link; sessions already signed in stay valid.
+- **PicTransfer upload codes** shorter than 10 characters are replaced by migration `272`. Upload links sent for those transfers stop working; the migration logs the affected transfers so you can send the new links.
+- **CRM records follow their creator** (v3.167.3-beta.0): quotes, invoices, contracts and documents are visible to the admin who created them and to super admins. From v3.171.0-beta.0 expenses and incoming invoices follow the same rule (recorder, or creator of the linked gallery). Linking a gallery to an invoice needs its creator or a super admin. A studio that used the built-in Admin role as bookkeeper for everyone needs a super admin for that view.
+- **External source folders need owners** (migration `274`, v3.167.2-beta.0). A super admin assigns folders to admins; until then, existing external-source galleries cannot be browsed or rescanned by anyone but a super admin. See [External Media](/features/external-media).
+
+**Capacity limits**
+
+- **Upload admission** (migrations `276`, `277`, v3.167.3-beta.0): public uploads (gallery guests, PicTransfer file requests) have lifetime, concurrency and hourly allowances; authenticated uploads are only bounded while in flight. Raise them with `PUBLIC_UPLOAD_LIMITS_JSON` / `ADMIN_UPLOAD_LIMITS_JSON`. See [Environment Variables → Upload limits](/deployment/environment-variables#upload-limits).
+- **Incoming mail** (migration `275`) has backlog and rate budgets; a message over a budget waits on the mail server. Retention stays off unless you set `EMAIL_INTAKE_RETENTION_DAYS`.
+- **Image and media processing** runs in worker processes with memory and time limits (migrations `278`, `279`, v3.167.4-beta.0 and v3.167.5-beta.0). The defaults accept what earlier versions accepted.
+
+**Media and storage after the upgrade**
+
+- **Photo trash** (migration `294`, v3.172.0-beta.0): a photo an admin deletes goes to the gallery's trash for 30 days, so its disk space is not freed at once. Set **Trash retention (days)** to `0` under **Settings → General** for the old immediate delete.
+- **Derived images without EXIF** (migration `311`, v3.174.2-beta.0): thumbnails, previews and heroes no longer carry GPS position, camera and copyright. A background pass rebuilds the existing ones, one photo at a time, starting with link-preview covers. Expect extra CPU (and S3 traffic) for a while after the upgrade; `RENDITION_REFRESH_DISABLED=true` skips it. Downloads keep their metadata.
+- **Video metadata** (v3.174.2-beta.0): **Strip location and device data from played videos** under **Settings → General** is on by default. Browser-compatible videos get a metadata-free copy of about the original's size, and on first start every existing video is queued once (S3 originals are downloaded to be probed).
+
+#### One-way changes on beta
+
+- Migration `273` stores invitation and password-reset tokens as digests (v3.167.2-beta.0). Outstanding invitations and reset links stop working on upgrade; the migration logs how many, and names any administrator whose temporary password it had to reset. Database guards then refuse writes from older backends, so update every replica promptly and do not go back to an older image.
+- Migration `313` seals gallery passwords and client PINs in queued mail and WhatsApp messages with `EMAIL_QUEUE_ENCRYPTION_KEY` (or `JWT_SECRET`) and masks them in sent ones (v3.175.1-beta.0). Keep that key unchanged while mail is pending.
+- Migration `272` replaces short PicTransfer upload codes; the old links cannot be restored.
+
+### Stable: v3.133.3 to v3.134.7
+
+The stable patch releases after v3.132.1 carry the stable twins of the beta fixes above, with their own migration numbers. Each release upgrades with the routine steps; the notes list what needs something from you.
+
+<Callout type="warning">
+**Before you pull v3.134.7:** a Compose install behind another reverse proxy with no `TRUST_PROXY` in `.env` needs `TRUST_PROXY=2`, and an all-in-one container behind a proxy needs `-e TRUST_PROXY=1`. The reasons are the same as on beta, above.
+</Callout>
+
+**v3.133.3** — migrations `229` (login attempts) and `230`.
+
+- A `JWT_SECRET` shorter than 32 characters, or one of the published example values, stops the backend at startup. Replace it before upgrading; values encrypted with the old secret (such as an OIDC client secret) need to be entered again.
+- Analytics servers and OIDC providers on a private address need an entry in `INTEGRATION_PRIVATE_ORIGINS`.
+- A forced password reset now revokes the account's API tokens (migration `230` applies this to accounts already in that state). Issue new tokens afterwards.
+
+**v3.133.4** — migrations `233` (stored document paths relative to the storage root), `234` (re-keys legacy anonymous guest feedback on first contact) and `235`. No action needed.
+
+**v3.133.5** — a private S3 endpoint for backups has to be approved by a super admin before it is used, and the S3 connection test is a real one. See [Backup and Restore → Private S3 endpoints](/guides/backup-restore#private-s3-endpoints).
+
+**v3.133.6** — migration `236` (SQLite only): queued emails left to the column default now come due. A pending email that had been waiting more than a day is marked failed with a reason; retry it from **System Health → Failures**. Resized and watermarked downloads keep the photo's EXIF, XMP and IPTC.
+
+**v3.133.8** — changing the OIDC issuer URL or client ID, and the database backup destination, needs a super admin. `ENABLE_HSTS` now takes effect behind the bundled nginx.
+
+**v3.133.9** — migration `237` (hero focal point). No action needed.
+
+**v3.134.0** — migrations `238` and `239`; see [October 2026: hardening and proofing](#october-2026-hardening-and-proofing).
+
+**v3.134.2** — migrations `240` to `246`. This release carries most of the hardening; check each item.
+
+- **Network:** the backend port is published on `127.0.0.1` only (`PICPEAK_BACKEND_BIND_ADDRESS`); `COOKIE_SECURE=auto` and `ENABLE_HSTS=false` are passed explicitly; the installer needs `--allow-insecure-http` for an unattended plain-HTTP install.
+- **PostgreSQL TLS:** `DB_SSL=true` verifies certificate and host name. Set `DB_SSL_CA` for a private CA before upgrading.
+- **Mail:** private mail servers configured in the admin UI need `MAIL_PRIVATE_ENDPOINTS`.
+- **Analytics:** custom tracker snippets are disabled; select Umami, Rybbit or None under **Settings → Analytics** and save to clear an old snippet. Production collectors must use HTTPS.
+- **Backups:** manifests are signed with a key that must be kept off the host; older backups are not authenticated and need the one-time recovery approval to be restored. Every run is a standalone full copy, and full or file restores from legacy incremental runs are refused. Rsync needs a pre-approved host key. Take a new backup after upgrading and copy the key. See [Beta: Backups](#beta-v3165-to-v3175) above for the details, which are the same.
+- **Access:** client links need the current link token with the PIN; short PicTransfer upload codes are replaced (migration `241`) and their old links stop working; external source folders need owners assigned by a super admin (migration `243`); CRM documents follow their creator.
+- **Capacity:** public and authenticated upload admission (migrations `245`, `246`) with the same defaults as beta; incoming-mail budgets (migration `244`).
+- **One-way:** migration `242` stores invitation and reset tokens as digests. Outstanding invitations and reset links stop working, and older backends cannot write to the database afterwards. `EMAIL_QUEUE_ENCRYPTION_KEY` (default `JWT_SECRET`) encrypts pending recovery mail; keep it unchanged while such mail is waiting.
+
+**v3.134.3** — migrations `247` and `248`: image and media processing run in worker processes with memory and time limits. With S3 as primary storage, backups copy the media through the storage adapter; configure the target bucket before restoring onto a fresh host, and if inline database dumps are off, create a new scheduled dump after upgrading. Uploads no longer fail with `UPLOAD_STORAGE_LOW` on nearly full volumes or filesystems that report no inodes.
+
+**v3.134.4** — migrations `249` and `250`: `.picpeak` imports run as a coordinated maintenance restore. They need Linux, the native build (in the Docker images) and `STORAGE_PATH` on a local filesystem; restart every backend instance after a committed restore.
+
+**v3.134.5** — every app page answers `X-Robots-Tag: noindex`, so only the landing page can be indexed and galleries can no longer be made indexable. A verified gallery viewer gets a request budget of their own. Visitors whose browser sends Do Not Track or Global Privacy Control are not counted by analytics.
+
+**v3.134.6** — expenses and incoming invoices follow the per-admin owner rule: an admin who is not a super admin sees only what they recorded and what is booked to their own galleries.
+
+**v3.134.7** — migration `251`.
+
+- **Proxy trust:** the compose file defaults `TRUST_PROXY` to `1` and the all-in-one image to `0` (see the warning above). Rate limits count an IPv6 /64 as one client.
+- **Image protection:** at enhanced and maximum protection, photos are served through the normal authenticated photo route; the unused secure-image token routes are removed, and `RATE_LIMIT_NETWORK_MULTIPLIER` has no effect any more. Remove it.
+- **EXIF:** new thumbnails, previews and heroes carry no EXIF or GPS. Stable has no background refresh: thumbnails and previews already stored keep their metadata until they are regenerated (**Regenerate All Thumbnails** in the thumbnail settings).
+- **`/health`** answers only `{"status":"ok"}`. Uploaded SVGs are served with a strict Content Security Policy.
+- **One-way:** migration `251` seals gallery passwords and client PINs in queued mail and WhatsApp messages and masks them in sent ones. Keep `EMAIL_QUEUE_ENCRYPTION_KEY` (or `JWT_SECRET`) unchanged while mail is pending.
+
+Not on stable yet: the `/backup` mount in the stable branch's compose file, [in-app updates](/deployment/self-update), the photo trash, video metadata stripping and the rendition refresh.
+
 ## If an upgrade goes wrong
 
 - **The backend will not start.** Check its logs first
@@ -120,5 +238,8 @@ Builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/180
   [API rate limiter](/guides/admin-settings/security#api-rate-limiting) rather
   than the upgrade — a `429` is a completed request, so the browser console shows
   nothing.
+- **Everyone is locked out of login, or every visitor gets `429`, behind a
+  reverse proxy.** `TRUST_PROXY` is missing or too low, so all visitors share the
+  proxy's address. See [Reverse Proxy](/deployment/reverse-proxy#client-ip-rate-limiting-and-trust_proxy).
 - **You need to go back.** Restore the backup. Pulling the previous image is not
   enough on a release whose notes above say it is one-way.

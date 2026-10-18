@@ -5,7 +5,7 @@ import { Tabs, Callout } from 'nextra/components'
 For production deployments, place PicPeak behind a reverse proxy for SSL termination and routing.
 
 <Callout type="info">
-The routing below applies to the **multi-container Compose stack**, where the frontend and backend are separate services. The [all-in-one image](/deployment/single-container) serves everything from one port, so a proxy in front of it needs a single rule pointing at port `3000` — see [Example: NAS at Home](/deployment/nas-example) for a worked setup with Nginx Proxy Manager.
+The routing below applies to the **multi-container Compose stack**, where the frontend and backend are separate services. The [all-in-one image](/deployment/single-container) serves everything from one port, so a proxy in front of it needs a single rule pointing at port `3000`, and the container needs `TRUST_PROXY=1` (see [below](#client-ip-rate-limiting-and-trust_proxy)) — see [Example: NAS at Home](/deployment/nas-example) for a worked setup with Nginx Proxy Manager.
 </Callout>
 
 ## Routing schema
@@ -20,6 +20,10 @@ The routing below applies to the **multi-container Compose stack**, where the fr
 
 <Callout>
 The `/admin/*` routes are served by the **frontend** (React SPA), not the backend. The backend only handles `/api/admin/*` requests.
+</Callout>
+
+<Callout type="info">
+The production compose file publishes the backend port `3001` on host loopback (`127.0.0.1`) only. A proxy on the same host reaches it at `localhost:3001` as below; a proxy on another machine cannot, unless you set `PICPEAK_BACKEND_BIND_ADDRESS`. The simpler alternative is a single rule that sends everything to the frontend port `3000`, whose nginx forwards `/api` and the media paths to the backend itself — then set `TRUST_PROXY=2` (see [below](#client-ip-rate-limiting-and-trust_proxy)).
 </Callout>
 
 <Tabs items={['Nginx', 'Traefik', 'Caddy']}>
@@ -89,7 +93,7 @@ proxy_send_timeout 3600;
 </Tabs.Tab>
 <Tabs.Tab>
 
-Add labels to `docker-compose.override.yml`:
+Add labels to `docker-compose.override.yml`. Traefik connects to the containers directly, so the ports are the container ports: `80` for the frontend and `3000` for the backend (the host port `3001` is only the published mapping):
 
 ```yaml
 version: '3.8'
@@ -110,12 +114,12 @@ services:
       - "traefik.http.routers.picpeak-api.rule=Host(`your-domain.com`) && PathPrefix(`/api`)"
       - "traefik.http.routers.picpeak-api.entrypoints=websecure"
       - "traefik.http.routers.picpeak-api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.picpeak-api.loadbalancer.server.port=3001"
+      - "traefik.http.services.picpeak-api.loadbalancer.server.port=3000"
       # Protected media files
       - "traefik.http.routers.picpeak-media.rule=Host(`your-domain.com`) && (PathPrefix(`/photos`) || PathPrefix(`/thumbnails`) || PathPrefix(`/uploads`))"
       - "traefik.http.routers.picpeak-media.entrypoints=websecure"
       - "traefik.http.routers.picpeak-media.tls.certresolver=letsencrypt"
-      - "traefik.http.services.picpeak-media.loadbalancer.server.port=3001"
+      - "traefik.http.services.picpeak-media.loadbalancer.server.port=3000"
 ```
 
 </Tabs.Tab>
@@ -157,18 +161,27 @@ Caddy automatically provisions and renews SSL certificates via Let's Encrypt.
 
 ## Client IP, rate limiting and `TRUST_PROXY`
 
-PicPeak keys its [API rate limiter](/guides/admin-settings/security#api-rate-limiting) and its login lockout on the client IP. Behind a proxy the backend only sees the real client address when two things hold: the proxy forwards `X-Forwarded-For` (all configurations above do), and PicPeak trusts that proxy.
+PicPeak keys its [API rate limiter](/guides/admin-settings/security#api-rate-limiting) and its login lockout on the client IP. Behind a proxy the backend only sees the real client address when two things hold: the proxy forwards `X-Forwarded-For` (all configurations above do), and PicPeak trusts exactly the proxies in front of it.
 
-Express' `trust proxy` is preset to `loopback, linklocal, uniquelocal`, which covers proxies on Docker networks and private ranges. If your proxy reaches the backend from a **public** address — a separate proxy host, a cloud load balancer, a tunnel — add it via `TRUST_PROXY`:
+`TRUST_PROXY` is the number of proxy hops PicPeak trusts. The production compose file defaults it to `1`, which is the bundled frontend nginx. Count the proxies between the client and the backend on the path your `/api` traffic takes:
+
+| Layout | Hops | `TRUST_PROXY` |
+|---|---|---|
+| No proxy of your own; clients open the frontend port | frontend nginx | `1` (default) |
+| Your proxy forwards everything to the frontend port `3000` (the installer's reverse-proxy layout, Cloudflare Tunnel, Nginx Proxy Manager) | your proxy, frontend nginx | `2` |
+| Your proxy routes `/api` and the media paths straight to the backend, as in the configurations above | your proxy | `1` (default) |
+| [All-in-one image](/deployment/single-container) behind your proxy | your proxy | `1` (the image defaults to `0`) |
 
 ```bash
-# .env — a CIDR, a comma list, a hop count, or `true` behind a fully controlled chain
-TRUST_PROXY=loopback, linklocal, uniquelocal, 203.0.113.0/24
+# .env — your proxy in front of the frontend port
+TRUST_PROXY=2
 ```
 
-Without it every visitor presents as the proxy's address, shares one rate-limit budget of 300 requests per 15 minutes, and a busy gallery can start returning `429` for everyone at once. Do not set `TRUST_PROXY=true` unless every hop in front of PicPeak is yours: a trusted-all setting lets any client spoof its address through `X-Forwarded-For`.
+Set it **before** you update an install that sits behind a proxy and has no `TRUST_PROXY` in its `.env` (beta from v3.174.2-beta.0, stable from v3.134.7). With too low a value every visitor presents as the proxy's address, shares one rate-limit budget of 300 requests per 15 minutes, and five failed logins from anyone lock out logins for everyone for 15 minutes. When `TRUST_PROXY` is `1` and a request shows another private-range proxy in front of nginx, the backend logs one warning suggesting `2`.
 
-See [Environment Variables → Core](/deployment/environment-variables#core).
+A hop count is only safe when clients cannot take a shorter path to the app, which is why the backend port is published on host loopback only (`PICPEAK_BACKEND_BIND_ADDRESS`). With a proxy on the same host, also set `PICPEAK_BIND_ADDRESS=127.0.0.1` so the plain-HTTP frontend port is not reachable around it. Do not set `TRUST_PROXY=true` unless every hop in front of PicPeak is yours: a trusted-all setting lets any client spoof its address through `X-Forwarded-For`.
+
+See [Environment Variables → `TRUST_PROXY`](/deployment/environment-variables#trust_proxy).
 
 Running behind Cloudflare? [Bots and Scanners](/deployment/bot-protection) has the ready-made `TRUST_PROXY` line.
 
@@ -177,19 +190,22 @@ Running behind Cloudflare? [Bots and Scanners](/deployment/bot-protection) has t
 Some self-hosted setups want two working entry points to the same PicPeak instance:
 
 - **Public HTTPS** via the reverse proxy on a domain (`https://photos.example.com`)
-- **Direct HTTP** on the LAN for admin access (`http://192.168.1.50:3001`)
+- **Direct HTTP** on the LAN for admin access (`http://192.168.1.50:3000`, the frontend port)
 
-With the default `COOKIE_SECURE` setting, only one of these works at a time — the `Secure` cookie flag either blocks LAN HTTP (when `true`) or weakens HTTPS cookies (when `false`).
-
-Set `COOKIE_SECURE=auto` in your `.env` to make PicPeak decide per request:
+This works with the default `COOKIE_SECURE=auto` in production. The backend reads `req.secure` from Express: the `Secure` cookie flag is set when the request arrived over HTTPS (via a trusted proxy forwarding `X-Forwarded-Proto: https`) and left off otherwise. Both public HTTPS login and LAN HTTP login work with correctly-flagged cookies.
 
 ```bash
-# .env
+# .env — the default; only needed if you set something else before
 COOKIE_SECURE=auto
 ```
 
-In this mode the backend reads `req.secure` from Express. The flag is set to `true` when the request arrived over HTTPS (either directly or via a trusted proxy forwarding `X-Forwarded-Proto: https`) and `false` otherwise. The end result: both public HTTPS login and LAN HTTP login work with correctly-flagged cookies.
+Two conditions:
 
-The Nginx, Traefik, and Caddy configurations shown above already forward `X-Forwarded-Proto` correctly. PicPeak's Express `trust proxy` is preset to `loopback, linklocal, uniquelocal`, which covers Docker networks and private-network proxies out of the box.
+- The proxy must be inside the `TRUST_PROXY` boundary described above. If it is not, every request counts as plain HTTP and the cookies lose their `Secure` flag.
+- The LAN entry point is the frontend port. The backend port `3001` is published on host loopback only; set `PICPEAK_BACKEND_BIND_ADDRESS` to reach it from another machine.
+
+Keep `PICPEAK_BIND_ADDRESS` at its default (`0.0.0.0`) in this setup, since the LAN needs the frontend port. If the site is only ever reached over HTTPS, set `COOKIE_SECURE=true` instead.
+
+The Nginx, Traefik, and Caddy configurations shown above already forward `X-Forwarded-Proto` correctly.
 
 See [Environment Variables → Authentication cookies](/deployment/environment-variables#authentication-cookies) for the full reference.

@@ -8,7 +8,7 @@ import { Callout } from 'nextra/components'
 - **RAM**: **4 GB minimum** for a normal photo-upload workload — sharp/libvips decodes the full uncompressed frame before resize, and the default two worker loops at sharp-concurrency 2 can push peak RSS past 1.5 GB on a batch of 20-MP+ photos. On a 2 GB VPS that's enough to OOM-kill the backend mid-batch (surfaces as 503s on thumbnails — see [Low-memory hosts](#low-memory-hosts) for the recipe to run on 2 GB).
 - **Storage**: 20 GB minimum (plus photo storage needs)
 - **OS**: Linux (Ubuntu 20.04+), macOS, or Windows with WSL2
-- **Node.js**: v18.0.0 or higher
+- **Node.js**: v22.12.0 or higher, for native installs and builds from source (the Docker images bring their own Node.js 22). The installer installs Node.js 22 on a native install
 - **Database**: SQLite (included) or PostgreSQL 12+
 
 ## Docker requirements (recommended)

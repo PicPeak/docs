@@ -1,6 +1,9 @@
 # API Reference
 
-PicPeak provides an Admin API for automation and integration. The machine-readable OpenAPI spec is at `docs/picpeak-admin-api.openapi.yaml` in the repository.
+PicPeak has two APIs:
+
+- The **public v1 API** under `/api/v1`, authenticated with API tokens, for integrations and automation: create galleries, upload photos, list photos with their proofing marks, download originals, get share links.
+- The **admin API** under `/api/admin`, authenticated with an admin session JWT, which the admin UI itself uses.
 
 ## Base URL
 
@@ -12,22 +15,16 @@ Behind a reverse proxy: `https://your-domain.com/api`
 
 ## Key endpoints
 
-- **[Authentication](/api/authentication)** --- obtain and use admin API tokens.
+- **[Authentication](/api/authentication)** --- API tokens and admin session tokens.
 - **[Events](/api/events)** --- create, list, update, and publish events.
 - **[Photos](/api/photos)** --- upload photos, download originals and manage event media.
+- **[Webhooks](/api/webhooks)** --- manage outbound webhooks and their deliveries.
 
 ## OpenAPI documentation
 
-Preview the spec interactively:
+The public v1 API is described by an OpenAPI 3 spec generated from the route definitions:
 
-```bash
-npx --yes @redocly/cli preview-docs docs/picpeak-admin-api.openapi.yaml
-```
+- `/api/openapi.json` on your instance (admin login required).
+- A browseable Swagger UI at `/api/docs` on your instance (admin login required).
 
-Import it into Postman, Insomnia, or any OpenAPI-compatible tool.
-
-Validate after changes:
-
-```bash
-npx --yes @apidevtools/swagger-cli@4.0.4 validate docs/picpeak-admin-api.openapi.yaml
-```
+Import the spec into Postman, Insomnia, or any OpenAPI-compatible tool. The admin API has no published spec; the pages above document the routes integrations use.

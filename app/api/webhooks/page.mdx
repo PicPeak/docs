@@ -1,6 +1,6 @@
 # Webhooks API
 
-Admin endpoints for managing outbound webhooks. All routes are gated by the `settings.view` (read) and `settings.edit` (mutate) permissions and use the same admin authentication as the rest of the admin panel (cookie or `Authorization: Bearer <jwt>`).
+Admin endpoints for managing outbound webhooks. Reading webhooks and deliveries needs `settings.view` or `settings.integrations`; creating, updating, deleting, testing and replaying need `settings.integrations`. All routes use the same admin authentication as the rest of the admin panel (cookie or `Authorization: Bearer <jwt>`).
 
 For payload shape, signature verification, retry semantics, and the deliveries operational view, see the **[Webhooks feature page](../../features/webhooks)**.
 
@@ -52,7 +52,26 @@ The response includes the **plaintext signing secret** in a `secret` field. Save
 
 ### Subscribed event types
 
-`event.created`, `event.published`, `event.archived`, `event.expired`, `photo.uploaded`, `photo.deleted`.
+`event.created`, `event.published`, `event.archived`, `event.expired`, `photo.uploaded`, `photo.deleted`, and on the beta channel from v3.171.0-beta.0 `selection.submitted`.
+
+`selection.submitted` fires when a guest presses **Finish selection** or **Approve edited photos** in a gallery that allows it. Its data carries the `event` and a `submission`:
+
+```json
+{
+  "submission": {
+    "id": 12,
+    "kind": "selection",
+    "guest_name": "Emily",
+    "count": 48,
+    "note": "Please retouch the group shot.",
+    "submitted_at": "2026-10-12T18:04:11.000Z"
+  }
+}
+```
+
+`kind` is `selection` or `approval`; an approval also carries `rejected_count`. `guest_name` and `note` may be `null`. See [Feedback](/features/feedback).
+
+A photo deleted into the [photo trash](/api/photos#trash) fires `photo.deleted` at that moment, not again when the trash is purged.
 
 ## Update a webhook
 

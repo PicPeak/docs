@@ -29,10 +29,13 @@ The script asks a few questions, then shows a summary and asks you to confirm be
 - **Install method** — Docker (recommended) or Native (systemd + SQLite, good for a Raspberry Pi)
 - **Install directory** — Docker only (default `~/picpeak`)
 - **Release channel** — `stable` (default) or `beta`
+- **In-app updates** — Docker only: install a small systemd agent so a super admin can update PicPeak from the browser (default: no). See [In-App Updates](/deployment/self-update)
 - **Domain** — leave blank to run on the local IP over HTTP; you can add a domain later
 - **HTTPS** — with a domain: automatic HTTPS via Caddy (native), your own reverse proxy, or plain HTTP
 - **Admin email** — used for the account you create in the browser
 - **Email / SMTP** — configure now (Gmail, SendGrid, or custom) or skip
+
+Without a domain the install runs over plain HTTP, and the summary asks you to confirm that risk separately (default: no) before anything is installed.
 
 ### Let it install
 
@@ -58,19 +61,27 @@ Open the admin URL, paste the token, and set your email + password. See [First L
 
 Pass `--unattended` plus flags to install without any prompts — useful for automation, CI, or a NAS. The script fails fast on impossible combinations (e.g. `--enable-ssl` without `--domain`).
 
+An unattended install without a domain runs over plain HTTP and stops with an error unless you pass `--allow-insecure-http`. Prefer `--domain` with a TLS reverse proxy; use `--allow-insecure-http` only on a trusted network while you prepare one.
+
 <Tabs items={['Browser-first admin', 'Seeded admin (headless)']}>
 <Tabs.Tab>
 The stack comes up unattended; you finish by creating the admin in the browser (the setup token is printed / saved to `data/SETUP_TOKEN`).
 
 ```bash
-sudo ./picpeak-setup.sh --docker --unattended --email admin@example.com
+# behind your own TLS reverse proxy
+sudo ./picpeak-setup.sh --docker --unattended --email admin@example.com \
+  --domain photos.example.com
+
+# or on a trusted LAN over plain HTTP
+sudo ./picpeak-setup.sh --docker --unattended --email admin@example.com \
+  --allow-insecure-http
 ```
 </Tabs.Tab>
 <Tabs.Tab>
 Fully headless — the admin is seeded from the password you pass, so there is no browser step.
 
 ```bash
-sudo ./picpeak-setup.sh --docker --unattended \
+sudo ./picpeak-setup.sh --docker --unattended --domain photos.example.com \
   --admin-password-file /root/picpeak-admin-password --channel beta
 ```
 
@@ -89,17 +100,31 @@ The file holds the password on its first line and must be readable by its owner 
 | `--admin-password PASS` | The same with the password on the command line. Still works, with a warning: the password ends up in the process list and the shell history. |
 | `--domain DOMAIN` | Domain name (enables HTTPS URLs) |
 | `--enable-ssl` | Native only: provision HTTPS via Caddy (requires `--domain`) |
+| `--allow-insecure-http` | Required for an unattended install without a domain. Publishes the frontend on all host interfaces and turns off `Secure` cookies; meant as a temporary override on a trusted LAN |
 | `--install-dir DIR` | Install directory (Docker; default `~/picpeak`) |
 | `--channel CHANNEL` | Image channel: `stable` (default) or `beta` |
 | `--port PORT` | User-facing port |
 | `--smtp-host` / `--smtp-port` / `--smtp-user` / `--smtp-pass-file` | Email configuration. `--smtp-pass-file FILE` reads the SMTP password from a file under the same rules; `--smtp-pass PASS` still works, with the same warning. |
 | `--update` | Update an existing installation |
+| `--enable-self-update` | Docker only: install the [in-app update](/deployment/self-update) host agent and set `PICPEAK_SELF_UPDATE=true`. Works on a new install and together with `--update`. Needs a backend that supports in-app updates (beta channel from v3.165.0-beta.0) |
+| `--disable-self-update` | Only together with `--update`: remove the host agent and set `PICPEAK_SELF_UPDATE=false`. Cannot be combined with `--enable-self-update` |
 | `--uninstall` | Remove PicPeak |
 
 ## HTTPS
 
 - **Native + `--domain`** — the script can provision automatic HTTPS with [Caddy](https://caddyserver.com/) (Let's Encrypt).
-- **Docker + `--domain`** — terminate TLS with your own reverse proxy (Traefik, nginx, or a Cloudflare Tunnel) pointed at the frontend port. See [Reverse Proxy](/deployment/reverse-proxy) and [SSL](/deployment/ssl).
+- **Docker + `--domain`** — terminate TLS with your own reverse proxy (Traefik, nginx, or a Cloudflare Tunnel) on the same host, pointed at the frontend port. See [Reverse Proxy](/deployment/reverse-proxy) and [SSL](/deployment/ssl).
+
+What the script writes to `.env` depends on the mode:
+
+| Mode | Frontend port published on | `TRUST_PROXY` | `COOKIE_SECURE` | `ENABLE_HSTS` |
+|---|---|---|---|---|
+| Docker + `--domain` (your reverse proxy) | `127.0.0.1` | `2` | `true` | `true` |
+| Docker, plain HTTP (`--allow-insecure-http`) | `0.0.0.0` | `1` | `false` | `false` |
+| Native + Caddy or your own proxy | the backend listens on `127.0.0.1` | `loopback` | `true` | `true` |
+| Native, plain HTTP | the backend listens on all interfaces | `false` | `false` | `false` |
+
+In the Docker reverse-proxy mode the frontend port is only reachable from the host itself, so the proxy must run on the same host. A proxy on another machine or in a container on another network needs `PICPEAK_BIND_ADDRESS` and `TRUST_PROXY` adjusted; see [Environment Variables → `TRUST_PROXY`](/deployment/environment-variables#trust_proxy).
 
 <Callout type="warning">
 **Putting PicPeak on the internet?** Any public server is probed by automated scanners within minutes. Before you share your first gallery link, read [Bots and Scanners](/deployment/bot-protection): a four-point checklist that takes ten minutes, plus an optional free shield in front of PicPeak. Installs that are only reachable inside your own network can skip it.

@@ -97,3 +97,7 @@ To disable update checks:
 ```env
 UPDATE_CHECK_ENABLED=false
 ```
+
+## In-app updates
+
+On the beta channel (from v3.165.0-beta.0) a super admin can also apply the update from the admin UI, if the install has opted in. The update always goes to the newest image of the channel set in `PICPEAK_CHANNEL`; it never switches channels and never downgrades. See [In-App Updates](/deployment/self-update).

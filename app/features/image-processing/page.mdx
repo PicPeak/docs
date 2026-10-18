@@ -58,9 +58,32 @@ Larger pre-rendered version used as the gallery hero image (the big photo at the
 |---|---|
 | Dimensions | 1920 × 1080, fit `cover` |
 | Quality | 85 (JPEG) |
-| EXIF | **Not** stripped (used for capture-date display in some themes) |
+| EXIF | Stripped, like thumbnails and previews (see [Metadata in derived images](#metadata-in-derived-images)) |
 | Path | `hero/{photo_id}_hero.{ext}` |
 | Focal point | Per-event setting (e.g. `top`, `center`, `bottom`, or `35% 60%`). Defaults to `center`. Used by Sharp's `extract` to pick which part of a tall photo to use as the landscape hero. |
+
+## Metadata in derived images
+
+Thumbnails, previews and hero images — what the gallery shows in the browser, including the public link-preview cover — carry **no EXIF, GPS, XMP or IPTC** data. Orientation is applied to the pixels before encoding, so photos still display upright.
+
+Downloads are the opposite: a download keeps the photo's **EXIF, XMP and IPTC** (photographer, copyright, GPS and so on). The stored original is never re-encoded, and a download that is re-encoded — resized to the gallery's download standard, a picked resolution, or watermarked — keeps the metadata too, with the Orientation tag reset to match the rotated pixels and the original's colour profile retained. A watermarked copy shown *in* the gallery (not downloaded) is stripped.
+
+<Callout type="info">
+Before v3.174.2-beta.0 (beta channel), thumbnails, previews and heroes still contained the source's EXIF, GPS included, because of a Sharp behaviour change. Stable strips them from v3.134.7 on (downloads keep their metadata from v3.133.6), but has no automatic clean-up of renditions written before it — use the regenerate actions under [Settings → Thumbnails](/guides/admin-settings/thumbnails) to rebuild thumbnails and previews.
+</Callout>
+
+### Background rendition refresh
+
+On the beta channel from v3.174.2-beta.0, renditions written before the stripping are rebuilt once in the background after the upgrade:
+
+- It starts about 30 seconds after boot (`RENDITION_REFRESH_DELAY_MS`, default `30000`) and runs on one replica only; it resumes after a restart.
+- Link-preview cover photos go first, then every live photo of every non-archived gallery. Videos are skipped; originals and downloads are not touched.
+- One photo at a time, with a pause between photos (`RENDITION_REFRESH_PAUSE_MS`, default `200`), and it waits while uploads are being processed. Expect a few hundred milliseconds per photo, more on S3 or a NAS.
+- Per photo it rebuilds the thumbnail, preview and hero, and deletes the cached size variants. A photo that fails, or is in the trash, is retried on the next pass.
+- Until its cover has been rebuilt, the public link-preview cover endpoint regenerates an old cover on first request, and answers `404` instead of the old file if that fails.
+- A files-only or selective restore marks the restored photos for another pass; a full or database restore triggers a pass after its migrations.
+
+Progress: `GET /api/admin/photos/refresh-renditions/status` (needs `system.manage`) and backend log lines starting with `Rendition refresh`. Set `RENDITION_REFRESH_DISABLED=true` to skip it. See [Environment variables](/deployment/environment-variables).
 
 ## Watermarking
 
@@ -74,13 +97,11 @@ Watermarking happens **on demand**, every time the user clicks Download. The wat
 
 Thumbnails are **not** watermarked by default — the brand logo is too large relative to a 300 px thumbnail to read clearly. Enable per-event "Watermark thumbnails" if you specifically want that.
 
-## Protected-image rendering
+## Protection levels
 
-When the per-event protection level is `enhanced` or `maximum`, the served image goes through `secureImageService.processProtectedImage`:
+The server treats `basic`, `standard` and `enhanced` alike: they serve the normal photo and preview files. Canvas rendering and DevTools detection happen in the browser. There is no fingerprinting or tile fragmentation.
 
-- **Fingerprint overlay** — invisible per-session pattern that lets you correlate a leaked image back to a specific viewer (only at `maximum`).
-- **Canvas rendering** — image is delivered as a `<canvas>` payload, not an `<img>` tag.
-- **Fragmentation** (`maximum` only) — image split into N×N tiles and reassembled client-side.
+At `maximum` (beta channel, from v3.175.0-beta.0) the full-size photo route and the preview route answer a per-request copy cut from the stored preview: it fits inside 1920 × 1080, is re-encoded at quality 60, carries no EXIF, and the route answers `503` when the image workers are busy. Videos and downloads are not capped.
 
 See [Image Security](/guides/admin-settings/image-security) for the per-level breakdown.
 
@@ -102,4 +123,5 @@ See [Video Support](/features/video-support) for upload limits and reverse-proxy
 - `backend/src/services/imageProcessor.js` — Sharp pipeline + EXIF
 - `backend/src/services/videoProcessor.js` — FFmpeg pipeline
 - `backend/src/services/watermarkService.js` — composite logic
-- `backend/src/services/secureImageService.js` — fingerprint, canvas, fragmentation
+- `backend/src/services/renditionRefresh.js` — background rebuild of renditions written before EXIF stripping
+- `backend/src/services/galleryAssetPolicy.js` — the `maximum` protection cap

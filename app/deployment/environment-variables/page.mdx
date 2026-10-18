@@ -8,16 +8,45 @@ Complete reference for all PicPeak environment variables. Set these in the `.env
 Avoid `$` characters in passwords. Docker Compose interprets `$` as variable substitution. Either omit `$` entirely or escape it as `$$`.
 </Callout>
 
+Unless a section says otherwise, a variable works the same on the stable and the beta channel. Sections marked **beta channel only** describe features that are not in a stable release yet.
+
 ## Core
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `NODE_ENV` | No | `production` | Environment mode |
-| `JWT_SECRET` | **Yes** | --- | Authentication secret. Generate with `openssl rand -base64 64` |
+| `JWT_SECRET` | **Yes** (generated in Docker) | --- | Authentication secret. The Compose stack and the all-in-one image generate one on first start when it is unset and reuse it from their secrets volume. If you set it yourself it must be at least 32 characters, and the example values from older `.env` files are refused: the backend stops at startup with a message saying so. Generate one with `openssl rand -hex 32` |
 | `TZ` | No | `UTC` | Timezone |
 | `SHUTDOWN_TIMEOUT_MS` | No | `8000` | Backend shutdown deadline in milliseconds after `SIGTERM` or `SIGINT`; forces an exit when exceeded. Set in the backend container's environment and keep below Docker Compose's `stop_grace_period`. See [Stopping and restarting](/deployment/docker#stopping-and-restarting). |
-| `TRUST_PROXY` | No | `loopback, linklocal, uniquelocal` | Which upstream proxies PicPeak trusts for `X-Forwarded-For` / `X-Forwarded-Proto`. Accepts any Express `trust proxy` value: a number of hops, `loopback`, `linklocal`, `uniquelocal`, a CIDR, a comma list, or `true`. The default covers Docker networks and private-network proxies. A proxy with a public address needs an explicit entry, otherwise per-IP features such as the [API rate limiter](/guides/admin-settings/security#api-rate-limiting) see the proxy's address for every visitor. |
-| `RATE_LIMIT_NETWORK_MULTIPLIER` | No | `20` | Ceiling on protected-image requests from one network (an IPv4 address or IPv6 /64), as a multiple of the per-device limit; each protected-image endpoint has its own network budget (at the default, 600 lightbox images per minute under enhanced protection). Guests sharing a connection keep their own per-device budgets; this bounds a client that rotates its browser headers to get fresh ones. A value below 1 or not a number falls back to 20. Raise it for very large events where many guests share one address. Guest feedback has its own fixed per-network budget and is not affected. Suspicious-activity detection likewise counts an IPv6 /64 as one client. Available on the beta channel in builds containing PicPeak/picpeak PR 1575. |
+| `TRUST_PROXY` | No | Compose: `1`; all-in-one image: `0`; unset: legacy private-range trust | How many reverse-proxy hops in front of the backend PicPeak trusts for `X-Forwarded-For` / `X-Forwarded-Proto`. See [`TRUST_PROXY`](#trust_proxy) below. |
+| `EMAIL_QUEUE_ENCRYPTION_KEY` | No | `JWT_SECRET` | Encrypts invitation, password-reset and temporary-password variables, and gallery passwords and client PINs, while their emails wait in the queue. At least 32 characters (`openssl rand -hex 32`). Keep it unchanged while such mail is pending: a changed or lost key makes those queued messages fail instead of sending. If you rotate `JWT_SECRET`, set this to the old value first or let the queue drain |
+
+### `TRUST_PROXY`
+
+PicPeak keys rate limits, login lockouts and audit addresses on the client IP, and decides from `X-Forwarded-Proto` whether a request arrived over HTTPS. Both headers are only believed from proxies inside the `TRUST_PROXY` boundary. The value is anything Express' `trust proxy` setting accepts: a number of hops, `loopback`, `linklocal`, `uniquelocal`, a CIDR, a comma list, `true`, or `false`/`0`.
+
+| Deployment | Default | Set it to |
+|---|---|---|
+| Compose stack, clients reach the frontend port directly | `1` (the bundled frontend nginx) | Leave it |
+| Compose stack behind another reverse proxy (Traefik, Nginx Proxy Manager, Caddy, Cloudflare Tunnel) that forwards to the frontend port | `1` | `2` |
+| All-in-one image, clients reach the container directly | `0` (no proxy inside the image) | Leave it |
+| All-in-one image behind a reverse proxy | `0` | `1`, plus one for each further proxy in front |
+| Native install, or an older compose file that does not set it | Legacy: trust loopback and every private-range address, with a warning at startup | The exact number of proxies in front of the backend, or `false` when there is none |
+
+With too low a value every visitor appears under the proxy's address: one shared rate-limit budget, and five failed logins from anyone lock out logins for everyone for 15 minutes. With too high a value a client can choose its own address through `X-Forwarded-For`. A hop count is only safe when clients cannot take a shorter path to the app; that is why the Compose stack publishes the backend port on host loopback only. Never use `true` unless every path to the app crosses a proxy you control.
+
+When `TRUST_PROXY` is `1` and a request shows another private-range proxy in front of the bundled nginx, the backend logs one warning per process suggesting `2`. See [Reverse Proxy → Client IP](/deployment/reverse-proxy#client-ip-rate-limiting-and-trust_proxy).
+
+## Network and transport
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PICPEAK_BIND_ADDRESS` | No | `0.0.0.0` | Compose: host address the frontend port is published on. Set `127.0.0.1` when a TLS reverse proxy on the same host fronts PicPeak, so the plain-HTTP port is not reachable around the proxy. The installer writes `127.0.0.1` in reverse-proxy mode |
+| `PICPEAK_BACKEND_BIND_ADDRESS` | No | `127.0.0.1` | Compose: host address the raw backend port (`BACKEND_PORT`) is published on. The frontend reaches the backend over the Compose network, so nothing else needs it. Set `0.0.0.0` only when something on another host must reach the backend port directly, and set `TRUST_PROXY` to match |
+| `LISTEN_HOST` | No | every interface | Address the Node process listens on. For a native install whose reverse proxy runs on the same host, set `127.0.0.1`; the installer does this in its TLS modes |
+| `ENABLE_HSTS` | No | `false` | `true` sends `Strict-Transport-Security` (one year, subdomains, preload) and `upgrade-insecure-requests`. Only for installs that are reached over HTTPS exclusively. The installer sets it in its TLS modes |
+| `INTEGRATION_PRIVATE_ORIGINS` | No | --- | Comma-separated exact origins (scheme, host, port) of analytics servers and OIDC identity providers on a private network, for example `http://umami:3000,https://idp.internal`. Without an entry PicPeak refuses private, loopback and similar addresses for these integrations. Cloud metadata addresses stay blocked even when listed |
+| `MAIL_PRIVATE_ENDPOINTS` | No | --- | Comma-separated `smtp://host:port` and `imap://host:port` entries for mail servers on a private, loopback or carrier-grade NAT (Tailscale) address. The `SMTP_HOST`/`SMTP_PORT` pair from the environment is trusted on its own (port `1025` when `SMTP_PORT` is unset); any other private mail server, including one changed in the admin UI, is refused until it is listed. Metadata, link-local and reserved addresses stay forbidden. An invalid entry is ignored with one error in the log |
 
 ## Authentication cookies
 
@@ -25,7 +54,7 @@ Admin, gallery, and guest sessions are carried in HTTP cookies. These variables 
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `COOKIE_SECURE` | No | follows `NODE_ENV` (production → `true`) | `true`, `false`, or `auto` — see below |
+| `COOKIE_SECURE` | No | `auto` in production, `false` in development | `true`, `false`, or `auto` — see below |
 | `COOKIE_SAMESITE` | No | `Lax` | `Lax`, `Strict`, or `None` |
 | `COOKIE_DOMAIN` | No | --- | Set to `.example.com` only if serving cookies across subdomains |
 
@@ -33,35 +62,29 @@ Admin, gallery, and guest sessions are carried in HTTP cookies. These variables 
 
 | Value | Behavior | When to use |
 |---|---|---|
-| _(unset)_ | Follows `NODE_ENV` — `true` in production, `false` in development | Default. Fine for typical HTTPS-only deployments |
-| `true` | Always set the `Secure` flag (HTTPS-only cookies) | Explicit HTTPS-only deployments |
+| _(unset)_ | `auto` when `NODE_ENV=production`, `false` otherwise | Default. Works for HTTPS and plain-HTTP installs |
+| `auto` | Decide per request: `Secure` on HTTPS, not on HTTP | Mixed HTTPS + LAN HTTP access (see below) |
+| `true` | Always set the `Secure` flag (HTTPS-only cookies) | Recommended once the site is only ever reached over HTTPS. Login over plain HTTP no longer works |
 | `false` | Never set the `Secure` flag | Local/LAN-only deployments with no HTTPS |
-| `auto` | Decide per request based on the actual protocol | Mixed HTTPS + LAN HTTP access (see below) |
+
+The value is trimmed and case-insensitive; `1`/`yes`/`on` mean `true` and `0`/`no`/`off` mean `false`. Any other value is treated as `auto`, with one warning in the log at startup. The Compose files pass `COOKIE_SECURE=${COOKIE_SECURE:-auto}`. The installer writes `true` for installs behind a TLS proxy and `false` for plain-HTTP installs.
 
 ### Mixed HTTPS/HTTP deployments (`COOKIE_SECURE=auto`)
 
 A common self-hosted setup:
 
 - **Public**: HTTPS via a reverse proxy like Nginx Proxy Manager, Traefik, or Caddy (e.g. `https://photos.example.com`)
-- **LAN**: Plain HTTP on a private address (e.g. `http://192.168.1.50:3001`) for admin access without going through the proxy
+- **LAN**: Plain HTTP on a private address (e.g. `http://192.168.1.50:3000`, the frontend port) for admin access without going through the proxy
 
-With a static `COOKIE_SECURE=true`, LAN login breaks because browsers refuse to send `Secure` cookies over HTTP. With `COOKIE_SECURE=false`, HTTPS login loses the security of the `Secure` flag. The `auto` value fixes this by deciding the `Secure` flag per request — the backend reads `req.secure` from Express, which reflects the `X-Forwarded-Proto` header forwarded by your reverse proxy.
+With `COOKIE_SECURE=true`, LAN login breaks because browsers refuse to send `Secure` cookies over HTTP. With `COOKIE_SECURE=false`, HTTPS login loses the security of the `Secure` flag. `auto`, the production default, decides the `Secure` flag per request — the backend reads `req.secure` from Express, which reflects the `X-Forwarded-Proto` header forwarded by your reverse proxy.
 
 <Callout type="info">
 **Requirements for `auto` mode:**
 1. **Your reverse proxy must forward `X-Forwarded-Proto: https`** on HTTPS requests. Nginx Proxy Manager, Traefik, and Caddy do this by default. Custom Nginx configs need `proxy_set_header X-Forwarded-Proto $scheme;`.
-2. **Your proxy must be on a trusted IP range.** PicPeak trusts `loopback, linklocal, uniquelocal` (127.0.0.1, 10.x, 172.16–31.x, 192.168.x, link-local, ULA). This covers Docker networks and most self-hosted setups. Proxies outside those ranges won't have their `X-Forwarded-Proto` honored.
+2. **Your proxy must be inside the [`TRUST_PROXY`](#trust_proxy) boundary.** In the Compose stack that means `TRUST_PROXY=2` when a proxy forwards to the frontend port; on the all-in-one image `TRUST_PROXY=1`. A proxy outside the boundary is not believed, every request counts as plain HTTP, and cookies lose their `Secure` flag.
 </Callout>
 
-Example `.env` entry:
-
-```bash
-COOKIE_SECURE=auto
-```
-
-<Callout type="warning">
-`auto` is **opt-in**. The default behavior (following `NODE_ENV`) is unchanged — existing deployments see no difference unless they explicitly set `COOKIE_SECURE=auto`.
-</Callout>
+The backend port (`3001`) is published on host loopback only, so LAN access goes through the frontend port. To reach the backend port from another machine, set `PICPEAK_BACKEND_BIND_ADDRESS`.
 
 ## Database
 
@@ -71,14 +94,22 @@ COOKIE_SECURE=auto
 | `DB_HOST` | No | `postgres` | PostgreSQL host (defaults to bundled container) |
 | `DB_PORT` | No | `5432` | PostgreSQL port |
 | `DB_USER` | No | `picpeak` | Database username |
-| `DB_PASSWORD` | **Yes** | --- | Database password |
+| `DB_PASSWORD` | **Yes** (generated in Docker) | --- | Database password. The Compose stack generates one on first start when it is unset |
 | `DB_NAME` | No | `picpeak_prod` | Database name |
+| `DB_SSL` | No | `false` | `true` connects to PostgreSQL over TLS and verifies the certificate and the host name — in the application, at startup, and for backup dumps and restores. The bundled database has no TLS, so leave it off for the default Compose stack. `1`/`yes`/`on` and `0`/`no`/`off` are accepted; any other value stops the backend at startup |
+| `DB_SSL_CA` | No | --- | CA for a private or self-signed server certificate: PEM text, or the path of a read-only file mounted into the container |
+| `DB_SSL_REJECT_UNAUTHORIZED` | No | `true` | `false` accepts any certificate. Insecure; prefer `DB_SSL_CA` |
+| `DB_SSL_SERVERNAME` | No | --- | Name on the certificate when it is not `DB_HOST` (for example when `DB_HOST` is an IP address or a Compose alias). The application verifies this name. `psql`/`pg_dump` (startup, backups, restores) verify it too when `DB_HOST` is an IP address; for a DNS `DB_HOST` they verify the CA chain only, so pair it with `DB_SSL_CA` |
+
+<Callout type="warning">
+`DB_SSL=true` used to encrypt without checking the certificate. It now verifies certificate and host name (beta from v3.167.2-beta.0, stable from v3.134.2). An external database with a self-signed or private-CA certificate needs `DB_SSL_CA` (or, if you accept the risk, `DB_SSL_REJECT_UNAUTHORIZED=false`) before you upgrade, or the backend cannot connect.
+</Callout>
 
 ## Redis
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `REDIS_PASSWORD` | **Yes** | --- | Redis password |
+| `REDIS_PASSWORD` | **Yes** (generated in Docker) | --- | Redis password. The Compose stack generates one on first start when it is unset |
 
 ## Admin account
 
@@ -99,6 +130,8 @@ COOKIE_SECURE=auto
 | `SMTP_PASS` | No | --- | SMTP password or API key |
 | `EMAIL_FROM` | No | `noreply@picpeak.local` | Sender email address |
 
+A mail server on a private address needs an entry in [`MAIL_PRIVATE_ENDPOINTS`](#network-and-transport) unless it is the `SMTP_HOST`/`SMTP_PORT` pair set here.
+
 ## Application URLs
 
 | Variable | Required | Default | Description |
@@ -112,10 +145,10 @@ COOKIE_SECURE=auto
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `BACKEND_PORT` | No | `3001` | Host port for the backend |
-| `FRONTEND_PORT` | No | `3000` | Host port for the frontend |
-| `DB_PORT` | No | `5432` | Host port for PostgreSQL |
-| `REDIS_PORT` | No | `6379` | Host port for Redis |
+| `BACKEND_PORT` | No | `3001` | Host port for the backend, published on `PICPEAK_BACKEND_BIND_ADDRESS` (host loopback by default) |
+| `FRONTEND_PORT` | No | `3000` | Host port for the frontend, published on `PICPEAK_BIND_ADDRESS` (all interfaces by default) |
+| `DB_PORT` | No | `5432` | Host port for PostgreSQL. Only the source-build `docker-compose.yml` publishes it, on `127.0.0.1`; the production compose file does not publish PostgreSQL |
+| `REDIS_PORT` | No | `6379` | Host port for Redis. Only the source-build `docker-compose.yml` publishes it, on `127.0.0.1` |
 
 ## Storage
 
@@ -124,6 +157,8 @@ COOKIE_SECURE=auto
 | `APP_STORAGE` | No | `./storage` | Host path for storage |
 | `APP_DATA` | No | `./data` | Host path for application data |
 | `LOGS` | No | `./logs` | Host path for logs |
+| `APP_BACKUP` | No | `./backup` | Host path mounted at `/backup` for the built-in local backups. Keep it outside `APP_STORAGE`, or the backup would include itself. In the production compose file from v3.142.1-beta.0 (the compose file on the stable branch does not mount `/backup` yet) |
+| `APP_UPDATE` | No | `./update` | Host path for the request and status files of [in-app updates](/deployment/self-update). Its `request/` and `status/` folders are created on the next `docker compose up -d` even when the feature stays off. Beta compose file only |
 | `EXTERNAL_MEDIA_ROOT` | No | Auto-detected or set by Compose | Library path visible to the backend process. In Docker, set this to the container-side path of the read-only mount; see [External Media configuration](/features/external-media#configuration). |
 
 ## External-folder watching
@@ -144,12 +179,19 @@ All interval values are in milliseconds. The updated bundled Compose files forwa
 
 The watcher uses the local `EXTERNAL_MEDIA_ROOT` with both local and S3 storage backends. These settings do not configure the managed-storage file watcher or the S3 prefix walker.
 
-## Docker user mapping
+## Watch-folder import
+
+The managed-storage file watcher (local storage only).
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PUID` | No | `1001` | Container user UID |
-| `PGID` | No | `1001` | Container user GID |
+| `FILE_WATCHER_CONCURRENCY` | No | `2` | Photos processed in parallel. Raise it on hosts with memory to spare, lower it to `1` on very small hosts |
+| `FILE_WATCHER_STABILITY_MS` | No | `2000` | How long a new file must stop growing before it is imported. Raise it on a slow NAS or a camera tether that writes in bursts. Beta channel only |
+| `FILE_WATCHER_POLL_INTERVAL_MS` | No | `100` | How often that is checked. Beta channel only |
+
+## Docker user mapping
+
+`PUID` and `PGID` are no longer read. The backend container starts as root, hands its bind mounts to UID 1001 and drops privileges; to run as another UID, pin `user:` in a compose override. See [Docker → Permissions](/deployment/docker#permissions).
 
 ## Social link preview fallback
 
@@ -167,19 +209,97 @@ Used for the static HTML title and meta description on the SPA shell — the fal
 | `PICPEAK_CHANNEL` | No | `stable` | Image tag: `stable`, `beta`, or a specific version |
 | `UPDATE_CHECK_ENABLED` | No | `true` | Show update notifications in admin dashboard |
 
-## Analytics
+## In-app updates
+
+Beta channel only (from v3.165.0-beta.0). Off by default. See [In-App Updates](/deployment/self-update).
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `VITE_UMAMI_URL` | No | --- | Umami analytics server URL |
-| `VITE_UMAMI_WEBSITE_ID` | No | --- | Umami website ID |
-| `VITE_UMAMI_SHARE_URL` | No | --- | Umami public share URL |
+| `PICPEAK_SELF_UPDATE` | No | off | `true` turns the feature on. Any other value, including unset, keeps it off and the update dialogs unchanged. `picpeak-setup.sh --enable-self-update` sets it |
+| `PICPEAK_SELF_UPDATE_REQUEST_TTL_MINUTES` | No | `10` | How long a filed update request waits for the updater before the backend withdraws it |
+| `COMPOSE_PROFILES` | Container updater | --- | `updater` starts the updater container. Only for the container packaging |
+| `PICPEAK_PROJECT_DIR` | Container updater | --- | Absolute host path of the directory with `docker-compose.production.yml`. Must be the real host path; the updater refuses to run on a mismatch |
+| `PICPEAK_UPDATER_TAG` | No | `1` | Tag of `ghcr.io/picpeak/picpeak/updater`. `1` follows the latest 1.x; set an exact version such as `1.0.0` to pin it |
+| `PICPEAK_UPDATER_REQUEST_MAX_AGE` | No | `15` | Read by the updater, not the backend: minutes a request may be old before the updater discards it instead of updating |
+
+## Analytics
+
+Umami and Rybbit are configured under **Settings → Analytics**, not in the environment. The build-time `VITE_UMAMI_URL`, `VITE_UMAMI_WEBSITE_ID` and `VITE_UMAMI_SHARE_URL` are no longer read. See [Analytics](/guides/admin-settings/analytics).
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ANALYTICS_ALLOW_INSECURE_HTTP` | No | `false` | `true` allows an `http://` analytics collector. Ignored when `NODE_ENV=production`: production collectors must use HTTPS |
 
 ## Public landing page
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `PUBLIC_SITE_CACHE_TTL_MS` | No | `60000` | Cache TTL for the landing page in milliseconds |
+
+## Upload limits
+
+Limits on what the server admits, set as JSON in the backend environment and applied after a restart. Empty means the defaults; omitted keys keep their default. Sizes are integer bytes, counts positive integers. Unknown keys and zero, negative or fractional values are refused. The defaults are the same on the stable and the beta channel. The full reference is [`docs/PUBLIC_UPLOAD_LIMITS.md`](https://github.com/PicPeak/picpeak/blob/main/docs/PUBLIC_UPLOAD_LIMITS.md) in the code repository.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PUBLIC_UPLOAD_LIMITS_JSON` | No | see below | Limits on **public** uploads only: gallery guests and PicTransfer file requests. Photographer, admin, API and import uploads never count |
+| `ADMIN_UPLOAD_LIMITS_JSON` | No | see below | Authenticated uploads (admin UI, API token, resumable uploads, PicTransfer files). These are never rate-limited or charged; only what is in flight at once is bounded |
+
+Public defaults: one request carries at most 95 MiB (never less than one file of the configured maximum size). Lifetime allowances, which deleting a file does not give back:
+
+| Scope | Lifetime | Concurrent requests | Per hour |
+|---|---|---|---|
+| Gallery | 50 GiB / 20,000 files | 16 | 20 GiB |
+| Guest | 50 GiB / 20,000 files | 16 | 20 GiB |
+| File request | 50 GiB / 20,000 files | 4 | 20 GiB |
+| Account | 500 GiB / 200,000 files | 32 | 100 GiB |
+| Deployment | unlimited (free-disk headroom) | 64 | 200 GiB |
+
+Admin defaults: at most the smaller of 50 GiB and 25% of free space staged at once, 50,000 staged files, 16 concurrent requests per admin account, 64 per deployment, 10 minutes per request or chunk. Both profiles keep 512 MiB and 1,024 inodes free (inodes only where the filesystem counts them); `headroomPercent` additionally keeps a share of the volume free and is off by default.
+
+```dotenv
+PUBLIC_UPLOAD_LIMITS_JSON={"requestBytes":209715200,"gallery":{"bytes":107374182400}}
+ADMIN_UPLOAD_LIMITS_JSON={"stagedBytes":214748364800,"accountRequests":32}
+```
+
+Larger request bodies also need matching limits in your reverse proxy.
+
+## Image and media processing
+
+Image parsing and transforms run in a small pool of worker processes outside the backend; `ffmpeg`, `ffprobe` and `exiftool` run under a process guard where the host supports it (Linux with the native build, which the Docker images include). The backend logs one line at startup saying which protections are active. All overrides must be positive integers. Defaults accept what earlier versions accepted. The full reference is [`docs/MEDIA_PROCESSING.md`](https://github.com/PicPeak/picpeak/blob/main/docs/MEDIA_PROCESSING.md).
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `IMAGE_WORKER_MEMORY_MIB` | No | a quarter of host/container memory, 768 MiB to 4 GiB | Memory limit per image worker. At most two workers run, within half the memory |
+| `IMAGE_MAX_PIXELS` | No | `268402689` | Largest image in pixels. An image over a limit is refused at upload with a message naming it |
+| `IMAGE_MAX_DIMENSION` | No | `65535` | Largest width or height in pixels |
+| `IMAGE_MAX_FRAMES` | No | no limit | Most frames (animated images) |
+| `IMAGE_MAX_DECODED_MIB` | No | no limit | Largest decoded size |
+| `IMAGE_MAX_INPUT_MIB` | No | no limit | Largest input file |
+| `IMAGE_WORKER_QUEUE_LENGTH` | No | `256` | Waiting jobs before on-demand thumbnail/preview requests are answered `503` with `Retry-After`. Queued uploads wait instead of being refused |
+| `IMAGE_WORKER_TIMEOUT_MS` | No | `120000` | Time limit per job, counted from when it starts |
+| `MEDIA_PROCESS_CONCURRENCY` | No | `2` | `ffprobe`/`ffmpeg`/`exiftool` jobs at once |
+| `MEDIA_PROCESS_QUEUE_LENGTH` | No | `256` | Waiting media jobs |
+| `MEDIA_WORKER_MEMORY_MIB` | No | `2048` | Memory limit under the guard for `ffprobe`, `exiftool` and poster frames |
+| `MEDIA_FFMPEG_MEMORY_MIB` | No | no limit | Memory limit under the guard for a transcode |
+| `MEDIA_FFMPEG_THREADS` | No | CPU count, at most 4 | `ffmpeg` threads |
+| `MEDIA_PROBE_TIMEOUT_MS` / `MEDIA_RAW_TIMEOUT_MS` | No | `30000` | Time limits for a probe and a RAW preview |
+| `MEDIA_THUMBNAIL_TIMEOUT_MS` | No | `60000` | Time limit for a video poster frame |
+| `MEDIA_MAX_SNAPSHOT_MIB` | No | `1024` | Private input copies staged at once; a larger file is read where it is |
+| `MEDIA_MAX_VIDEO_PIXELS` / `MEDIA_MAX_VIDEO_DIMENSION` / `MEDIA_MAX_VIDEO_STREAMS` / `MEDIA_MAX_VIDEO_FPS` | No | `40000000` / `16384` / `16` / `240` | Video limits. A video over one keeps its original and gets the placeholder tile with a note |
+| `MEDIA_MAX_INPUT_MIB` / `MEDIA_MAX_VIDEO_OUTPUT_MIB` / `MEDIA_MAX_VIDEO_DURATION_SECONDS` / `MEDIA_MAX_VIDEO_PIXEL_FRAMES` | No | no limit | Optional further video limits |
+| `MEDIA_PROCESS_HOST_ID` | No | `/etc/machine-id`, else a generated id | Host identity for crash recovery. Set it only when several backend processes on one host do not share the data directory |
+| `MEDIA_PROCESS_LEASE_PATH` | No | `<temp>/picpeak-media-leases` | Lease directory for crash recovery; must be on a local filesystem |
+
+### Refreshing old renditions
+
+Beta channel only (from v3.174.2-beta.0). Thumbnails, previews and heroes are written without the photo's EXIF (GPS position, camera, copyright). After the upgrade a background pass rebuilds the renditions written before that, one photo at a time, starting with link-preview covers.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `RENDITION_REFRESH_DISABLED` | No | `false` | `true` skips the pass |
+| `RENDITION_REFRESH_DELAY_MS` | No | `30000` | Wait after startup before the pass begins |
+| `RENDITION_REFRESH_PAUSE_MS` | No | `200` | Pause between photos |
 
 ## Storage backend
 
@@ -202,17 +322,21 @@ See **[Storage Backends](../../features/storage-backends)** for the migration pl
 
 ## Video copies
 
-The worker behind **Browser-playable copies of videos** ([Video Support → Browser playback](/features/video-support#browser-playback)). All optional; the setting itself is switched on in the admin, not here. Builds containing [PicPeak PR #1761](https://github.com/PicPeak/picpeak/pull/1761).
+The worker behind **Browser-playable copies of videos** ([Video Support → Browser playback](/features/video-support#browser-playback)). All optional; the setting itself is switched on in the admin, not here. Builds containing [PicPeak PR #1761](https://github.com/PicPeak/picpeak/pull/1761); beta channel only.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `VIDEO_RENDITION_CONCURRENCY` | No | `1` | Transcodes running at once. One is right for a small server that also serves galleries; each extra worker keeps another core busy. |
 | `VIDEO_RENDITION_POLL_MS` | No | `5000` | How often an idle worker looks for queued videos. |
 | `VIDEO_RENDITION_STUCK_TIMEOUT_MS` | No | `7200000` (2 hours) | A video claimed by a worker that died is queued again after this long. Raise it if a single transcode on your hardware can take longer. |
-| `VIDEO_RENDITION_TIMEOUT_MS` | No | `3600000` (1 hour) | Longest a single transcode may run before it is killed and the video marked failed. |
+| `VIDEO_RENDITION_TIMEOUT_MS` | No | `3600000` (1 hour) | The least time a transcode gets before it is killed and the video marked failed. A longer video gets 20 seconds per second of video, up to `VIDEO_RENDITION_MAX_TIMEOUT_MS`. |
+| `VIDEO_RENDITION_MAX_TIMEOUT_MS` | No | `86400000` (24 hours) | Upper bound for that per-video time limit. |
 | `VIDEO_RENDITION_MAX_EDGE` | No | `1920` | Longest edge of the copy in pixels. Smaller sources are not upscaled. |
 | `VIDEO_RENDITION_CRF` | No | `23` | x264 quality (lower is better and larger). |
 | `VIDEO_RENDITION_DISABLED` | No | `false` | `true` keeps the worker from starting on this instance, for example on a replica that should only serve requests. |
+| `VIDEO_HLS_CONCURRENCY` | No | `1` | Adaptive-streaming transcodes at once. Adaptive streaming is off until switched on under **Settings → General** |
+| `VIDEO_HLS_MAX_DURATION_SECONDS` | No | `1800` | Longest video that gets adaptive streaming; a longer one keeps playing from the original |
+| `VIDEO_HLS_MAX_SOURCE_MIB` | No | `4096` | Largest source file that gets adaptive streaming |
 
 ## Webhooks
 
@@ -226,9 +350,37 @@ See **[Webhooks](../../features/webhooks)** for event catalog, payload shapes, a
 | `WEBHOOK_HTTP_TIMEOUT_MS` | No | `10000` | Per-request timeout |
 | `WEBHOOK_MAX_ATTEMPTS` | No | `5` | Total attempts before a delivery is marked `failed` |
 
+## Incoming mail
+
+Capacity and retention for mail captured from the accounting mailbox and additional mailboxes. The limits apply before a new message is downloaded and never delete mail on the IMAP server. A message refused for capacity or rate stays unread on the server and is fetched by a later poll; the backend logs one warning per mailbox, limit and hour naming the variable. Values must be positive integers; invalid values fall back to the defaults. The full reference is [`docs/incoming-mail-retention.md`](https://github.com/PicPeak/picpeak/blob/main/docs/incoming-mail-retention.md).
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `EMAIL_INTAKE_INSTALLATION_BYTES` | No | `2147483648` (2 GiB) | Shared byte budget for the unhandled intake backlog |
+| `EMAIL_INTAKE_MAILBOX_BYTES` | No | `536870912` (512 MiB) | Byte budget per mailbox |
+| `EMAIL_INTAKE_INSTALLATION_ROWS` | No | `50000` | Shared ceiling on unhandled items |
+| `EMAIL_INTAKE_MAILBOX_ROWS` | No | `10000` | Ceiling per mailbox |
+| `EMAIL_INTAKE_INSTALLATION_PER_HOUR` | No | `1000` | Shared admissions per hour |
+| `EMAIL_INTAKE_MAILBOX_PER_HOUR` | No | `500` | Admissions per hour per mailbox |
+| `EMAIL_INTAKE_SENDER_PER_HOUR` | No | `50` | Admissions per hour for one sender in one mailbox |
+| `EMAIL_INTAKE_RETENTION_DAYS` | No | unset (keep forever) | Opt-in age limit for captured messages and untouched intake documents. A value below 91 is raised to 91 with a warning. Booked, edited or otherwise curated documents are never removed |
+| `EMAIL_INTAKE_METADATA_RETENTION_DAYS` | No | `7` | How long bare refusal/failure records are kept |
+| `EMAIL_INTAKE_MAX_MESSAGE_BYTES` | No | `26214400` (25 MiB) | Largest message; a bigger one is recorded once as an error and marked seen |
+| `EMAIL_INTAKE_MAX_ATTACHMENTS` | No | `25` | Most attachments per message |
+| `EMAIL_INTAKE_MAX_ATTACHMENT_BYTES` | No | `26214400` (25 MiB) | Largest attachment |
+
+## Automatic scene tags
+
+Beta channel only. Uses the same `picpeak-ml` sidecar, `FACE_ML_URL` and `FACE_ML_TOKEN` as face recognition, but has its own feature flag (`autoTagging`) and per-gallery switch, both off by default.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `TAG_PROCESSOR_CONCURRENCY` | No | `1` | Tagging workers in the backend |
+| `TAG_ENCODER_ONNX_URL` / `TAG_ENCODER_ONNX_SHA256` | No | --- | Build arguments for the sidecar image. The published sidecar does not include the tagging model yet; build it with these (see `ml/README.md` in the code repository), or tagged galleries stay queued |
+
 ## Contract signing evidence
 
-See **[Contracts](/features/crm/contracts)**.
+Beta channel only. See **[Contracts](/features/crm/contracts)**.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -263,7 +415,7 @@ Back up `PICPEAK_EVIDENCE_KEY` (and any old keys still needed) with your other s
 
 ## Malware scanner for customer documents
 
-See **[Customer Documents → Malware scanning](/features/customer-accounts/documents#malware-scanning)**. Unset, no scanner is used and customer uploads wait for an admin's review. The bundled compose files have an opt-in ClamAV service: `docker compose --profile clamav up -d`, then set `CLAMAV_HOST=clamav`.
+Beta channel only. See **[Customer Documents → Malware scanning](/features/customer-accounts/documents#malware-scanning)**. Unset, no scanner is used and customer uploads wait for an admin's review. The bundled compose files have an opt-in ClamAV service: `docker compose --profile clamav up -d`, then set `CLAMAV_HOST=clamav`.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -278,9 +430,24 @@ See **[Backup and Restore](/guides/backup-restore)**.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
+| `BACKUP_DIR` | No | `/backup` in the production compose file (from v3.142.1-beta.0); `/data/backup` in the all-in-one image; otherwise unset | A backup root the entrypoint creates and hands to UID 1001 on start. Set it together with a `/backup` mount to keep database dumps at `/backup/database`. See [Where the database dump is written](/guides/backup-restore#where-the-database-dump-is-written) |
+| `BACKUP_MANIFEST_KEY` | No | generated (see below) | Key that signs and verifies backup manifests: 64 hex digits (`openssl rand -hex 32`). A backup whose manifest does not verify is not restored. Keep a copy off the host: a lost key never verifies a backup again. A value that is not 64 hex digits disables signing (with a warning at startup) but still verifies the backups it signed before |
+| `BACKUP_MANIFEST_KEY_FILE` | No | Compose: `/run/secrets/backup_manifest_key`; otherwise `DATA_DIR/backup-manifest.key` (`/data/db/backup-manifest.key` in the all-in-one image) | File holding the key. It must be a private regular file outside the backed-up storage. Compose generates it in the backend's secrets volume; native and all-in-one installs create it with the first backup |
+| `BACKUP_MANIFEST_KEYS_OLD` | No | --- | Earlier 64-hex signing keys, comma-separated, while rotating |
+| `BACKUP_MANIFEST_LEGACY_KEY` | No | --- | The original key string of an older install, for manifests signed before the current format |
+| `BACKUP_MANIFEST_RECOVERY_SHA256` / `BACKUP_MANIFEST_RECOVERY_REASON` | No | --- | One-time approval to restore one **unauthenticated** backup (an unsigned one, or one whose key is lost) after you inspected it offline: the full digest from `backend/scripts/backup-manifest-recovery-digest.js` plus a reason. Restore on an isolated host, then remove both variables |
+| `RESTORE_ALLOWED_ROOTS` | No | --- | Extra directories a restore may read from, separated by `:` (`;` on Windows). By default only the backup destination and the manifest path are allowed |
+| `BACKUP_SSH_KNOWN_HOSTS` | No | `known_hosts` next to the rsync SSH key | `known_hosts` file with the independently verified host key of the rsync destination. Unknown or changed host keys are refused; nothing is trusted on first use |
 | `PICPEAK_IMPORT_MAX_ENTRIES` | No | `2000000` | Most entries (files and directories) a `.picpeak` import may contain; more is refused before extracting |
 | `PICPEAK_IMPORT_MAX_EXPANDED_BYTES` | No | 1 TiB | Most bytes a `.picpeak` import may unpack to. Extraction also stops when the extraction directory runs out of free space |
-| `PICPEAK_IMPORT_MAX_MANIFEST_BYTES` | No | 16 MiB | Largest `manifest.json` a `.picpeak` import may contain |
-| `BACKUP_MANIFEST_REQUIRE_KEYED` | No | off | When `true`, restores refuse unkeyed backup manifests, including manifests without a database dump checksum |
-| `BACKUP_DIR` | No | (unset; `/data/backup` in the all-in-one image) | A backup root the entrypoint creates and hands to UID 1001 on start. Set it together with a `/backup` mount to keep database dumps at `/backup/database`. See [Where the database dump is written](/guides/backup-restore#where-the-database-dump-is-written) |
+| `PICPEAK_IMPORT_MAX_MANIFEST_BYTES` | No | 256 MiB | Largest `manifest.json` a `.picpeak` import may contain |
+| `PICPEAK_IMPORT_MAX_ROW_BYTES` | No | 64 MiB | Largest single database row in a `.picpeak` import |
+| `PICPEAK_RESTORE_DRAIN_GRACE_MS` | No | `60000` | How long running requests may finish before a `.picpeak` restore closes their connections. If work still does not end, the restore is aborted |
+| `PICPEAK_IMPORT_WORKER_MEMORY_MIB` / `PICPEAK_IMPORT_WORKER_TIMEOUT_MS` / `PICPEAK_IMPORT_WORKER_CPU_SECONDS` | No | scaled to the archive; no CPU limit | Override the restore worker's budgets |
 | `LOG_TO_CONSOLE` | No | `false` | When `true`, the backend also logs to the container console, so errors such as a failed database dump appear in `docker compose logs`. Otherwise they go to `logs/error.log` and `logs/combined.log` |
+
+`BACKUP_MANIFEST_REQUIRE_KEYED` is gone: every manifest now needs a key, and a manifest without a valid signature fails closed. `.picpeak` imports need Linux, the native build (included in the Docker images) and `STORAGE_PATH` on a local filesystem; where the host does not qualify, only the import is switched off and one startup log line says why.
+
+<Callout type="warning">
+Keep the backup manifest key separately from the backups, ideally off the host. Without it a backup cannot be authenticated on a fresh host. With Compose, `BACKUP_MANIFEST_KEY` set in `.env` replaces the generated key file; the replaced value is kept in `backup_manifest_key.previous` in the secrets volume so you can list it in `BACKUP_MANIFEST_KEYS_OLD`.
+</Callout>

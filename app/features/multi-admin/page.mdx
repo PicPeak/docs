@@ -10,7 +10,7 @@ The editable roles, the permission matrix and the two preset roles described bel
 
 ## Roles that ship
 
-Six roles exist out of the box. All are marked as system roles, so none of them can be deleted, but all except Super Admin can be edited.
+Seven roles exist out of the box on the beta channel (six on stable, which has no Customer Support). All are marked as system roles, so none of them can be deleted, but all except Super Admin can be edited.
 
 | Role | Intended for |
 |---|---|
@@ -18,16 +18,17 @@ Six roles exist out of the box. All are marked as system roles, so none of them 
 | **Solo Photographer** | A one-person studio: everything an operator needs. |
 | **Admin** | Day-to-day management without system-level settings. |
 | **Editor** | Editing existing events and their photos. |
+| **Customer Support** | Helping gallery clients across every gallery: resend the gallery email, reset the password, extend expiry, reset download limits, moderate feedback and manage guests. Cannot change gallery settings or photos. Beta channel from v3.155.0-beta.0. |
 | **Team Photographer** | A second shooter or assistant: view events, work with photos, look up customers. Nothing else. |
 | **Viewer** | Read-only. |
 
 **Super Admin is protected.** It cannot be edited, and it automatically gains new permissions as features are added — the app re-grants anything missing on every start. That is deliberate: it guarantees at least one account can always reach everything, so an upgrade can never lock you out.
 
-The two preset roles are frozen at the set of permissions that existed when they were introduced. They do **not** pick up permissions from later releases. Treat them as starting points to clone rather than roles that keep pace on their own.
+The preset roles (Solo Photographer, Team Photographer and Customer Support) are frozen at the set of permissions that existed when they were introduced. They do **not** pick up permissions from later releases. Treat them as starting points to clone rather than roles that keep pace on their own.
 
 ## The role editor
 
-**Users** in the sidebar, then the **Roles** tab. It appears only for accounts that can manage roles.
+**Settings → Users** (under *People & access*), then the **Roles** tab. It appears only for accounts that can manage roles. On the beta channel before v3.151.0-beta.0, and on stable, **Users** is a sidebar entry of its own.
 
 From there you can create a role, clone an existing one and trim it, rename it, change its description, toggle individual permissions, and delete a role that no one is using. Each role shows how many permissions it holds and how many users have it.
 
@@ -43,6 +44,7 @@ The editor stops you doing the things that would lock you out or let someone qui
 - You cannot edit your own role, unless you are a Super Admin.
 - You can only grant permissions your own role already holds.
 - Only a Super Admin can assign or invite another Super Admin.
+- Only a Super Admin can change a Super Admin account at all: edit it, reset its password, deactivate, activate or delete it. `users.edit` and `users.delete` do not reach those accounts (beta channel from v3.135.3-beta.0).
 - You cannot change your own role, demote the last Super Admin, or deactivate or delete the last Super Admin account.
 - A role in use cannot be deleted until its users are reassigned.
 - System roles cannot be deleted, and their names are reserved.
@@ -67,11 +69,37 @@ The site URL is protected per field rather than per page: saving the General set
 
 ## Events you do not own
 
-In builds containing [PicPeak PR #1483](https://github.com/PicPeak/picpeak/pull/1483):
+Which galleries an account reaches is decided by three event permissions (beta channel from v3.155.0-beta.0; stable keeps the fixed rule described at the end of this section):
 
-- **Super Admin** and the built-in **Admin** role see every event in the list and on the event page. On an event the account does not own, the share link, client link and share token are withheld, and the Share link card says that only the owner can share it.
-- **Every other role** (Editor, Viewer, Team Photographer, Solo Photographer and custom roles) sees its own events plus events without an owner. Another owner's event answers "not found". The archive list, the dashboard totals and upload status follow the same rule.
+| Permission | Effect |
+|---|---|
+| `events.view_all` | List and read every gallery, not only the account's own and those without an owner. Held by the built-in **Admin** role. |
+| `events.manage_all` | Act on every gallery with whatever event and photo permissions the role holds. Held by **Customer Support**. |
+| `events.support` | The client-help actions: send and resend the gallery email, show and reset the gallery password, extend expiry, reset the download limit, moderate feedback and manage guests. Every role that held `events.edit` was granted it on upgrade, so no role lost or gained an action. |
+
+- **Super Admin** and roles with `events.manage_all` act on every gallery, including its share link.
+- Roles with `events.view_all` only see every event in the list and on the event page. On an event the account cannot act on, the share link, client link, slideshow link and share token are withheld, and the Share link card says that only the gallery owner can see and share it.
+- **Every other role** sees its own events, events without an owner, and galleries it is a team member of (see below). Another owner's event answers "not found". The archive list, the dashboard totals, upload status and the notification bell follow the same rule.
 - Event-specific categories can only be created, renamed, given a cover photo or deleted by an account that can open that event. Global categories are unchanged.
+- `events.manage_all` covers galleries only. Quotes, invoices, contracts, projects and transfers attached to another owner's event stay with that owner.
+
+On stable there are no such permissions: Super Admin and the built-in Admin role see every event (with links withheld for Admin on events it does not own), and every other role sees its own and ownerless events.
+
+## Gallery team
+
+On the beta channel from v3.167.0-beta.0, the owner of a gallery can add other admin accounts as **Team members** in the gallery's settings. A team member reaches that one gallery like its owner, within what their own role allows. The list of accounts to pick from shows other active admins; Super Admin accounts are only listed for a Super Admin.
+
+Some things stay with the **owner** — the gallery's creator, or for a gallery without an owner anyone who can open it, plus Super Admin and roles holding `events.manage_all`. A team member gets `403` for these (a change made through the gallery settings form answers with the code `EVENT_OWNER_REQUIRED`):
+
+- deleting or archiving the gallery,
+- the stored gallery password, the client PIN and password resets, and resending the gallery email,
+- changing who is on the team and whether team uploads are reviewed,
+- changing who receives the gallery email: the customer email, the admin email and the assigned customer accounts (from v3.175.1-beta.0). The settings form shows these read-only to a team member; saving the rest of the form with the stored values unchanged still works,
+- CRM data on the gallery (quotes, invoices, contracts, projects) and transfers.
+
+**Review team uploads.** With **Review team members' uploads before they are published** on, photos uploaded by a team member whose role lacks `photos.review` (*Review Team Uploads*) stay hidden from guests and clients until the owner or a reviewer approves them on the Photos tab. Admin, Editor and Solo Photographer hold `photos.review` by default; Team Photographer does not. A held upload never replaces an existing photo, and a folder import by such a team member is refused with `UPLOAD_REVIEW_REQUIRED`.
+
+Stable has no gallery team.
 
 ## Reserved for Super Admin
 
@@ -91,7 +119,7 @@ A few actions could hand someone Super Admin power or a full copy of the instanc
 
 In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809):
 
-- **Analytics tracker code.** The tracker provider, the Umami and Rybbit URLs and the custom head HTML can only be changed by a Super Admin. They decide which script runs in visitors' browsers, so `settings.integrations` no longer covers them; the other analytics fields are unchanged. See [Analytics](/guides/admin-settings/analytics).
+- **Analytics tracker code.** The tracker provider, the Umami and Rybbit URLs and the custom head HTML can only be changed by a Super Admin. They decide which script runs in visitors' browsers, so `settings.integrations` no longer covers them; the other analytics fields are unchanged. Custom head HTML has since been removed entirely, and on the beta channel the **Honour Do Not Track** switch is Super Admin only as well. See [Analytics](/guides/admin-settings/analytics).
 - **Settings with a screen of their own.** The General, Security, Analytics and SEO save actions refuse keys that belong to another screen — `backup_*`, `database_backup_*`, `rate_limit_*`, `max_image_requests_*`, `ledger_*` and `restore_*` — with `400` and the code `SETTINGS_OWNED_ELSEWHERE`. Change them on the Backup, Security (rate limiting), Image Security, Accounting and Restore screens, which check their own permissions.
 - **Customers on events and projects.** Assigning customer accounts to an event needs `customers.events`, on top of the event permission; without `customers.view` the event page shows no assigned customers. Linking a customer to a project needs `customers.view`, and a role without it does not see the project's customer.
 - **Deal documents.** The deal view lists quotes, contracts and invoices only for the document types the role may view (`quotes.view`, `contracts.view`, `bills.view`).
@@ -102,7 +130,7 @@ In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/
 
 ## Assigning a role
 
-**Users** tab → edit a user → **Role**. Invitations pick a role at creation time.
+**Settings → Users** (on stable, **Users** in the sidebar) → edit a user → **Role**. Invitations pick a role at creation time.
 
 Changes take effect on the next request the server handles, so there is no need to re-issue logins. The affected person may need to reload the page before menus and buttons reflect their new role, because the browser caches the permission list for the session.
 
@@ -120,13 +148,14 @@ What you will notice after upgrading:
 
 - Two new roles, Solo Photographer and Team Photographer, appear in the list.
 - A **Roles** tab appears under Users.
+- On the beta channel from v3.155.0-beta.0, the Customer Support role and the `events.support`, `events.view_all` and `events.manage_all` permissions appear. The built-in Admin role receives `events.view_all`, so it keeps seeing every event.
 - Narrow roles may see fewer Settings tabs than before, because those tabs now have their own permissions.
 
 New permissions from future features default to **off** for every role except Super Admin, so an upgrade never silently widens what your team can do.
 
 ## Managing administrators
 
-**Users** in the sidebar. Create accounts directly or send an invitation, set each one's role, deactivate accounts that should no longer have access, and see who did what in the activity log.
+**Settings → Users** (on stable, **Users** in the sidebar). Create accounts directly or send an invitation, set each one's role, deactivate accounts that should no longer have access, and see who did what in the activity log.
 
 The Users area itself is behind the `userManagement` feature flag, which is on by default.
 

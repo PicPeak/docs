@@ -5,39 +5,69 @@ import { Callout } from 'nextra/components'
 PicPeak ships with **two** distinct analytics tracks:
 
 1. **Built-in analytics** (always on, no third-party calls) — gallery views, photo opens, downloads, unique visitors, device types. Recorded server-side, displayed on the Analytics admin page.
-2. **Umami integration** (optional) — embeds a [Umami](https://umami.is) tracking script in the public pages and galleries so you get a privacy-friendly third-party dashboard alongside the built-in metrics.
+2. **External collector** (optional) — PicPeak forwards sanitized page views and gallery events to your [Umami](https://umami.is) or [Rybbit](https://rybbit.io) instance, so you get a privacy-friendly third-party dashboard alongside the built-in metrics.
 
-This tab only configures #2. The built-in tracking has no admin knobs — you can disable it on the [General Settings](/guides/admin-settings/general) tab via the "Enable analytics tracking" feature toggle.
+This tab only configures #2. The built-in tracking has no admin knobs. The **Enable analytics tracking** toggle on the [General Settings](/guides/admin-settings/general) tab switches off forwarding to the external collector; the built-in metrics keep being recorded.
 
-## Umami settings
+<Callout type="warning">
+**Changed in v3.167.2-beta.0 (beta channel) and v3.134.2 (stable).** PicPeak no longer loads any tracker script in the browser. The Umami or Rybbit script, the custom `<head>` HTML option and the `VITE_UMAMI_*` build variables are gone. Instead the gallery sends events to PicPeak's own endpoint, and the backend forwards them to the collector. A legacy custom snippet is kept in the database but never sent to visitors: the tab shows **Custom scripts disabled** until you choose Umami, Rybbit or None and save, which clears the old snippet.
+</Callout>
 
-| Setting | Default | What it does |
+## Provider settings [#umami-settings]
+
+Pick the collector under **Provider**: **None**, **Umami** or **Rybbit**.
+
+| Setting | Provider | What it does |
 |---|---|---|
-| **Enable Umami** | off | Master toggle. When off, no third-party script is injected. |
-| **Umami URL** | (empty) | Base URL of your Umami instance, e.g. `https://analytics.example.com`. No trailing slash. |
-| **Website ID** | (empty) | UUID of the website you registered in Umami's dashboard. |
-| **Share URL** | (empty) | Optional public share link (e.g. `https://analytics.example.com/share/abc123/Picpeak`). When set, the admin Analytics page links to it. |
+| **Umami URL** / **Rybbit URL** | both | Base URL of your instance, e.g. `https://analytics.example.com` or `https://app.rybbit.io`. In production it must be `https://`; an `http://` URL or an invalid site ID means nothing is forwarded (the backend logs a warning). |
+| **Website ID** / **Site ID** | both | The site's ID from the collector's dashboard. |
+| **Share URL** | Umami | Optional public share link (e.g. `https://analytics.example.com/share/abc123/Picpeak`). The admin Analytics page opens it in a new tab and can embed it; see [Dashboard link and embed](#dashboard-link-and-embed). |
+| **API key** | both | Optional. Only needed for the device-breakdown chart on the Analytics page. Shown masked (`••••••••`) once saved; leave the masked value to keep the stored key. |
+| **Honour Do Not Track** | both | On by default. See [Privacy signals](#privacy-signals). Beta channel only (from v3.169.0-beta.0). |
 
-All three of `URL`, `Website ID`, and the master toggle are required for the script to load. Bad configuration results in a console warning in the browser, not a hard error.
+**Who can change it.** The provider, the collector URLs and **Honour Do Not Track** are saved by a **Super Admin** only. Other roles with access to this tab can still edit the website ID, the share URL and the API keys.
 
-In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809):
+**Collectors on your own network.** In production the backend refuses to forward to a private address (for example `http://umami:3000` in the same Docker network) unless that origin is listed in `INTEGRATION_PRIVATE_ORIGINS`; see [Environment Variables](/deployment/environment-variables).
 
-- **Who can change it.** The tracker provider, the tracker URLs and the custom head HTML are saved by a **Super Admin** only. Other roles with access to this tab can still edit the website ID and the share URL.
-- **Where the tracker runs.** It is never loaded in the admin area, in the customer portal (`/customer`), on short links (`/s/…`) or on pages that are opened with a one-time link: invitations, quotes, contracts, payment checks and transfers. Galleries are tracked, with the share token removed from the recorded path.
-- **Share URL.** The share link is only sent to signed-in admins. It is no longer part of the public settings the gallery loads.
+## What gets forwarded
 
-## What gets tracked
+The browser posts each event to `POST /api/analytics/tracker/events` without cookies or referrer. The backend checks it, builds the collector's payload and sends it on; nothing the collector answers (scripts, cookies, redirects) is passed back to the browser.
 
-The Umami script tracks page views and any `data-umami-event` attributes — PicPeak adds those to the gallery's photo-open and download buttons. Customer email/phone is **never** sent to Umami; only path-based pageviews and event names.
+- **Page views** of the landing page and galleries. A gallery is recorded as `/gallery/<slug>`; anything after the slug, such as a share token, is replaced by `/[redacted]`.
+- **Gallery events** from a fixed list: password entry, photo view, photo download, bulk download, expired gallery, expiry warning shown, search (query length and result count only), and the photo-protection violation events.
+- **Request data**: the visitor's IP address and user agent, the screen size and the browser language. Query strings, page titles, referrers, tokens and account identifiers are never sent. Customer email and phone are never sent.
+
+**Not tracked at all:** the admin area, the customer portal (`/customer`), short links (`/s/…`), the client-access and slideshow pages of a gallery, and pages opened with a one-time link: invitations, quotes, contracts, payment checks and transfers.
+
+## Privacy signals
+
+A visitor whose browser sends **Global Privacy Control** (Brave by default, Firefox can) is never counted: no event leaves the browser, and the backend drops any request carrying `Sec-GPC: 1`. There is no switch for this.
+
+**Do Not Track** is treated the same way by default. On the beta channel (from v3.169.0-beta.0) a Super Admin can untick **Honour Do Not Track** to count those visitors, for example on invite-only galleries; you are then responsible for the legal basis. On stable, Do Not Track is always honoured.
+
+If you test with such a browser after an upgrade, you see no request, no error and no log line. That is expected, not broken analytics.
+
+## Dashboard link and embed
+
+When a share URL is set, the Analytics page offers **Open dashboard in new tab**. That always works.
+
+Embedding the dashboard in the page is stricter, because it must not be able to read PicPeak's login cookies. The embed is only offered when all of these hold:
+
+- the share URL uses `https://` and has no user name or password in it,
+- its host differs from the PicPeak host and the API host, and lies outside the `COOKIE_DOMAIN` scope if one is set,
+- the browser supports credentialless iframes (Chromium-based browsers at the time of writing).
+
+Otherwise the page says the external dashboard cannot be embedded; the built-in statistics stay available. The dashboard's origin must also be in the `frame-src` directive of your reverse proxy's Content-Security-Policy, or the frame stays blank.
 
 <Callout type="info">
-The built-in analytics still run when Umami is enabled — they are independent. You can use both, just one, or neither.
+The built-in analytics still run when a collector is configured — they are independent. You can use both, just one, or neither.
 </Callout>
 
 ## Self-hosted vs hosted
 
-PicPeak does not care where Umami runs. Common options:
+PicPeak does not care where the collector runs, as long as it is reachable over HTTPS (or approved in `INTEGRATION_PRIVATE_ORIGINS`):
 
-- Self-hosted Umami in your own Docker stack (recommended for full data ownership)
-- Umami Cloud (umami.is hosted plans)
-- Any other Plausible/Matomo-compatible script — just paste the equivalent URL/ID into these fields. (Tested with Umami; YMMV with other providers.)
+- Self-hosted Umami or Rybbit in your own Docker stack (recommended for full data ownership)
+- Umami Cloud or the Rybbit SaaS (`https://app.rybbit.io`)
+
+Other analytics tools (Plausible, Matomo, GA4 and so on) are not supported since custom scripts were removed.

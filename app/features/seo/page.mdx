@@ -2,17 +2,23 @@ import { Callout } from 'nextra/components'
 
 # SEO & Robots
 
-PicPeak hosts a private gallery — usually you do **not** want it indexed by Google, scraped by AI training crawlers, or pulled into social-media link previews without your control. The **Settings → SEO & Robots** tab gives you fine-grained control over `robots.txt` and the per-page `<meta name="robots">` tags.
+PicPeak hosts a private gallery — usually you do **not** want it indexed by Google, scraped by AI training crawlers, or pulled into social-media link previews without your control. The **Settings → SEO & Robots** tab gives you control over `robots.txt` and the landing page's `<meta name="robots">` tags. Galleries and all other app pages are never indexable, whatever you set here.
 
 ## Indexing
 
+Only the public landing page at `/` can ever appear in search results, and only while **Allow search engine indexing** is on. Every other page — the admin area, the customer portal, galleries, share and transfer links, short links, setup and legal pages — answers with the HTTP header `X-Robots-Tag: noindex`, whatever the settings say. A gallery cannot be made indexable.
+
 | Setting | Default | What it does |
 |---|---|---|
-| **Allow indexing** | on | When off, `robots.txt` returns `User-agent: *` + `Disallow: /` for every crawler. Most respectful crawlers will skip your site entirely. |
+| **Allow search engine indexing** | off | When off, the landing page also answers `X-Robots-Tag: noindex` (and so does the redirect to the login when the landing page is disabled), and `robots.txt` additionally disallows the media paths `/photos`, `/thumbnails`, `/uploads` and `/og`. When on, the landing page may be indexed. |
 | **Sitemap URL** | (empty) | If set, gets appended as `Sitemap: <url>` at the end of `robots.txt`. Only meaningful if you have a sitemap to point to. |
 
+`robots.txt` never disallows `/`, `/admin`, `/customer` or `/gallery`, even with indexing off. That is deliberate: a crawler only sees a page's `noindex` header if it may fetch the page, and a disallowed URL it knows from a link can stay in the results as a bare URL. Crawlers get the same static app shell every visitor gets; `/api` is always disallowed, so nothing behind a password or login becomes reachable. A URL already in a search index drops out on the next recrawl.
+
+This behaviour is in v3.169.0-beta.0 on the beta channel and v3.134.5 on stable. Earlier builds answered `Disallow: /` with indexing off and always disallowed `/admin`, which kept the login page in search results as a bare URL.
+
 <Callout type="warning">
-`robots.txt` is advisory. It blocks well-behaved crawlers (Google, Bing, modern archive bots) but does not stop a scraper that ignores it. If you have content that *must* not leave your control, also use the [Image Security](/guides/admin-settings/image-security) tab to set protection level `enhanced` or `maximum` on the gallery.
+`robots.txt` and `noindex` are advisory. They stop well-behaved crawlers (Google, Bing, modern archive bots) but not a scraper that ignores them. If you have content that *must* not leave your control, also use the [Image Security](/guides/admin-settings/image-security) tab to set protection level `enhanced` or `maximum` on the gallery.
 </Callout>
 
 ## AI crawler blocking
@@ -21,8 +27,8 @@ The "AI crawlers" toggle blocks the user-agents commonly used for LLM training d
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Block AI crawlers** | off | Adds `Disallow: /` rules for ~15 known AI training bots in `robots.txt`. |
-| **Custom AI agents** | (empty) | Newline-separated list of additional UAs to block. Useful when a new training crawler appears between PicPeak releases. |
+| **Block AI/LLM crawlers** | on | Adds a `Disallow: /` group to `robots.txt` for every user-agent in the list below. |
+| **Blocked AI agents** | 15 agents | The user-agents to block. Starts with GPTBot, ChatGPT-User, Google-Extended, Claude-Web, Anthropic-AI, CCBot, Bytespider, FacebookBot, Omgilibot, Diffbot, PetalBot, Amazonbot, PerplexityBot, YouBot and Applebot-Extended; add an agent when a new training crawler appears between PicPeak releases. |
 
 ## Social bot blocking
 
@@ -51,15 +57,15 @@ User-agent: BadBot
 Disallow: /gallery/
 ```
 
-## Per-page meta tags
+## Landing-page meta tags
 
-In addition to `robots.txt`, PicPeak can inject `<meta name="robots">` into every page so even crawlers that ignore `robots.txt` see the directive in the HTML they fetched.
+In addition to `robots.txt` and the `noindex` header, PicPeak can put `<meta name="robots">` tags into the public landing page. These settings only matter for the landing page: every other page refuses indexing through its header anyway.
 
 | Setting | Default | What it does |
 |---|---|---|
-| **noindex** | off | Adds `<meta name="robots" content="noindex">`. Tells crawlers not to add the page to their index. |
-| **nofollow** | off | Adds `<meta name="robots" content="nofollow">`. Tells crawlers not to follow links from the page. |
-| **noai / noimageai** | off | Adds `<meta name="robots" content="noai, noimageai">`. Newer convention; honored by some AI training pipelines. |
+| **Add noindex meta tag** | on | Adds `<meta name="robots" content="noindex">`. Keeps the landing page out of the index even with indexing allowed; switch it off if you want the landing page found. |
+| **Add nofollow meta tag** | off | Adds `<meta name="robots" content="nofollow">`. Tells crawlers not to follow links from the page. |
+| **Add noai/noimageai meta tag** | on | Adds `<meta name="robots" content="noai, noimageai">`. Newer convention; honored by some AI training pipelines. |
 
 ## Live preview
 
@@ -68,4 +74,5 @@ The tab includes a **Preview** panel that shows you the rendered `robots.txt` ex
 ## Where it's served
 
 - `robots.txt` is served by the backend at `/robots.txt` (proxied through nginx). Cached for 1 hour; saving in the admin invalidates the cache immediately.
-- The meta tags are injected into the `<head>` of the public landing page and the gallery pages.
+- The meta tags are injected into the `<head>` of the public landing page.
+- The `X-Robots-Tag: noindex` header is sent by the frontend nginx for every app page, and by the built-in server of the all-in-one image and native installs. The share-preview pages served to link-preview bots refuse indexing too. If you put your own reverse proxy in front, let it pass the header through.

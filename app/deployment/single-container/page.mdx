@@ -15,7 +15,7 @@ Open **http://localhost:3000/admin** and follow the setup wizard.
 One volume, no environment variables. Everything that has to survive lives under `/data`, and the JWT secret is generated on first start and kept there with the rest.
 
 <Callout type="warning">
-Back up the volume, not just the database. The JWT secret sits in `/data/db/jwt.secret` and the built-in backup does **not** include it — it archives your photos and a database dump. Lose that file and every session and gallery link is invalidated, and an encrypted OIDC client secret can no longer be decrypted. A copy of the whole `/data` volume is what makes the install restorable.
+Back up the volume, not just the database. The JWT secret sits in `/data/db/jwt.secret` and the built-in backup does **not** include it — it archives your photos and a database dump. Lose that file and every session and gallery link is invalidated, and an encrypted OIDC client secret can no longer be decrypted. The key that signs backup manifests sits next to it in `/data/db/backup-manifest.key`; without it a backup cannot be authenticated on a new host, so keep a copy of that file somewhere other than the backups. A copy of the whole `/data` volume is what makes the install restorable.
 </Callout>
 
 <Callout type="info">
@@ -70,7 +70,7 @@ Continue with [Your First Gallery](/getting-started/first-gallery).
 
 | Path | Contents |
 |---|---|
-| `/data/db` | `picpeak.db` (plus `-wal`/`-shm`), `SETUP_TOKEN`, and `jwt.secret` |
+| `/data/db` | `picpeak.db` (plus `-wal`/`-shm`), `SETUP_TOKEN`, `jwt.secret`, and `backup-manifest.key` (created with the first backup) |
 | `/data/storage` | Uploaded originals, thumbnails, previews, and archives |
 | `/data/logs` | Application logs — inside the volume, so they persist by default |
 | `/data/backup` | Output of the built-in backup |
@@ -93,6 +93,8 @@ Nothing is required. Everything has a working default, and the rest of the app i
 | `BRAND_DESCRIPTION` | `Photo gallery shared with PicPeak.` | Meta description for link previews |
 | `PORT` | `3000` | Listening port inside the container |
 | `DATABASE_CLIENT` | `sqlite3` | Set to `pg` to use an external PostgreSQL |
+| `TRUST_PROXY` | `0` | Proxy hops in front of the container. `0` trusts no `X-Forwarded-*` header, which is right when clients reach the container directly. Behind a reverse proxy set `1`, plus one for each further proxy. See [HTTPS](#https) |
+| `COOKIE_SECURE` | `auto` | `Secure` cookie flag per request. Set `true` once the instance is only reached over HTTPS |
 
 Branding, SMTP, storage, and expiry rules are all set in **Admin → Settings** after first login.
 
@@ -125,6 +127,22 @@ The container waits for the database to accept connections before starting, and 
 ## HTTPS
 
 The image serves plain HTTP and does not terminate TLS. For anything reachable from the internet, put a reverse proxy in front — see [Reverse Proxy](/deployment/reverse-proxy) and [SSL Certificates](/deployment/ssl). On a home network reached only over LAN or a VPN, plain HTTP is usually acceptable.
+
+Behind a reverse proxy, pass `-e TRUST_PROXY=1` (one per proxy hop):
+
+```bash
+docker run -d --name picpeak -p 3000:3000 \
+  -v picpeak:/data \
+  -e TRUST_PROXY=1 \
+  ghcr.io/picpeak/picpeak/aio:stable
+```
+
+The image has no proxy inside, so it trusts no forwarding headers by default (`TRUST_PROXY=0`, from v3.134.7 on stable and v3.174.2-beta.0 on beta). Without `TRUST_PROXY=1` behind a proxy:
+
+- every visitor shares the proxy's address, so they share one rate-limit budget and one login lockout;
+- every request counts as plain HTTP: `COOKIE_SECURE=auto` leaves the `Secure` flag off, and links built from the request use `http://` when no site URL is saved.
+
+Do not set it when clients can reach the container port directly as well as through the proxy: a client could then choose its own address through `X-Forwarded-For`.
 
 ## NAS installs [#nas-installs]
 
@@ -160,7 +178,7 @@ docker rm -f picpeak
 # re-run the same `docker run` command
 ```
 
-Migrations run automatically on start. Back up first — see [Backup & Restore](/guides/backup-restore). Tags follow the same channels as the other images: `stable` for releases, `beta` for the beta channel. On a NAS, use the container UI's update or re-pull action instead — the `/data` volume carries over. See [Release Channels](/deployment/release-channels).
+Migrations run automatically on start. If the container sits behind a reverse proxy and you never set `TRUST_PROXY`, add `-e TRUST_PROXY=1` to the `docker run` command when you update to v3.134.7 or later (see [HTTPS](#https)). Back up first — see [Backup & Restore](/guides/backup-restore). Tags follow the same channels as the other images: `stable` for releases, `beta` for the beta channel. On a NAS, use the container UI's update or re-pull action instead — the `/data` volume carries over. See [Release Channels](/deployment/release-channels).
 
 ## Limits
 

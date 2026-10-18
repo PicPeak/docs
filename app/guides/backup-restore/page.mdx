@@ -2,7 +2,7 @@ import { Callout } from 'nextra/components'
 
 # Backup and Restore
 
-PicPeak's built-in backup service runs full or incremental backups on a cron schedule, writes to local disk / rsync / S3-compatible storage, and tracks file checksums so that subsequent runs only upload what changed.
+PicPeak's built-in backup service runs on a cron schedule and writes to local disk, an rsync/SSH server or S3-compatible storage. Each run to a local or S3 destination is a complete, standalone restore point; every manifest is signed with a dedicated key that you must keep separately from the backups.
 
 ## Manual backup (DB + files)
 
@@ -37,10 +37,11 @@ Configure under **Admin → Backup & Restore**.
 | `backup_enabled` | `false` | Master toggle. |
 | `backup_schedule` | (empty) | Cron expression. Either standard (`0 2 * * *` = 2 AM daily) or one of the named presets (see below). |
 | `backup_destination_type` | (required) | `local` / `rsync` / `s3` |
-| `backup_destination_path` | `storage/backups` | Where backups land for `local` destinations. |
+| `backup_destination_path` | `/backup/picpeak` (seeded) | Where backups land for `local` destinations. Empty means `<STORAGE_PATH>/backups`. The path is resolved **inside the backend container**, not on the Docker host. See [Local destination checks](#local-destination-checks). |
+| `backup_manifest_path` | `/backup/manifests` (seeded) | Directory for the manifests of local backups. Empty, or not writable, means the manifest is written into the restore point itself (`backup-<uuid>/manifests/`). |
 | `backup_manifest_format` | `json` | `json` or `yaml`. Manifest is the file index for the backup. |
-| `backup_retention_days` | `30` | Backups older than N days are deleted on the next successful run. |
-| `backup_incremental` | `true` | When on, files that haven't changed since the last backup are skipped. Saves bandwidth + storage. |
+| `backup_retention_count` | `7` | How many complete restore points a local or S3 destination keeps (0–1000, `0` keeps all). Older ones are deleted after each successful backup. See [Retention & rotation](#retention--rotation). |
+| `backup_retention_days` | `30` | Shown as **Retention Period** and recorded in each manifest. Automatic deletion of restore points follows `backup_retention_count`, not this value. |
 | `backup_include_archived` | `true` | Include `events/archived/` in the file scan. |
 | `backup_include_database` | `true` | Include a `pg_dump` (or SQLite copy) in the backup. |
 | `backup_max_file_size_mb` | `5000` | Files above this size are skipped (with a warning) — prevents one corrupt huge file from blocking a backup. |
@@ -48,7 +49,7 @@ Configure under **Admin → Backup & Restore**.
 | `backup_email_on_failure` | `true` | Email admin after a failed backup. |
 
 <Callout type="info">
-**Who can change the destination.** In builds containing [PicPeak PR #1493](https://github.com/PicPeak/picpeak/pull/1493), only a **Super Admin** can change where backups go (`backup_destination_*`, `backup_s3_*`, `backup_rsync_*`), whether they include the database, or run the destination connection test. Roles with `backup.create` keep the schedule, retention and file options; for them the destination fields are locked on the Backup page.
+**Who can change the destination.** In builds containing [PicPeak PR #1493](https://github.com/PicPeak/picpeak/pull/1493), only a **Super Admin** can change where backups go (`backup_destination_*`, `backup_s3_*`, `backup_rsync_*`), whether they include the database, or run the destination connection test. Roles with `backup.create` keep the schedule, retention and file options; for them the destination fields are locked on the Backup page. The database dump directory (`database_backup_destination_path`) is also Super Admin only; other roles get `403 SUPER_ADMIN_REQUIRED`. On the beta channel (from v3.135.3-beta.0) `backup_manifest_path` and `backup_manifest_format` count as destination settings too.
 </Callout>
 
 ### Where the database dump is written
@@ -66,7 +67,9 @@ A publicly served directory is refused. If the directory cannot be created, the 
 The database backup **test configuration** check (`POST /api/admin/database-backup/test`) tests and reports this same directory in builds containing [PicPeak PR #1504](https://github.com/PicPeak/picpeak/pull/1504). Older builds always reported the destination as not writable.
 
 <Callout type="info">
-**Keeping dumps in a host folder with `docker-compose.production.yml`.** The production compose file mounts nothing at `/backup`. To keep dumps at `/backup/database` on the host, add to the `backend` service:
+**The `/backup` mount with `docker-compose.production.yml`.** On the beta channel (from v3.142.1-beta.0) the production compose file mounts `${APP_BACKUP:-./backup}` at `/backup` and sets `BACKUP_DIR=/backup`, so the seeded `/backup/picpeak`, `/backup/database` and `/backup/manifests` land in `./backup` on the host. Set `APP_BACKUP` in `.env` to use another host directory, and keep it outside `APP_STORAGE`, or the backup would include itself.
+
+The stable channel's production compose file still mounts nothing at `/backup`. To keep backups and dumps in a host folder there, add to the `backend` service:
 
 ```yaml
     environment:
@@ -75,8 +78,18 @@ The database backup **test configuration** check (`POST /api/admin/database-back
       - ./backup:/backup
 ```
 
-On start the entrypoint creates `BACKUP_DIR` and hands it to UID 1001. Builds without PicPeak PR #1502 need this mount, or backups fail with `EACCES: permission denied, mkdir '/backup'`.
+On start the entrypoint creates `BACKUP_DIR` and hands it to UID 1001. Builds without PicPeak PR #1502 need this mount, or backups fail with `EACCES: permission denied, mkdir '/backup'`. The all-in-one image writes backups to `/data/backup` and links `/backup` to it.
 </Callout>
+
+### Local destination checks
+
+The local destination is checked the same way by **Test connection** and by the backup run (beta channel from v3.158.2-beta.0 and v3.165.1-beta.0, stable from v3.133.10 and v3.134.1):
+
+- **Not writable.** If the directory cannot be created, the test answers `LOCAL_PATH_NOT_WRITABLE` and names the nearest existing directory that blocks it. A path like `/home/ubuntu/picpeak/backups` that exists on the host but not in the container fails this way; use a container path such as `/app/storage/backups` or the `/backup` mount. A directory that does not exist yet but can be created passes.
+- **Inside a backed-up folder.** A destination inside a folder the backup copies (for example `<storage>/uploads/backups`) is skipped by the file walk, so the backup does not copy itself. This also works when the same host folder is visible at two container paths.
+- **Equal to a backed-up folder.** A destination that *is* a backed-up folder, or the storage folder itself, cannot be skipped. The test answers `LOCAL_PATH_IS_BACKED_UP_FOLDER` and backups fail before the dump is written, with a message naming the folder. Pick a directory outside the backed-up folders.
+
+Saving the form trims the destination path.
 
 ### S3 destination settings
 
@@ -90,73 +103,128 @@ On start the entrypoint creates `BACKUP_DIR` and hands it to UID 1001. Builds wi
 | `backup_s3_prefix` | `backups` | Key prefix. Backups stored under `{prefix}/YYYY/MM/DD/backup-{id}/`. |
 | `backup_s3_force_path_style` | `false` | On for MinIO. Off for AWS S3. |
 | `backup_s3_ssl_enabled` | `true` | HTTPS to the S3 endpoint. |
+| `backup_s3_private_endpoint_approval` | (empty) | The exact private endpoint origin a Super Admin approved. See below. |
 
+Each S3 run is stored under `{prefix}/YYYY/MM/DD/backup-<uuid>/`, with its manifest in a `manifests/` folder inside that prefix.
+
+#### Private S3 endpoints
+
+In production, an S3 endpoint that resolves to a private address (RFC 1918, loopback, IPv6 unique-local), such as a MinIO or RustFS container on the same Docker network, is refused with `S3_PRIVATE_ENDPOINT` until a **Super Admin** approves it. The Backup page then shows a panel with the endpoint's origin and an approval checkbox; the next **Test connection** or save carries the approval. It covers only that scheme, host and port: an approval for another origin answers `S3_APPROVAL_MISMATCH`, and moving the endpoint to a public address clears it.
+
+Link-local, cloud-metadata, carrier-grade NAT, reserved and multicast addresses answer `S3_ENDPOINT_FORBIDDEN` and can never be approved. Every connection re-checks the DNS answers, so a hostname that resolved publicly when it was saved cannot later point uploads at an internal address. **Test connection** runs a real bucket check, and reuses the saved secret only against the endpoint it was saved for. (Beta channel from v3.142.1-beta.0, stable from v3.133.5.)
 ### Rsync destination settings
 
 | Key | Default | What it does |
 |---|---|---|
-| `backup_rsync_host` | (required) | Hostname or IP of the rsync target. |
+| `backup_rsync_host` | (required) | Hostname or IP of the rsync target. Must resolve to public addresses only; private, metadata, reserved and mixed public/private answers are refused. |
+| `backup_rsync_port` | `22` | SSH port (1–65535). |
 | `backup_rsync_user` | (empty) | SSH username. |
 | `backup_rsync_path` | (required) | Remote path. |
-| `backup_rsync_ssh_key` | (empty) | Local path to a private SSH key. `StrictHostKeyChecking=no` is set on the SSH command. |
+| `backup_rsync_ssh_key` | (empty) | **Absolute path** to a private key file the backend can read, for example `/app/data/ssh/backup_ed25519` (`chmod 600`). Pasting the key itself is refused with `RSYNC_SSH_KEY_NOT_PATH`; a key pasted by an older build stays masked and must be replaced by a path. Optional: without it, default identities or an SSH agent are used. |
 
-## Full vs incremental
+#### SSH host keys
 
-| | Full | Incremental |
-|---|---|---|
-| What's uploaded | Every file matching the scan filter | Only files whose checksum changed since the last backup |
-| Manifest | Complete file list with checksums | Same shape, plus `parent_backup_id` linking to the previous run |
-| When to use | First run, periodic ground-truth runs (weekly?) | Routine daily runs |
+Rsync connects with `StrictHostKeyChecking=yes` and never learns a host key on first use. Before the first test or backup, get the destination's host key through a channel you trust (not unverified `ssh-keyscan` output) and provide a `known_hosts` entry for the hostname:
 
-The first ever backup is always a full backup. After that, when `backup_incremental=true`, the service compares each file's current checksum to the value stored in the `backup_file_states` table. Unchanged files are skipped.
+- set `BACKUP_SSH_KNOWN_HOSTS` to the absolute path of a readable `known_hosts` file, or
+- put `known_hosts` in the same directory as the configured SSH key.
+
+With neither, pre-provisioned OpenSSH default user/global trust is used. Read-only trust files work. For a port other than 22 the entry is named `[host]:port`, as `ssh-keyscan -p` writes it. An unknown or changed key fails with `RSYNC_SSH_TRUST_REQUIRED`; if the selected trust file is missing, the backend logs the expected path at startup. The SSH command ignores local SSH configuration (aliases, proxies, jump hosts, ports from config) and connects to the vetted address while checking the key against the configured hostname. Mount the key and trust files persistently, outside the backed-up data. (Beta channel from v3.167.2-beta.0, stable from v3.134.2.)
+## Restore points
+
+On the beta channel from v3.167.3-beta.0 and stable from v3.134.2, every run to a **local** or **S3** destination copies every selected file into a new, standalone restore point (`backup-<uuid>/` locally, its own prefix on S3), together with the run's database dump. A restore point does not depend on earlier runs, so any one of them can be restored on its own. Plan destination capacity for `backup_retention_count` complete copies of the selected files.
+
+A run that cannot copy a required file, the dump or the manifest fails; it is not recorded as a completed partial backup.
+
+**Rsync** keeps syncing into one mirror on the remote host, so only changed files are transferred and its manifests are recorded as incremental.
+
+<Callout type="warning">
+**Legacy incremental backups.** Backups taken by older builds with the incremental setting only list the files that changed since their parent run. They are refused for a **full** or **files** restore, even with force, because they cannot prove a complete file set. Restore a legacy full backup or a new restore point instead, or use database-only or selective file recovery. The `backup_incremental` setting has no effect on new backups.
+</Callout>
+
+### S3 as primary storage
+
+With `STORAGE_BACKEND=s3`, standard backups read originals, archives, derived media, customer documents and transfer attachments through the storage adapter, with their object metadata; CRM PDFs, signatures and static uploads stay local and are included alongside. The backup destination (`backup_s3_*`, local or rsync) is independent of the live media bucket. The run stages the files in a private temporary directory, so provide temporary disk space for the whole selected file set. Before restoring onto a fresh host, configure the target `STORAGE_BACKEND` and `STORAGE_S3_*` bucket and credentials first. (Beta channel from v3.167.6-beta.0, stable from v3.134.3.)
 
 ## Manifest format
 
 Every backup writes a manifest alongside the photos. The manifest is the index — it tells the restore process what to expect.
 
 ```yaml
-version: '2.0'
+manifest:
+  version: '3.0'
 backup:
   id: backup-20260428-022150-a1b2c3d4
-  type: incremental
-  parent_backup_id: backup-20260427-022150-...
+  type: full
+  parent_backup_id: null
   timestamp: 2026-04-28T02:21:50.000Z
 files:
   count: 1245
   manifest:
     - path: events/active/wedding-smith/DSC_0001.jpg
       size: 4523894
-      checksum: sha256:...
+      checksum: ...
     - ...
 database:
   type: postgresql
-  schema_version: 097_add_customer_phone
+  backup_file: ...
+  checksum: ...                  # SHA-256 of the dump
 verification:
-  total_checksum: sha256:...   # SHA-256 of the manifest itself
+  checksum_algorithm: hmac-sha256
+  serialization: canonical-v1
+  key_id: ...
+  total_checksum: ...            # HMAC-SHA256 signature over the manifest
 ```
 
 Format is `json` or `yaml` per `backup_manifest_format`. JSON is more compact; YAML is human-readable.
 
 The manifest also records the backup settings that were in force. In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) credentials are left out of that record: the S3 access and secret key, the rsync SSH key and any other setting whose name marks it as a secret. Manifests written by older builds still contain them — treat old manifests like the credentials themselves, and rotate the keys if a manifest may have been read by someone who should not have them.
 
-## S3 prefix walker (auto-import)
+## Manifest signing key
 
-When PicPeak is reading backups *from* S3 (e.g. you migrated to a new server and want to restore from your existing S3 backup bucket), the **S3 Prefix Walker** scans the bucket under your configured `backup_s3_prefix` and surfaces every backup it finds.
+On the beta channel from v3.167.2-beta.0 and stable from v3.134.2, every standard (JSON/YAML) manifest is signed with HMAC-SHA256 using a dedicated 32-byte key. The signature covers the whole restore description, including dump and file checksums. A restore refuses a manifest when the key is missing, the manifest is unsigned, or its signature does not match; `force` and the install trigger do not bypass this. Portable `.picpeak` files are a separate format and do not use this key.
 
-How it works:
+**Where the key lives:**
 
-1. Lists all objects under `{prefix}/`.
-2. Filters for objects matching the dated structure (`YYYY/MM/DD/backup-{id}/manifest.{json|yaml}`).
-3. Polls again 30 seconds later — this is the **2-poll eventual-consistency gate**: S3 may not list very-recently-uploaded objects, so we wait once and re-check before declaring "no more backups".
-4. Returns the list to the admin UI for selection.
+| Install | Key |
+|---|---|
+| Docker Compose | Created on first start as `backup_manifest_key` in the private `picpeak-secrets` volume (mounted at `/run/secrets`), not in the database or storage volumes. |
+| All-in-one image, native | Created on the first backup as `DATA_DIR/backup-manifest.key` (native default `backend/data`). |
+| Explicit | `BACKUP_MANIFEST_KEY` (64 hex digits, e.g. from `openssl rand -hex 32`) or `BACKUP_MANIFEST_KEY_FILE` (a file outside the backed-up storage). |
 
-Triggered manually from the **Backup & Restore** page → **Browse S3** action. There is no cron variant — it's always admin-initiated.
+<Callout type="warning">
+**Copy the key off-host before you rely on a backup.** A lost key is never regenerated for verification, and without it no backup verifies. On a fresh recovery host, restore the original key first; a key supplied by the backup itself is not accepted.
+</Callout>
+
+**Key status.** System Health reports whether the key is ready and whether the latest manifest is authenticated, separately from whether the backup completed. A latest manifest that predates signing is shown as legacy; the next backup signs a new one. An invalid key (wrong encoding, a symlink, or a group/world-writable file) does not stop the server: it is logged at boot and shown in System Health, and backups fail until it is fixed.
+
+On the beta channel from v3.174.0-beta.0 the Backup page also shows a notice with the reason, a newly created key is read back so an unusable one stops the backup **before** anything is copied, and a key file the PicPeak process owns is restricted to `0600` automatically. On a filesystem that does not keep file modes (some NAS, VM shared folders, bind mounts that report every file as `0777`/`0666`) the backup fails with:
+
+```
+The backup manifest key file <file> is group- or world-writable (mode 0777), so another account could replace the key that signs backups. chmod 600 did not take effect: its filesystem does not keep file modes (some NAS, VM shared folders or bind mounts). Move the key to a filesystem that does and point BACKUP_MANIFEST_KEY_FILE at it, or set BACKUP_MANIFEST_KEY to its 64 hex digits.
+```
+
+Follow one of the two fixes it names. A key directory that other accounts can write to is logged as a warning.
+
+**Rotating the key.** Set the new key and list earlier keys in `BACKUP_MANIFEST_KEYS_OLD` (comma-separated 64-hex values) for as long as you keep backups they signed. Manifests signed before v3 signing by an earlier keyed build can be verified with `BACKUP_MANIFEST_LEGACY_KEY` (the original key string); a passphrase-style `BACKUP_MANIFEST_KEY` left in place verifies them the same way but never signs new ones.
+
+**Unsigned or lost-key backups.** A backup that is unsigned, was signed by the old serializer, or whose key is lost is **unauthenticated**. Restore it only on an isolated host after inspecting its contents yourself (a database dump can contain arbitrary SQL). Run `node scripts/backup-manifest-recovery-digest.js /path/to/manifest.json` from `backend/`, set `BACKUP_MANIFEST_RECOVERY_SHA256` to the digest it prints and `BACKUP_MANIFEST_RECOVERY_REASON` to a reason, restart and restore that one manifest. The approval does not carry over to other contents, and the restore logs the unauthenticated outcome. Remove both variables afterwards, restart, and take a new signed backup.
+
+All key variables are listed under [Environment Variables](/deployment/environment-variables#backup-and-restore).
+
+<Callout type="info">
+The **S3 prefix walker** (`STORAGE_AUTO_IMPORT`) imports photos dropped into an event's S3 prefix. It is not part of backup or restore; see [Storage Backends](/features/storage-backends#s3-auto-import-drop-folder-workflow).
+</Callout>
 
 ## Retention & rotation
 
-After every successful backup the service enumerates existing backups (local or S3) and deletes any whose `backup.timestamp` is older than `backup_retention_days`. For S3 destinations this means deleting the entire `{prefix}/YYYY/MM/DD/backup-{id}/` prefix plus the manifest sibling.
+After every successful backup the service keeps the newest `backup_retention_count` completed restore points of the current destination type (local or S3) and deletes older ones whole, together with their history rows. `0` keeps everything. Legacy backup trees and anything not shaped like a standalone restore point are never deleted, rsync mirrors are not pruned, and a failed cleanup never fails the backup that just succeeded. Scheduled database dumps have their own retention (`database_backup_retention_days`).
 
-If you want to keep a permanent ground-truth backup, copy it to a separate prefix or bucket — anything inside the rotated path is fair game.
+If you want to keep a permanent ground-truth backup, copy it to a separate prefix, bucket or folder — anything inside the rotated path is fair game.
+
+### Deleting a backup
+
+On the beta channel (from v3.148.2-beta.0) the **History** table has a **Delete backup** action (`DELETE /api/admin/backup/runs/:id`, permission `backup.delete`). It removes the run's record and its manifest; for an S3 run it also deletes the objects under the run's prefix. A running backup cannot be deleted (`BACKUP_RUNNING`). If the run's files lie outside the configured destination (`ARTIFACT_OUT_OF_SCOPE`) or the manifest cannot be removed, nothing is deleted and the record is kept. Each deletion is written to the activity log.
 
 ## Restore
 
@@ -176,7 +244,9 @@ The Backup & Restore page lists every available backup with a **Restore** button
 
 Restores and `.picpeak` imports replace admin accounts, roles and permissions from the file, so in builds containing [PicPeak PR #1493](https://github.com/PicPeak/picpeak/pull/1493) they require a **Super Admin**. Other roles see an explanation on the Restore tab instead of the wizard.
 
-Before the database is touched, the restore checks the dump file against the SHA-256 recorded in the manifest (`database.checksum`) and refuses a dump that was changed or truncated. Backups whose manifest has no dump checksum still restore, with a warning in the restore log, unless `BACKUP_MANIFEST_REQUIRE_KEYED` is set. (Builds containing [PicPeak PR #1491](https://github.com/PicPeak/picpeak/pull/1491).)
+Before the database is touched, the restore checks the dump file against the SHA-256 recorded in the manifest (`database.checksum`) and refuses a dump that was changed or truncated. From v3.167.2-beta.0 (beta) and v3.134.2 (stable) the manifest must also carry a valid signature (see [Manifest signing key](#manifest-signing-key)); a manifest without a dump checksum is refused instead of restoring with a warning, and `BACKUP_MANIFEST_REQUIRE_KEYED` no longer exists. The only way to restore an unsigned backup is the one-artifact recovery approval described there.
+
+Local restore paths must lie inside `backup_destination_path` or `backup_manifest_path`, also after symbolic links are resolved. To restore from a folder elsewhere (for example a rescued disk mounted at another path), list it in `RESTORE_ALLOWED_ROOTS` (several paths separated by `:`, or `;` on Windows).
 
 A `.picpeak` import is checked before and while it is extracted: too many entries (`PICPEAK_IMPORT_MAX_ENTRIES`), more unpacked bytes than `PICPEAK_IMPORT_MAX_EXPANDED_BYTES` or than the free space of the extraction directory, or an oversized `manifest.json` (`PICPEAK_IMPORT_MAX_MANIFEST_BYTES`) stop the import before anything is restored. See [Environment Variables](/deployment/environment-variables#backup-and-restore).
 
@@ -190,6 +260,17 @@ In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/
 - **Everyone signs in again.** After a full or database restore, after a rollback and after a `.picpeak` import, all admin, customer and gallery sessions issued before it are invalid.
 - **`.picpeak` imports** only restore files under the folders an export writes: `business-docs`, `uploads`, `events/active` and `events/archived`. Anything else in the archive stops the import. Under the publicly served folders `uploads/logos` and `uploads/favicons`, HTML and JavaScript files are refused.
 - **S3 manifests** larger than 16 MiB are refused.
+
+### `.picpeak` imports
+
+A `.picpeak` import replaces the whole database and the managed files (beta channel from v3.168.1-beta.0, stable from v3.134.4; details in [Portable restore](https://github.com/PicPeak/picpeak/blob/main/docs/PORTABLE_RESTORE.md)):
+
+- **Every table is cleared**, including tables the archive does not list because they did not exist when it was made; those end up empty.
+- **Paths** containing `..`, `.` or empty segments are refused.
+- **Host requirements.** The import needs Linux (the Docker images qualify), the native restore components (`cd backend && npm run build:native`; Docker builds them), a process guard allowed to supervise the worker (Docker's default profile allows it), and `STORAGE_PATH` on a local filesystem, not NFS or CIFS. Where one is missing, PicPeak runs normally, the import is shown as unavailable with the reason, and the import route answers 503.
+- **Maintenance.** While the import runs, the instance answers ordinary requests with 503 and `/health` answers `200` with `"maintenance": "restoring"`. Running work gets `PICPEAK_RESTORE_DRAIN_GRACE_MS` (default 60 s) to finish first.
+- **After a failure** the files and database are rolled back and the instance reopens by itself. **After a committed import**, restart every backend process once, including background-only instances. All instances must share one host, database and `STORAGE_PATH` volume.
+- **Interrupted imports.** An import interrupted by a crash or reboot keeps the instance in maintenance as `recovery_required` until the next start recovers it. Do not delete the maintenance files under `<STORAGE_PATH>/.picpeak-maintenance` to clear it; if it stays stuck, stop the backend and run `node scripts/clear-portable-restore-fence.js` (add `--confirm` to clear).
 
 ### SQLite: characters in the dump path
 
@@ -242,6 +323,8 @@ For full DR after `docker compose down -v`, host migration, drive replacement, o
 ### Prerequisites
 
 - Your install's backup files must already be present in the `/backup` mount. They survive `docker compose down -v` because `/backup` is a bind mount, not a Docker-managed volume.
+- The **original manifest signing key** must be in place before the first boot (see [Manifest signing key](#manifest-signing-key)). With Compose, `docker compose down -v` deletes the `picpeak-secrets` volume and with it the generated key, so set `BACKUP_MANIFEST_KEY` to your off-host copy before starting.
+- With `STORAGE_BACKEND=s3`, configure the target `STORAGE_S3_*` bucket before the restore runs.
 - The backup must contain a database dump. The restore cannot reconstruct your CRM data, customers, quotes, invoices, or admin users from a files-only backup. Confirm by inspecting any `backup-manifest-*.json` and checking that `database.backup_file` is non-null.
 
 ### How the trigger works
@@ -256,7 +339,7 @@ The trigger file is named **`RESTORE_ON_INSTALL`** (no extension) or **`RESTORE_
 touch /path/to/backup/RESTORE_ON_INSTALL
 ```
 
-The boot hook scans `/backup/manifests/` for `backup-manifest-*.json` (or `.yaml`) and picks the one with the most recent modification time.
+The boot hook looks for `backup-manifest-*.json` (or `.yaml`) in `/backup/manifests/` and in the `manifests/` folder of every standalone restore point directly under `/backup` (`/backup/backup-<uuid>/manifests/`), and picks the one with the most recent modification time. Symlinked restore points are ignored.
 
 **Use a specific backup** — write the manifest path (relative to the `/backup` mount root, or absolute) into the trigger file:
 
@@ -291,7 +374,7 @@ Three layers prevent accidental data loss:
 
 1. **The trigger file must exist.** No auto-magic — an admin explicitly drops the file to signal intent.
 2. **The destination database must be empty.** If it contains any events, the hook refuses to run. The fresh-install default admin is treated as throwaway and replaced by the backup's admin row, so a single admin user does not block the restore.
-3. **Failed restores roll back to the pre-restore state.** If anything fails after the DROP DATABASE step, PicPeak's automatic rollback restores the destination from the pre-restore safety backup it took before starting.
+3. **Failed restores roll back.** If anything fails, the restore is rolled back and the install stays in its fresh-install state; the trigger file is kept for a retry. (The install trigger skips the pre-restore safety backup, since there is nothing to keep.)
 
 <Callout type="warning">
 To intentionally clobber a populated install (dev rebuilds, staging refresh), set `INSTALL_FROM_BACKUP_FORCE=true` on the backend service. This skips gate #2 only — the trigger-file requirement and rollback-on-failure still apply.
@@ -299,8 +382,8 @@ To intentionally clobber a populated install (dev rebuilds, staging refresh), se
 
 ## Recommendations
 
-- Run a weekly full backup + daily incrementals (cron: `0 2 * * 0` for Sunday full, `0 3 * * 1-6` for Mon–Sat incremental — manage as two separate webhooks if needed).
-- Keep at least 30 days of retention.
+- Run a daily backup and keep enough restore points (`backup_retention_count`) to cover the time it might take you to notice a problem.
+- Keep a copy of the manifest signing key and your SSH key/`known_hosts` off-host, separate from the backups.
 - Store backups off-site — S3 in a different region than your primary, or rsync to a remote server.
 - Test the restore at least quarterly. A backup you've never restored isn't a backup.
 - Monitor `backup_email_on_failure` notifications — the only way you'll find out a backup is failing silently.

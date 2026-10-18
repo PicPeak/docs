@@ -10,5 +10,6 @@ export default {
   'nas-example': 'Example: NAS at Home',
   'release-channels': 'Release Channels',
   upgrading: 'Upgrading',
+  'self-update': 'In-App Updates',
   'repository-move': 'Repository and Image Move (2026)',
 }

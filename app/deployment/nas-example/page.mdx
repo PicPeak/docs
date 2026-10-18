@@ -112,6 +112,7 @@ services:
     networks:
       - proxy
     environment:
+      TRUST_PROXY: "1"
       COOKIE_SECURE: auto
       FRONTEND_URL: "https://gallery.example.com"
 
@@ -138,10 +139,11 @@ Replace `gallery.example.com` with your own domain and `/volume1/...` with the p
 
 The `7080`/`7443`/`7081` mappings on the left of each colon are the NAS-side ports the router forwards to. The `80`/`443`/`81` on the right are inside the container and never change.
 
-Three more details worth understanding rather than copying:
+Four more details worth understanding rather than copying:
 
 - **`picpeak/aio:stable`** is the all-in-one image from Docker Hub on the stable channel. The same image is on GitHub Container Registry as `ghcr.io/picpeak/picpeak/aio:stable` — either works, Docker Hub is simply what NAS container apps search by default. Use `:beta` to follow the beta channel. See [Release Channels](/deployment/release-channels).
-- **`COOKIE_SECURE: auto`** lets the same instance serve public HTTPS *and* direct LAN HTTP with correctly-flagged session cookies. Without it you get one or the other. See [Reverse Proxy → Mixed HTTPS + LAN HTTP access](/deployment/reverse-proxy#mixed-https--lan-http-access).
+- **`TRUST_PROXY: "1"`** tells PicPeak that one proxy, Nginx Proxy Manager, sits in front of it. The all-in-one image trusts no proxy by default (`0`, from v3.134.7). Without this line every visitor appears under Nginx Proxy Manager's address, so all guests share one rate-limit budget and one failed-login lockout, and PicPeak treats every request as plain HTTP. If you add a second proxy in front (for example Cloudflare), make it `"2"`. See [Single-Container Install → HTTPS](/deployment/single-container#https).
+- **`COOKIE_SECURE: auto`** lets the same instance serve public HTTPS *and* direct LAN HTTP with correctly-flagged session cookies. It is the production default, so the line only makes the choice visible; it relies on `TRUST_PROXY` above to recognise HTTPS requests. See [Reverse Proxy → Mixed HTTPS + LAN HTTP access](/deployment/reverse-proxy#mixed-https--lan-http-access).
 - **`FRONTEND_URL`** is the public address PicPeak puts into gallery links and emails. Set it to the HTTPS domain, not the LAN IP, or the links you send clients point somewhere they cannot reach.
 
 <Callout type="info">
@@ -291,7 +293,8 @@ Both the token and the environment-variable route are also covered in [Single-Co
 | Works on Wi-Fi, not on mobile data | Port forwarding, DynDNS, or the NAS changed its LAN IP. Give it a static lease. |
 | Works on mobile data, not on Wi-Fi | Your router does not support NAT loopback. Not a PicPeak problem — use the LAN IP from inside, or set up split DNS. |
 | Gallery links point at `localhost` or a LAN IP | `FRONTEND_URL` is missing or wrong. |
-| Login works on HTTPS but not on the LAN IP | `COOKIE_SECURE: auto` is missing. |
+| Login works on HTTPS but not on the LAN IP | `COOKIE_SECURE` is set to `true`. Use `auto`. |
+| Logins lock out for everyone, or galleries return `429` | `TRUST_PROXY: "1"` is missing, so every visitor shares Nginx Proxy Manager's address. |
 | `413` on upload | Nginx Proxy Manager's body size limit. Add `client_max_body_size 10G;` under the host's Advanced tab. |
 | Container unhealthy, startup hangs | The `/data` volume is on an SMB/CIFS share. Move it to a native volume. |
 
@@ -301,4 +304,4 @@ Both the token and the environment-variable route are also covered in [Single-Co
 docker compose pull && docker compose up -d
 ```
 
-Or use the UGREEN Docker app's rebuild action on the project. Migrations run automatically on start — take a backup first, and back up the whole `/data` volume rather than only the database, because the JWT secret at `/data/db/jwt.secret` is not part of the built-in backup. See [Backup & Restore](/guides/backup-restore) and [Single-Container Install](/deployment/single-container).
+Or use the UGREEN Docker app's rebuild action on the project. An install set up from an older version of this page has no `TRUST_PROXY` line; add `TRUST_PROXY: "1"` to the environment before updating to v3.134.7 or later. Migrations run automatically on start — take a backup first, and back up the whole `/data` volume rather than only the database, because the JWT secret at `/data/db/jwt.secret` is not part of the built-in backup. See [Backup & Restore](/guides/backup-restore) and [Single-Container Install](/deployment/single-container).

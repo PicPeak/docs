@@ -2,86 +2,82 @@ import { Callout } from 'nextra/components'
 
 # Image Security Settings
 
-The **Image Security** tab governs how aggressively PicPeak protects photos from being saved without permission, and how the rate limiter throttles abusive clients.
+The **Image Security** tab sets the protection defaults that new galleries start with: the protection level, the image quality value, DevTools detection and canvas rendering.
 
-This page is the authoritative reference for what each protection level *actually does*. See [Photo Protection](/features/photo-protection) for the conceptual overview and the caveats (no protection is bulletproof against a determined attacker).
+This page is the reference for what each protection level *actually does*. See [Photo Protection](/features/photo-protection) for the overview and the caveats (no protection stops a determined visitor from capturing the screen).
+
+<Callout type="info">
+All four settings are **creation defaults**. A new gallery copies them when it is created; changing them later does not touch existing galleries. DevTools detection and canvas rendering can be changed per gallery afterwards (event page → **Settings** → **Downloads**); the protection level and image quality cannot be changed in the admin UI after creation — only through the admin API (`PUT /api/admin/events/:id` accepts `protection_level` and `image_quality`).
+</Callout>
 
 ## Default protection level
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Default protection level** | `standard` | Pre-fills new events. Existing events keep whatever level they were created with. |
+| **Default protection level** | `standard` | Copied into every new gallery. An explicit `protection_level` in the create request (admin API or [v1 API](/api/events)) wins over it. |
 
-Levels:
+What each level does in the current gallery code:
 
-| Level | Right-click | Canvas overlay | DevTools detection | Watermark | Fragmentation | When to use |
-|---|---|---|---|---|---|---|
-| `basic` | blocked | no | no | optional | no | Public sample galleries — block accidental "Save Image" only |
-| `standard` | blocked | no | no | optional | no | **Default**. Most paid client galleries. |
-| `enhanced` | blocked | yes (transparent canvas overlay) | yes (device fingerprint, suspicious-activity logs) | optional | no | High-value commercial work |
-| `maximum` | blocked | yes | yes (aggressive — closes lightbox on detection) | required | yes (image split into reassembled tiles) | Premium / forensic-grade |
+| Level | DevTools detection | Lightbox rendering | Full-resolution zoom | Full-size view served |
+|---|---|---|---|---|
+| `basic` | per-gallery switch | `<img>` (canvas only if the gallery's canvas switch is on) | allowed (when downloads hand out the original) | original / preview |
+| `standard` | per-gallery switch | as `basic` | as `basic` | original / preview |
+| `enhanced` | always on | as `basic`, plus a faint overlay pattern while the lightbox is open | refused | original / preview |
+| `maximum` | always on, high sensitivity: the gallery page navigates away and the lightbox closes on detection | always canvas | refused | **capped copy**: fits inside 1920 × 1080, quality 60, no EXIF |
 
-Per-event override on the Edit Event page wins over this default.
+`basic` and `standard` currently behave the same. The right-click block is not tied to the level at all: it is the gallery's own **Block right-click menu** switch (on by default).
+
+### Maximum: capped full-size view
+
+Available on the beta channel from v3.175.0-beta.0. At `maximum`, the gallery photo route (`/api/gallery/:slug/photo/:photoId`) and the preview route (`/api/gallery/:slug/preview/:photoId`, including its `?w=` sizes) no longer send the original or the full preview. They answer a copy cut from the stored preview per request:
+
+- fits inside **1920 × 1080**, never upscaled, re-encoded at **quality 60**
+- rotation applied, **no EXIF or GPS** data
+- a watermark, if configured, is applied before the downscale
+- a WebP preview (transparency or animation) stays WebP; everything else is JPEG
+- it runs in the isolated image worker pool and answers `503` with `Retry-After` when the workers are busy, instead of queueing or falling back to the original
+- if no preview can be made (for example a corrupt source), the route answers `404`
+
+The admin preview of a gallery is capped the same way, so it shows what guests see. **Not** capped: `standard` and `enhanced`, videos, and the download routes — a guest who may download still receives the file the download settings allow. Turn downloads off or limit their resolution if the cap is meant to be the only size a guest can get.
+
+The label of the `maximum` option in the picker mentions the cap in English and German; the other languages still show the older label.
+
+<Callout type="warning">
+On the stable channel (v3.134.x) `maximum` has no server-side cap: the full-size view serves the same file as `standard`. Enhanced and maximum are client-side rendering modes only there (from v3.134.7 they serve the normal photo route instead of a broken token link).
+</Callout>
 
 ## Image quality
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Default JPEG quality** | `85` | Quality (1–100) used by Sharp for delivered images. Thumbnails have their own quality setting in [Thumbnails](/guides/admin-settings/thumbnails). |
+| **Default image quality** | `85` | Value from 1–100, copied into a new gallery's `image_quality` field. |
 
-## Rate limiting
+The value is stored on the gallery and returned with its settings, but no rendition is currently encoded with it. Thumbnail and preview quality come from [Thumbnails](/guides/admin-settings/thumbnails); the `maximum` cap always uses quality 60.
 
-These limits apply to image and thumbnail requests **per IP**. Hitting any of them returns `429 Too Many Requests` and increments the suspicious-activity counter.
-
-| Setting | Default | What it does |
-|---|---|---|
-| **Max image requests per minute** | `30` | Short burst limit. |
-| **Max image requests per 5 minutes** | `100` | Medium-window limit. |
-| **Max image requests per hour** | `500` | Long-window limit. |
-
-A normal guest browsing a gallery rarely exceeds 100 requests in 5 minutes; bots scraping every photo do.
-
-## Suspicious activity
-
-Counts violations (rate-limit hits, devtools-detection triggers, broken-token attempts) per IP and acts on them.
+## DevTools detection
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Suspicious activity threshold** | `10` | After this many violations the IP is flagged as "suspicious". Logged to `security_events`. |
-| **Auto-block IPs** | on | When `true`, suspicious IPs hitting the auto-block threshold are blocked entirely. |
-| **Auto-block threshold** | `50` | Violation count that triggers an IP block (when auto-block is on). |
-| **Block suspicious IPs** | on | Master toggle for IP blocking. Off = log only. |
-
-Blocked IPs receive `403 Forbidden` on every photo / thumbnail request until manually unblocked from the Image Security dashboard.
-
-## Monitoring
-
-| Setting | Default | What it does |
-|---|---|---|
-| **Security monitoring enabled** | on | Off = no security events recorded at all. Disable only for debugging. |
-| **Log security events to DB** | on | Off = events go to the application log only, not the `security_events` table. |
-| **DevTools protection** | on | Embeds the client-side detection code that triggers a violation when DevTools opens on a protected gallery. |
+| **Enable DevTools detection by default** | on | New galleries start with **Detect developer tools** switched on. At `enhanced` and `maximum` detection runs regardless of the switch. |
 
 ## Canvas rendering
 
 | Setting | Default | What it does |
 |---|---|---|
-| **Enable canvas rendering** | off | When on, photos at protection level `enhanced` and above are drawn into a `<canvas>` element instead of `<img>`, which breaks naive screenshot tools and prevents drag-to-save on most browsers. |
+| **Enable canvas rendering in the lightbox by default** | off | New galleries start with **Canvas rendering in the lightbox** switched on. The lightbox then draws the photo into a `<canvas>` instead of an `<img>`, which defeats drag-to-save and "Save image as". |
 
-Costs ~10–30 ms of client render time per photo and disables `<img>`-based browser features (e.g. lazy loading hints, native zoom). Worth it for premium galleries; overkill for casual ones.
+At `maximum` the lightbox always uses canvas rendering. Canvas rendering, like `enhanced` and `maximum`, also switches off full-resolution zoom in the lightbox.
 
-## Fragmentation
+## Removed settings
 
-| Setting | Default | What it does |
-|---|---|---|
-| **Default fragmentation level** | `3` | Number of tiles the image is split into (1–10) when protection level is `maximum`. The browser reassembles the tiles into a canvas — works against pixel-perfect copy tools but breaks accessibility (screen readers can't read a fragmented image). |
+Builds before v3.175.0-beta.0 showed **Rate Limiting** (image requests per minute / 5 minutes / hour) and **Security Monitoring** cards (suspicious-activity threshold, auto-block, block suspicious IPs, monitoring and DB logging switches) on this tab. None of them were enforced: the middleware that read the budgets was no longer mounted on any route, and nothing read the monitoring switches. Both cards are gone, `POST /api/admin/image-security/block-ip` answers `404`, and the `RATE_LIMIT_NETWORK_MULTIPLIER` variable is no longer read. Fragmentation (splitting a photo into tiles) no longer exists either.
 
-<Callout type="warning">
-Fragmentation is the most aggressive option and degrades the user experience the most. Reserve it for galleries where the photographer has explicitly asked for forensic-level protection.
-</Callout>
+The stable channel (v3.134.x) still shows these cards, but they have no effect there either.
+
+For limits that are enforced, see [API rate limiting](/guides/admin-settings/security#api-rate-limiting) on the Security tab.
 
 ## Where it's enforced
 
-- Rate limits: `backend/src/middleware/secureImageMiddleware.js`
-- Settings consumed by: `backend/src/services/imageProcessor.js` (canvas, watermark, fragmentation), `backend/src/routes/adminImageSecurity.js` (dashboard + IP unblock)
-- Suspicious-IP state lives in process memory plus the `security_events` table — restarting the backend clears the in-memory blocks but the DB log persists.
+- Creation defaults: `backend/src/services/eventSettings.js` (`getImageSecurityDefaults`)
+- `maximum` cap: `backend/src/services/galleryAssetPolicy.js` (`MAXIMUM_PROTECTION_CAP`) and the gallery media routes
+- DevTools detection and canvas rendering: the gallery frontend (`GalleryView`, `PhotoLightbox`)

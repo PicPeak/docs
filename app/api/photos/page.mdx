@@ -9,7 +9,7 @@ is the most common reason a request comes back `401`.
 |---|---|---|
 | **Auth** | API token (`Authorization: Bearer pp_live_…`) | Admin session JWT |
 | **For** | Integrations, scripts, the Lightroom plugin | The admin UI |
-| **Photo endpoints** | Upload, replace, list-with-marks, download originals | Everything else on this page |
+| **Photo endpoints** | Upload, replace, list-with-marks, download originals or resized renditions, preview images | Everything else on this page |
 
 The admin API is **JWT-only** — `adminAuth` verifies a signed session token, so
 an API token sent to an `/api/admin/…` route is rejected. There is currently no
@@ -73,9 +73,21 @@ curl -X POST "$BASE_URL/api/v1/events/$EVENT_ID/photos" \
 
 - Images only — the endpoint rejects any non-`image/*` MIME type. Video goes
   through the admin chunked upload.
-- Max 100 MB per file.
+- The file's bytes must match its declared type: a file whose signature does
+  not match (for example HTML sent as `image/jpeg`) answers
+  `400 File content does not match declared type`. An image type the
+  signature table does not know (TIFF, AVIF, …) must instead be an image Sharp
+  can read. The admin multipart and chunked uploads apply the same check.
+- Max file size is the **Max File Size (MB)** setting in
+  [General settings](/guides/admin-settings/general) (default 50 MB).
 - `category_id` is optional and must belong to this event or be global;
-  anything else returns `400`.
+  anything else returns `400`. On the beta channel from v3.164.0-beta.0, where
+  galleries have [nested folders](/features/photo-categories), passing a
+  folder's id places the photo in that folder (its `folder_id`) instead of
+  setting a filter category.
+- The v1 upload never refuses a duplicate. On the beta channel it stores the
+  file's content hash, so a later admin upload with duplicate detection on
+  recognises it (see [Duplicate detection](#duplicate-detection)).
 
 **Response** (`201`):
 
@@ -165,6 +177,21 @@ Three fields are worth understanding before you build against this:
 `my_rating` and `my_color_label` are scoped to the token owner. Marks made by a
 different admin are deliberately not visible here.
 
+Each row also carries `like_count`, `favorite_count`, `comment_count`,
+`category`, `width`, `height` and `uploaded_at`. On the beta channel from
+v3.142.0-beta.0 it adds what a client needs to decide how to fetch the photo:
+
+| Field | Notes |
+|---|---|
+| `size_bytes` | Recorded size of the stored original. `null` means unknown, not zero. |
+| `media_type` | `image` or `video`. Videos are never resized. |
+| `mime_type` | The stored type. |
+| `processing_status` | `complete` unless the background worker is still on the photo. The preview and rendition routes answer `503` (still processing) or `422` (failed) otherwise. |
+| `moderation_status` | Set while a team member's upload waits for review, or after it was rejected; such a photo is not shown to guests. From v3.167.0-beta.0. |
+| `folder` | The photo's folder name (beta channel from v3.164.0-beta.0). Since folders exist, `category` names only the filter category: for a photo that was in a folder-style category before the upgrade, `category` is now `null` and the name moved to `folder`. |
+
+Photos in the [trash](#trash) are not listed.
+
 ### Download an original
 
 Streams one photo or video exactly as it was uploaded — the stored original,
@@ -196,6 +223,47 @@ file — a cheap way to check a photo is there and how big it is.
 
 Range requests are not supported; a partial download restarts from zero.
 
+**Resized renditions** (beta channel from v3.142.0-beta.0): add
+`?resolution=WxH`, for example `?resolution=2048x2048`, to get the photo
+resized into that box instead — aspect ratio kept, never enlarged,
+re-encoded in the source format, never watermarked. These are the same ids
+the gallery's download menu uses; `resolution=original` (the default) serves
+the stored bytes, and any other value answers `400`.
+
+- Only JPEG, PNG, WebP and GIF are resized. Videos, RAW (for example DNG) and
+  HEIC/HEIF are always served at original size.
+- A photo already inside the box is returned byte for byte.
+- The box is a maximum, not a guarantee: when the image cannot be re-encoded
+  safely (HEIC detected from the bytes, or a file Sharp cannot decode) the
+  stored bytes go out unchanged. Check what you received if size matters.
+- `HEAD` carries no `Content-Length` for a rendition: its length is only known
+  once it has been rendered.
+
+### Get a preview image
+
+Beta channel from v3.142.0-beta.0. The web-sized JPEG preview the admin grid
+shows, for building a picker without pulling originals:
+
+```bash
+curl -o preview.jpg "$BASE_URL/api/v1/events/$EVENT_ID/photos/$PHOTO_ID/preview?w=1280" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Requires the `read` scope and `photos.view` (no `photos.download`). It is not a
+download: no `Content-Disposition`, no download audit entry, no notification.
+
+- `w` picks a tier: `640`, `1280` or `1920`. Any other value is ignored and the
+  default preview is served, so read the image's own width.
+- The preview is JPEG, or WebP when the source is animated or has an alpha
+  channel — read `Content-Type`.
+- Generated on first request and cached afterwards; sent with
+  `Cache-Control: private, max-age=3600`.
+- Videos have no preview: `404 PREVIEW_UNAVAILABLE`.
+- A photo still being processed answers `503 PHOTO_PROCESSING` with
+  `Retry-After`; one whose processing failed answers
+  `422 PHOTO_PROCESSING_FAILED`. Poll rather than treating either as fatal.
+- An archived event answers `409`.
+
 ### Download originals as a ZIP
 
 ```bash
@@ -214,6 +282,12 @@ built, so there is no waiting before the first byte, and it has no
   extracted on macOS or Windows.
 - `ids` limits the archive to those photos: `?ids=1234,1235,1236`, at most 500,
   and every id must belong to the event.
+- `resolution=WxH` (beta channel from v3.142.0-beta.0) packs resized renditions
+  under the same rules as the single download, and names the archive after the
+  box. Renditions are rendered one at a time as the archive streams, so this is
+  slower than originals, and the size cap below is measured against the
+  originals. A photo that fails to render is skipped and listed in
+  `MISSING_FILES.txt` while the archive still ends `200` — read the manifest.
 - The [list filters](#list-photos-for-an-event) work here too (`marked_only`,
   `mark_source`, `color_labels`, `my_color_labels`, `min_rating`,
   `my_min_rating`, `logic`), so you can zip exactly what you just listed — for
@@ -322,6 +396,36 @@ cannot create events or upload.
 Everything below needs an **admin JWT**, not an API token, and is mounted under
 `/api/admin/photos`.
 
+### Upload (multipart)
+
+```bash
+curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/upload" \
+  -H "Authorization: Bearer $ADMIN_JWT" \
+  -F "photos=@IMG_1.JPG" -F "photos=@IMG_2.JPG" \
+  -F "detect_duplicates=true"
+```
+
+Permission: `photos.upload`. Files go in the repeated field `photos`, up to
+**Max files per upload**. Optional text fields: `category_id`, and on the beta
+channel `folder_id` (a folder of this event) and `detect_duplicates`.
+
+### Duplicate detection
+
+Beta channel from v3.171.0-beta.0. With `detect_duplicates=true` on the
+multipart upload or on the chunked `complete` call, a file whose bytes are
+identical to a photo already in the same gallery is not stored:
+
+- The multipart upload lists it under `duplicates`
+  (`[{ "index": 0, "filename": "IMG_1.JPG", "duplicate_of": "IMG_1.JPG" }]`)
+  with a `duplicateCount`, and stores the rest.
+- The chunked `complete` answers
+  `409 { "code": "DUPLICATE_PHOTO", "duplicate_of": "<name>" }`.
+
+Only byte-identical files match, and only within one gallery. A photo in the
+trash does not count, so the same file can be uploaded again. Without the flag
+nothing is refused. The admin UI's uploader sets the flag and offers
+"upload anyway" for the files it reports.
+
 ### Chunked upload (large files)
 
 For individual files over the normal upload limit (typical for video), use the
@@ -346,7 +450,7 @@ curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID/chu
 curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID/complete" \
   -H "Authorization: Bearer $ADMIN_JWT" \
   -H "Content-Type: application/json" \
-  -d '{ "category_id": null }'
+  -d '{ "category_id": null, "detect_duplicates": true }'
 ```
 
 Progress and cleanup:
@@ -358,6 +462,11 @@ curl -X DELETE "$BASE_URL/api/admin/photos/$EVENT_ID/chunked-upload/$UPLOAD_ID" 
 
 Re-sending a chunk index replaces the earlier copy, so a failed chunk can be
 retried on its own.
+
+`complete` checks the merged file's content against its type
+(`400 File content does not match declared type`), and takes the same optional
+`category_id`, `folder_id` and `detect_duplicates` fields as the multipart
+upload.
 
 In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) the chunk layout is fixed by `fileSize`:
 `totalChunks`, when sent, must equal `ceil(fileSize / chunkSize)`, every chunk
@@ -407,7 +516,16 @@ admin UI exposes.
 | `min_rating` | Guest star average. |
 | `color_label` | A single client colour. |
 | `logic` | `AND` (default) or `OR` across the feedback filters. |
-| `sort` / `order` | `date` (default), plus `asc` / `desc`. |
+| `media_type` | `photo` or `video`. Beta channel. |
+| `folder_id` | A folder id, `root` (photos in no folder) or `pending` (waiting for a folder request). Beta channel. |
+| `moderation` | Photos waiting for review or rejected. Beta channel. |
+| `sort` | `date` (upload time, default), `name`, `size`, and on the beta channel `capture_date` and `rating`. |
+| `order` | `desc` (default) or `asc`. |
+
+On the beta channel `name` sorts in natural order on the original filename
+(`IMG_2` before `IMG_10`), and `capture_date` sorts by the photo's capture time.
+On stable, `name` sorts by the stored filename, which follows upload order.
+Photos in the [trash](#trash) are never listed.
 
 For the mark-aware, API-token-friendly version, use the public
 [list endpoint](#list-photos-for-an-event) above instead.
@@ -449,8 +567,19 @@ curl -X DELETE "$BASE_URL/api/admin/photos/$EVENT_ID/photos/$PHOTO_ID" \
   -H "Authorization: Bearer $ADMIN_JWT"
 ```
 
-Permission: `photos.delete`. Removes the file, its derivatives and the database
-row.
+Permission: `photos.delete`.
+
+On the beta channel from v3.172.0-beta.0 a delete moves the photo to the
+gallery's [trash](#trash) instead: the row and files stay, guests and every
+other route stop seeing it, and it can be restored until its retention runs
+out. Disk space is only freed when the photo is purged. With **Trash retention
+(days)** set to `0` in [General settings](/guides/admin-settings/general), or
+on stable, a delete removes the file, its derivatives and the database row at
+once.
+
+```json
+{ "message": "Photo moved to trash", "trashed": 1, "deleted": 0, "retention_days": 30 }
+```
 
 ### Bulk delete
 
@@ -463,6 +592,44 @@ curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/photos/bulk-delete" \
 
 Permission: `photos.delete`. The body key is `photoIds`, camelCase. Ids outside
 the event in the URL are ignored, so this cannot reach another gallery's photos.
+On the beta channel the photos go to the trash under the same rule as a single
+delete; the response reports `trashed`, `deleted`, `failed` and
+`retention_days`.
+
+### Trash
+
+Beta channel from v3.172.0-beta.0. Every trash route needs `photos.delete` and
+is scoped to the event.
+
+```bash
+# List the gallery's trash
+curl "$BASE_URL/api/admin/photos/$EVENT_ID/photos/trash" -H "Authorization: Bearer $ADMIN_JWT"
+
+# Restore
+curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/photos/trash/restore" \
+  -H "Authorization: Bearer $ADMIN_JWT" -H "Content-Type: application/json" \
+  -d '{ "ids": [1234, 1235] }'
+
+# Delete for good
+curl -X POST "$BASE_URL/api/admin/photos/$EVENT_ID/photos/trash/purge" \
+  -H "Authorization: Bearer $ADMIN_JWT" -H "Content-Type: application/json" \
+  -d '{ "ids": [1234] }'
+```
+
+- The list answers `{ items, retention_days }`, newest first. Each item has
+  `id`, `filename`, `media_type`, `size_bytes`, `deleted_at`, `purge_after`,
+  `deleted_by_name`, `held` (it was waiting for review and comes back held) and
+  `thumbnail_url` (`GET …/photos/trash/:photoId/thumbnail`, the only route
+  that serves a trashed photo's thumbnail).
+- `ids` is 1–500 positive integers; anything else answers `400`.
+- Restore answers `{ restored, photo_ids, failed }`, `200` when anything came
+  back and `409` when nothing did. A photo that would push the gallery past
+  its photo cap fails with `PHOTO_CAP_REACHED`; one no longer in the trash with
+  `NOT_IN_TRASH`.
+- Purge answers `{ purged, failed }`.
+- Retention is **Trash retention (days)** in General settings: default 30,
+  range 0–365. An hourly job purges what is past its retention. Archiving a
+  gallery empties its trash.
 
 ### Repair dimensions
 
@@ -499,7 +666,7 @@ photos, customer-assignment re-check):
 
 | Path | Auth | Notes |
 |---|---|---|
-| `/api/gallery/{slug}/photo/{id}` | gallery or admin token | Full-size photo, or the protected/watermarked variant when the event calls for it. |
+| `/api/gallery/{slug}/photo/{id}` | gallery or admin token | Full-size photo; watermarked when the event's watermark applies, and at protection level `maximum` (beta from v3.175.0-beta.0) a copy capped at 1920 × 1080, quality 60, without EXIF. |
 | `/api/gallery/{slug}/thumbnail/{id}` | gallery or admin token | Thumbnail. |
 | `/api/gallery/{slug}/download/{id}` | gallery or admin token | Download with `Content-Disposition`; honours the download settings. |
 
@@ -530,6 +697,6 @@ Video goes through the **admin** upload and chunked-upload endpoints. The public
 The Photos API fires:
 
 - `photo.uploaded` — once per successfully uploaded file (admin upload, API upload, guest upload, S3 prefix walker import, filewatcher auto-import)
-- `photo.deleted` — once per delete (single or bulk). Not fired per-photo when an event is archived — receivers infer from `event.archived`.
+- `photo.deleted` — once per delete (single or bulk). With the trash, it fires when the photo is moved to the trash and not again when the trash is purged or emptied. Not fired per-photo when an event is archived — receivers infer from `event.archived`.
 
 See [Webhooks](/features/webhooks) for the payload shape.

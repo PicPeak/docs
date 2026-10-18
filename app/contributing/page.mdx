@@ -25,7 +25,26 @@ Look for issues labeled:
 5. Ensure linting passes: `npm run lint` in both directories.
 6. Write tests for new code.
 7. Update documentation if needed.
-8. Submit the pull request.
+8. Attach a screenshot for any UI change (see below).
+9. Submit the pull request.
+
+### Screenshots for UI changes
+
+A screenshot is **required** for any pull request that changes a user-facing surface: a component, page, layout, style, or in-app text. Put at least one screenshot of the result in the PR description, with before/after where it helps reviewers see the difference. A UI pull request without one is asked to add it before review. Backend-only and other non-visual changes do not need one.
+
+Where the images live:
+
+- **Working from a fork:** drag the image into the PR description or a comment. GitHub hosts it; there is nothing to push.
+- **Pushing to the PicPeak repository:** commit the image to the `pr-assets` branch, never to a branch of your own. `pr-assets` is an orphan branch that holds only images, one folder per PR or issue (`screenshots/<issue-or-pr>-<n>/<file>.png`, for example `screenshots/1446-2/sign-step-dark.png`). Link it through `https://raw.githubusercontent.com/PicPeak/picpeak/pr-assets/screenshots/...`. Checking the branch out in a separate worktree (`git worktree add ../picpeak-pr-assets pr-assets`) keeps your working branch untouched.
+
+Rules for `pr-assets`:
+
+- Never delete it or force-push it; older PRs and issues load their images from it.
+- Do not overwrite an existing file. Use a new name such as `-v2.png`, because the raw CDN can keep serving the old image for a while.
+- Images only (PNG, JPEG, WebP, GIF, short MP4/WebM). No code, no secrets, nothing that shows real customer data.
+- Do not create new `screenshots/*` branches; the old ones were folded into `pr-assets`.
+
+The full recipe is in [`CONTRIBUTING.md`](https://github.com/PicPeak/picpeak/blob/main/CONTRIBUTING.md#where-screenshots-live).
 
 ## Code style
 

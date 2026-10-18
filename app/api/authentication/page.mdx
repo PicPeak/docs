@@ -2,12 +2,17 @@ import { Callout } from 'nextra/components'
 
 # Authentication
 
-The Admin API uses JWT bearer tokens. Tokens expire after 24 hours.
+PicPeak has two kinds of credential:
 
-## Obtaining a token
+- **API tokens** (`pp_live_…`) for the public `/api/v1` API — integrations, scripts, the Lightroom plugin. See [API tokens](#api-tokens).
+- **Admin session JWTs** for the admin API under `/api/admin`. The admin API accepts only these; an API token sent there is rejected.
+
+## Obtaining an admin token
+
+The login response does not contain the token. It is set as the `admin_token` cookie, so let curl store the cookie and read it from there:
 
 ```bash
-curl --fail --silent --show-error \
+curl --fail --silent --show-error -c cookies.txt \
   -X POST "http://localhost:3001/api/auth/admin/login" \
   -H "Content-Type: application/json" \
   -d '{
@@ -25,15 +30,21 @@ If reCAPTCHA is disabled (the default), you can omit or leave `recaptchaToken` e
 
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
     "id": 1,
     "username": "admin",
     "email": "admin@example.com",
-    "mustChangePassword": false
+    "mustChangePassword": false,
+    "role": { "name": "super_admin", "displayName": "Super Admin" }
   }
 }
 ```
+
+```bash
+TOKEN=$(awk '$6 == "admin_token" { print $7 }' cookies.txt)
+```
+
+When the account has two-factor authentication on, the login answers `{ "mfaRequired": true, "mfaToken": "…" }` instead. Send that `mfaToken` with the current code to `POST /api/auth/admin/login/mfa` (`{ "mfaToken": "…", "code": "123456" }`) to get the cookie.
 
 ## Using the token
 
@@ -43,7 +54,7 @@ Pass the token in the `Authorization` header for all subsequent requests:
 curl -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/admin/events
 ```
 
-PicPeak also sets an `admin_token` cookie on login, but for scripting, the bearer header is recommended.
+Sending the `admin_token` cookie instead (`curl -b cookies.txt`) works too.
 
 ## Token types
 
@@ -59,7 +70,21 @@ The middleware validates that the token type matches the endpoint requirements.
 
 ## Token expiration
 
-Admin tokens expire after 24 hours. Log in again to get a fresh token.
+Admin tokens expire after 24 hours, or after 30 days when the login sent `"remember_me": true`. Log in again to get a fresh token.
+
+## API tokens
+
+Create API tokens in **Settings → API Tokens** (permission `settings.integrations`). The token is shown once, on creation.
+
+```
+Authorization: Bearer pp_live_xxxxxxxx
+```
+
+- **Scopes** are hierarchical: `admin` implies `write` implies `read`. Reading needs `read`, uploading needs `write`, creating events needs `admin`.
+- A token acts as the admin who created it. Its effective rights are the intersection of its scopes and that admin's current role permissions, and it sees only the events that admin may see.
+- A token can carry an expiry date. Expired, revoked or unknown tokens answer `401` with `TOKEN_EXPIRED`, `TOKEN_REVOKED` or `INVALID_TOKEN`; a missing one `NO_TOKEN`.
+- A token whose owner is deactivated answers `401 OWNER_INACTIVE`; one whose owner must change their password answers `403 MUST_CHANGE_PASSWORD` until they do.
+- Resetting an admin's password (by another admin or the command-line recovery) revokes all of that admin's API tokens.
 
 ## Logout and revocation
 

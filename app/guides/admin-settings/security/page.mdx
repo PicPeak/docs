@@ -43,11 +43,45 @@ In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/
 
 ## Two-factor authentication
 
-| Setting | Default | What it does |
-|---|---|---|
-| **Enable 2FA** | off | When on, admins must enrol a TOTP authenticator (Google Authenticator, 1Password, etc.) on their next login and supply a code on every subsequent login. |
+Two-factor authentication is per admin, not a tab-wide switch. Each admin turns it on for their own account on the **Two-factor authentication** card under **Settings → General** (next to their account details), by enrolling a TOTP authenticator (Google Authenticator, 1Password, etc.). From then on every password login asks for a code.
 
-Recovery codes are issued at enrolment — store them somewhere safe. There is no admin-side bypass for a locked-out 2FA user; you must reset the user's password (which invalidates 2FA) from another admin account.
+Recovery codes are issued at enrolment — store them somewhere safe. Turning 2FA off and regenerating recovery codes both ask for a current code. Wrong codes on those two actions count against the same per-IP budget as failed logins (**Failed logins per window**, see [API rate limiting](#api-rate-limiting)), so a hijacked session cannot guess its way through (stable from v3.133.8, beta from v3.151.2-beta.0).
+
+A password reset does **not** remove 2FA. For an admin who has lost both the authenticator and the recovery codes, run the break-glass script inside the backend container:
+
+```bash
+docker compose exec backend node scripts/reset-admin-mfa.js --email admin@example.com
+```
+
+It clears that admin's 2FA so they can sign in with their password and enrol again (`--all --yes` resets every admin).
+
+## Passkeys
+
+Available on the beta channel from v3.171.0-beta.0; stable has no passkeys.
+
+An admin can register passkeys (fingerprint, face, device PIN or a security key) on the **Passkeys** card under **Settings → General**, below the two-factor card. A passkey can be used two ways:
+
+- **Instead of the password:** **Sign in with a passkey** on the login page. No username is typed, and an unknown passkey gets the same refusal as a refused account.
+- **Instead of the authenticator code:** after the password, **Use a passkey instead** at the second step.
+
+Rules:
+
+- **Up to 10 passkeys** per admin.
+- **Adding** one asks for the current password and, on an account with 2FA, a current authenticator or recovery code as well — a passkey signs in without the code, so the password alone is not enough to add one. **Removing** one asks for the current password. Wrong passwords or codes on add and remove, and failed passkey logins, count against the failed-logins budget.
+- **Tied to the site's address.** The relying party ID is the host name of the configured public address (`FRONTEND_URL`, or the Site URL setting when that is not pinned), never the address in the browser. Passkeys are unavailable when the public address is an IP address, uses plain `http` on anything other than `localhost`, or is not configured, and the admin must open the admin UI on that exact origin. If the site moves to another domain, existing passkeys stop working and admins sign in with their password again.
+- **Not for SSO accounts.** Accounts that sign in through [Admin SSO](/features/admin-sso) cannot register or use passkeys, and with password sign-in switched off in favour of SSO, passkeys are off too.
+- A passkey challenge issued before a restore's session cutoff is refused. A portable (`.picpeak`) restore keeps the restoring admin's own passkeys.
+
+## Password resets
+
+A password reset is either a Super Admin resetting it on the Users page (**Settings → Users** on the beta channel, a sidebar entry on stable), or a command-line script that sets a password on an existing account, such as `reset-admin-password.js`. On a reset:
+
+- the admin must change the new password at the next login (a reset from the Users page emails a generated password)
+- **every API token that admin created is revoked permanently** — issue new ones after recovery (stable from v3.133.3, beta from v3.135.2-beta.0)
+- **all of that admin's passkeys are removed** (beta from v3.171.0-beta.0); the activity log entry `admin_password_reset` records how many
+- 2FA stays as it is (see above)
+
+An admin who changes their own password while signed in keeps their API tokens and passkeys. Accounts managed by SSO cannot be reset here; reset the password at the identity provider.
 
 ## reCAPTCHA
 
@@ -106,11 +140,29 @@ Saving applies at once: the limiter's settings cache is cleared and the limiters
 
 Counted: every request to `/api/` from a client without an admin session, including the gallery photo list, gallery info, password verification, feedback and downloads. Not counted: `/health`, the transfer upload endpoints (which have their own per-minute limits), admin sessions, and — from `v3.127.0-beta.0` — image requests carrying a valid gallery token for that gallery.
 
-These are the general limits. The **per-image** limits on the [Image Security](/guides/admin-settings/image-security#rate-limiting) tab (requests per minute / 5 minutes / hour) are a separate mechanism for the secure-image routes and feed the suspicious-activity counter.
+**A verified viewer has a budget of their own** (stable from v3.134.5, beta from v3.169.0-beta.0). Requests that carry a valid gallery token for the gallery in their path, to that gallery's photo list and per-photo feedback (likes, ratings, comments), bulk rating, the lightbox view beacon, `my-feedback`, `feedback-summary`, `feedback-settings`, `info`, `stats` and `people`, count against **ten times** **Max requests per window** (3000 at the default), in a bucket separate from the anonymous traffic on the same address. A guest choosing from a large gallery therefore no longer runs out mid-selection, and other people behind the same address do not spend their budget. Downloads, uploads and the password check keep the ordinary budget. The factor is fixed; scale it through **Max requests per window**. Switching **Do not count authenticated requests** off turns both the viewer budget and the image exemption off. When a like is refused with `429`, the lightbox now shows a message instead of a heart that does nothing.
+
+There are no separate per-image budgets. The per-minute / 5-minute / hour image limits that the [Image Security](/guides/admin-settings/image-security#removed-settings) tab used to show were never enforced and are removed.
+
+### IPv6 clients
+
+For an IPv4 client the budget key is the address. For an IPv6 client it is the **/64** the address sits in, because a single host can use every address in its /64 and would otherwise get a fresh budget per request. IPv4-mapped addresses (`::ffff:203.0.113.7`) count as the plain IPv4 address. This applies to the general limit, the failed-logins limit and the viewer budget (stable from v3.133.3, beta from v3.135.0-beta.0).
 
 ### Behind a reverse proxy
 
-The limiter keys on the client IP Express reports. Behind a proxy that is only correct when the proxy forwards `X-Forwarded-For` and PicPeak trusts that proxy. The default `TRUST_PROXY` (`loopback, linklocal, uniquelocal`) covers Docker networks and private-network proxies; a proxy with a public address needs an explicit `TRUST_PROXY` entry, otherwise **every visitor shares the proxy's single budget**. See [Reverse Proxy → Client IP](/deployment/reverse-proxy#client-ip-rate-limiting-and-trust_proxy).
+The limiter keys on the client IP Express reports. Behind a proxy that is only correct when the proxy forwards `X-Forwarded-For` and PicPeak trusts that proxy — and trusts nothing beyond it, or a client can choose its own address. `TRUST_PROXY` sets that boundary:
+
+| Install | Default | When to change it |
+|---|---|---|
+| Docker Compose | `1` (the bundled frontend nginx) | Another reverse proxy in front of the frontend (Traefik, Nginx Proxy Manager, Caddy, Cloudflare Tunnel, a host-local TLS proxy): set `TRUST_PROXY=2`, one per hop. Otherwise **every visitor shares the proxy's single budget**. |
+| All-in-one image | `0` (trust nothing) | Behind a reverse proxy pass `-e TRUST_PROXY=1`, one per proxy hop. |
+| Native process, variable unset | `loopback, linklocal, uniquelocal` (legacy private-range trust) | Set the exact hop count, or `false` without a proxy. In production the backend logs a warning at startup while it is unset. |
+
+A hop count is only safe when clients cannot reach the app by a shorter path. With `TRUST_PROXY=1` on Compose, the backend logs a one-time warning when a request reaches the bundled nginx from a private address that already carried a forwarded client address — the sign of an extra proxy that needs `2`. See [Reverse Proxy → Client IP](/deployment/reverse-proxy#client-ip-rate-limiting-and-trust_proxy) and [Environment variables](/deployment/environment-variables).
+
+### Scanner probes
+
+On the beta channel from v3.135.0-beta.0, paths no PicPeak route uses answer `404` instead of the app's HTML page: anything ending in `.php` (also with a version digit, such as `.php7`), `.phtml`, `.asp`, `.aspx`, `.jsp`, `.jspx` or `.cgi`, and paths starting with the segments `/wp-admin`, `/wp-content`, `/wp-includes`, `/phpmyadmin` or `/cgi-bin`. Both the bundled nginx and the all-in-one image's fallback do this. A `200` told scanners something was there and hid them from log-based tools such as CrowdSec or fail2ban, which count `404`s — see [Bots and Scanners](/deployment/bot-protection). Stable still answers these paths with the app page.
 
 ### Recognising a hit
 

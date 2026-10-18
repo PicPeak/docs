@@ -10,6 +10,8 @@ Once you've completed the [Getting Started](/getting-started) guide, this sectio
 - **[Bots and Scanners](/deployment/bot-protection)** — what PicPeak blocks on its own, a checklist for public instances, and how to put Cloudflare (easy) or CrowdSec (advanced) in front.
 - **[Example: NAS at Home](/deployment/nas-example)** — a complete worked install on a UGREEN NAS behind a FRITZ!Box, with DynDNS, port forwarding, and HTTPS via Nginx Proxy Manager.
 - **[Release Channels](/deployment/release-channels)** — stable vs beta, switching channels, update notifications.
+- **[Upgrading](/deployment/upgrading)** — what to do before pulling a new release, per channel.
+- **[In-App Updates](/deployment/self-update)** — the opt-in updater that installs a new release from the admin UI (beta channel only).
 
 ## Background services
 
@@ -19,7 +21,7 @@ The `picpeak-backend` container runs a single Node process that hosts the HTTP A
 |---|---|---|
 | **Storage backend** (`initStorage`) | Startup | Validates `STORAGE_BACKEND` config; HEADs the bucket / `stat`s the directory. Refuses to boot on misconfig. |
 | **Managed file watcher** (chokidar) | Startup; local mode only | Auto-imports any photo dropped into `events/active/<slug>/`. Disabled when `STORAGE_BACKEND=s3`. |
-| **External-folder watcher** | Startup; opt-in per event | Imports new files from a reference event’s folder after they settle, with a 15-minute fallback scan. Keeps gallery records when source files disappear. Works with local or S3 storage; see [External Media](/features/external-media#watch-a-folder-for-new-files). |
+| **External-folder watcher** | Startup; opt-in per event | Imports new files from a reference event’s folder after they settle, with a 15-minute fallback scan. Keeps gallery records when source files disappear; on the beta channel it hides them from guests until the file is back. Works with local or S3 storage; see [External Media](/features/external-media#watch-a-folder-for-new-files). |
 | **S3 auto-importer** | Startup; opt-in via `STORAGE_AUTO_IMPORT=true` | Polls every active event's S3 prefix on a slow cadence (default 5 min). Imports objects seen for two consecutive polls. See [Storage Backends](./features/storage-backends). |
 | **Email queue processor** | Every 60s | Sends queued notifications (event creation, expiration warnings, archive complete). |
 | **Expiration checker** | Every hour (cron) | Marks galleries inactive past their `expires_at`, then archives them. Fires `event.expired` then `event.archived` webhooks. |
