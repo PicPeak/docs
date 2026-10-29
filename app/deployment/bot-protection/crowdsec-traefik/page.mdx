@@ -83,14 +83,17 @@ From the PicPeak directory:
 ```bash
 cp docker-compose.crowdsec-traefik.example.yml docker-compose.crowdsec-traefik.yml
 echo 'PICPEAK_DOMAIN=photos.example.com' >> .env
-docker compose -f docker-compose.production.yml -f docker-compose.crowdsec-traefik.yml up -d
+echo 'COMPOSE_FILE=docker-compose.production.yml:docker-compose.crowdsec-traefik.yml' >> .env
+docker compose up -d
 ```
+
+`COMPOSE_FILE` makes every later `docker compose` command, updates included, use both files. If you leave it out, pass both `-f` arguments every time: an update run with `docker-compose.production.yml` alone drops the Traefik labels and publishes the frontend port again, so CrowdSec is no longer in front. The in-app updater reuses the files the stack was started with.
 
 The overlay:
 
 - adds the `traefik` network and the router labels to the `frontend` service, with `traefik.http.routers.picpeak.middlewares=crowdsec@file`;
 - removes the published frontend port, so Traefik is the only way in;
-- sets `TRUST_PROXY=2` and `COOKIE_SECURE=true` on the backend.
+- sets `TRUST_PROXY` on the backend from `TRAEFIK_TRUST_PROXY` (default `2`), and `COOKIE_SECURE=true`. It has its own variable because `.env` usually still holds `TRUST_PROXY=1` from the default install, which is wrong behind Traefik.
 
 `TRAEFIK_NETWORK`, `CROWDSEC_MIDDLEWARE`, `TRAEFIK_ENTRYPOINT` and `TRAEFIK_CERTRESOLVER` in `.env` override the defaults (`traefik`, `crowdsec@file`, `websecure`, `letsencrypt`).
 
@@ -140,6 +143,8 @@ Traefik, CrowdSec, nginx and Express must all agree on the client address, and n
 
 `TRUST_PROXY` is parsed by the backend as follows: unset or empty keeps the legacy `loopback, linklocal, uniquelocal` trust (and logs a warning in production); `false` or `0` trusts no forwarding header; `true` trusts every hop; a number is a hop count; anything else (a subnet name, a CIDR, a comma list) is passed to Express unchanged. Use the hop count. Do not use `true`.
 
+**Trust boundary:** `docker-compose.production.yml` still publishes the backend on `127.0.0.1:3001` for local tools. A process on the host that calls that port directly can send its own `X-Forwarded-For` and, with two trusted hops, pick the address the backend sees. Only run trusted software on the host, or drop that port mapping in your copy of the overlay if nothing uses it.
+
 With `TRUST_PROXY=2` the backend takes the entry Traefik wrote and ignores anything to its left. A client sending `X-Forwarded-For: 1.2.3.4` through Traefik gets that header dropped at the entrypoint. A client reaching nginx directly could plant one entry, which is why the overlay removes the published frontend port. If you keep a port for LAN access, bind it to loopback (`PICPEAK_BIND_ADDRESS=127.0.0.1`) instead.
 
 **A CDN or load balancer in front of Traefik** (e.g. Cloudflare) adds one hop. Set the provider's address ranges in both places and raise the count:
@@ -160,7 +165,7 @@ entryPoints:
             - "173.245.48.0/20"
 ```
 
-and `TRUST_PROXY=3`. CrowdSec then needs the real client address in the access log as well; with a CDN in front, `ClientHost` is the CDN edge. Prefer the CDN's own bot protection in that layout ([Bots and Scanners](/deployment/bot-protection)).
+and `TRAEFIK_TRUST_PROXY=3` in `.env` (not `TRUST_PROXY`: the overlay sets the backend's value from `TRAEFIK_TRUST_PROXY`), then `docker compose up -d` to recreate the backend. CrowdSec then needs the real client address in the access log as well; with a CDN in front, `ClientHost` is the CDN edge. Prefer the CDN's own bot protection in that layout ([Bots and Scanners](/deployment/bot-protection)).
 
 **IPv6.** If Traefik runs in a Docker bridge network without IPv6 enabled and publishes its ports, Docker's userland proxy accepts IPv6 connections and forwards them from the bridge gateway address (for example `172.18.0.1`). Every IPv6 client then shares one IPv4 address, in Traefik's log, in CrowdSec and in PicPeak's rate limits, and a ban on it blocks all of them. Either enable IPv6 for Docker and the `traefik` network, or run Traefik with `network_mode: host`. Check by opening the site from an IPv6-only connection and looking at the Traefik access log.
 
@@ -200,7 +205,16 @@ Treat the access log as sensitive:
 - Make it readable only by Traefik and CrowdSec (`chmod 640`, shared group).
 - Keep it short-lived. Traefik does not rotate its own log; rotate with `logrotate` and send Traefik `USR1` so it reopens the file. A few days are enough for CrowdSec, which reads the log as it is written.
 - Do not ship it to a central log store without masking those paths.
-- If you would rather not log those URLs at all, a second Traefik router for `/gallery` and `/invite` with access logs switched off (`traefik.http.routers.<name>.observability.accessLogs=false`, Traefik v3.3 or later; older versions reject the label) does that, at the cost of CrowdSec no longer seeing probes on those paths. The bouncer still blocks known-bad IPs there.
+- If you would rather not log those URLs at all, add a second Traefik router for `/gallery` and `/invite` with access logs switched off (Traefik v3.3 or later; older versions reject the label). It must carry the bouncer middleware itself: Traefik does not pass a router's middlewares on to another router, and the longer path rule wins, so without it banned addresses reach those paths. CrowdSec no longer sees probes on those paths, but the bouncer still blocks known-bad IPs there.
+
+  ```yaml
+  - "traefik.http.routers.picpeak-private.rule=Host(`${PICPEAK_DOMAIN}`) && (PathPrefix(`/gallery`) || PathPrefix(`/invite`))"
+  - "traefik.http.routers.picpeak-private.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+  - "traefik.http.routers.picpeak-private.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+  - "traefik.http.routers.picpeak-private.middlewares=${CROWDSEC_MIDDLEWARE:-crowdsec@file}"
+  - "traefik.http.routers.picpeak-private.observability.accessLogs=false"
+  - "traefik.http.routers.picpeak-private.service=picpeak"
+  ```
 
 What CrowdSec reports to its network is described under [CrowdSec (Advanced) → Privacy](/deployment/bot-protection/crowdsec#privacy).
 
@@ -247,6 +261,6 @@ services:
 
 ## Upgrades and rollback
 
-PicPeak updates do not touch the overlay or Traefik. Pull and restart with the same two `-f` arguments. To roll back, run `docker compose -f docker-compose.production.yml up -d` and set `TRUST_PROXY` back to what it was (the default is `1`). The frontend port is published again. No PicPeak code or primary Compose file changes either way.
+PicPeak updates do not touch the overlay or Traefik. With `COMPOSE_FILE` set, `docker compose pull && docker compose up -d` keeps both files; without it, pass the same two `-f` arguments. To roll back, remove the overlay from `COMPOSE_FILE` (or drop the second `-f`) and run `docker compose up -d`: the backend goes back to `TRUST_PROXY` from `.env` (default `1`) and the frontend port is published again. No PicPeak code or primary Compose file changes either way.
 
 If a real visitor is blocked, see [If a real visitor gets locked out](/deployment/bot-protection/crowdsec#if-a-real-visitor-gets-locked-out).
