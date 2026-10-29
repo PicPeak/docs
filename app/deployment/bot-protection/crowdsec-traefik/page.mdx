@@ -118,6 +118,8 @@ Then remove the crawler scenario, which bans normal gallery guests ([why](/deplo
 cscli scenarios remove crowdsecurity/http-crawl-non_statics --force
 ```
 
+CrowdSec reads acquisition files and scenarios only at start, so reload it to apply both changes: `sudo systemctl reload crowdsec` on a host install, `docker restart crowdsec` (or your container's name) for the container. Until then the Traefik log is not read and the crawler scenario keeps banning.
+
 ### Verify
 
 Run the [checklist](#verification-checklist) below before you rely on it.
@@ -198,7 +200,7 @@ Treat the access log as sensitive:
 - Make it readable only by Traefik and CrowdSec (`chmod 640`, shared group).
 - Keep it short-lived. Traefik does not rotate its own log; rotate with `logrotate` and send Traefik `USR1` so it reopens the file. A few days are enough for CrowdSec, which reads the log as it is written.
 - Do not ship it to a central log store without masking those paths.
-- If you would rather not log those URLs at all, a second Traefik router for `/gallery` and `/invite` with access logs switched off (`traefik.http.routers.<name>.observability.accessLogs=false`, Traefik v3.1 or later) does that, at the cost of CrowdSec no longer seeing probes on those paths. The bouncer still blocks known-bad IPs there.
+- If you would rather not log those URLs at all, a second Traefik router for `/gallery` and `/invite` with access logs switched off (`traefik.http.routers.<name>.observability.accessLogs=false`, Traefik v3.3 or later; older versions reject the label) does that, at the cost of CrowdSec no longer seeing probes on those paths. The bouncer still blocks known-bad IPs there.
 
 What CrowdSec reports to its network is described under [CrowdSec (Advanced) → Privacy](/deployment/bot-protection/crowdsec#privacy).
 
