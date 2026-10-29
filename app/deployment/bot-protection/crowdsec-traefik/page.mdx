@@ -205,7 +205,7 @@ Treat the access log as sensitive:
 - Make it readable only by Traefik and CrowdSec (`chmod 640`, shared group).
 - Keep it short-lived. Traefik does not rotate its own log; rotate with `logrotate` and send Traefik `USR1` so it reopens the file. A few days are enough for CrowdSec, which reads the log as it is written.
 - Do not ship it to a central log store without masking those paths.
-- If you would rather not log those URLs at all, add a second Traefik router for `/gallery` and `/invite` with access logs switched off (Traefik v3.3 or later; older versions reject the label). It must carry the bouncer middleware itself: Traefik does not pass a router's middlewares on to another router, and the longer path rule wins, so without it banned addresses reach those paths. CrowdSec no longer sees probes on those paths, but the bouncer still blocks known-bad IPs there.
+- To keep the most common token URLs out of the log, add a second Traefik router for the `/gallery` and `/invite` pages with access logs switched off (Traefik v3.3 or later; older versions reject the label). It must carry the bouncer middleware itself: Traefik does not pass a router's middlewares on to another router, and the longer path rule wins, so without it banned addresses reach those paths. CrowdSec no longer sees probes on those paths, but the bouncer still blocks known-bad IPs there.
 
   ```yaml
   - "traefik.http.routers.picpeak-private.rule=Host(`${PICPEAK_DOMAIN}`) && (PathPrefix(`/gallery`) || PathPrefix(`/invite`))"
@@ -216,11 +216,15 @@ Treat the access log as sensitive:
   - "traefik.http.routers.picpeak-private.service=picpeak"
   ```
 
+  This covers page loads only. The API calls those pages make, and other links, still carry tokens in the path and are still logged: `/api/invite/<token>`, PicTransfer (`/api/public/transfer/<token>`, `/api/public/transfer-upload/<token>`), contract signing (`/api/public/contract-signing/invite/<token>`), quote and payment-check links. A router cannot strip a token from a path, so treat the log as sensitive either way (the points above), or switch Traefik's access log off for the PicPeak router entirely and accept that CrowdSec then only sees decisions from elsewhere.
+
 What CrowdSec reports to its network is described under [CrowdSec (Advanced) → Privacy](/deployment/bot-protection/crowdsec#privacy).
 
 ## AppSec stays off
 
 The MVP covers IP decisions only. Keep `crowdsecAppsecEnabled: false` on the PicPeak middleware. PicPeak streams uploads of up to 1 GB through nginx with request buffering off; AppSec body inspection would buffer or reject them. If you enable AppSec later, use a separate middleware on a router that excludes `/api` upload routes.
+
+**Upload timeout:** Traefik v3 stops reading a request after 60 seconds by default (`respondingTimeouts.readTimeout`). Gallery and admin uploads of large files go up in chunks, so each request stays short, but a single large request on a slow uplink can hit that limit. Raise it on the entry point PicPeak uses, for example `entryPoints.websecure.transport.respondingTimeouts.readTimeout: 600s`.
 
 ## Docker Swarm
 
