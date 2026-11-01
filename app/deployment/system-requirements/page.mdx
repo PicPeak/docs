@@ -4,12 +4,50 @@ import { Callout } from 'nextra/components'
 
 ## Minimum requirements
 
-- **CPU**: 2 CPU cores
+- **CPU**: 2 CPU cores, 64-bit ARM or x86-64 with at least the **x86-64-v2** instruction set. See [CPU compatibility](#cpu), especially on a virtual machine
 - **RAM**: **4 GB minimum** for a normal photo-upload workload — sharp/libvips decodes the full uncompressed frame before resize, and the default two worker loops at sharp-concurrency 2 can push peak RSS past 1.5 GB on a batch of 20-MP+ photos. On a 2 GB VPS that's enough to OOM-kill the backend mid-batch (surfaces as 503s on thumbnails — see [Low-memory hosts](#low-memory-hosts) for the recipe to run on 2 GB).
 - **Storage**: 20 GB minimum (plus photo storage needs)
 - **OS**: Linux (Ubuntu 20.04+), macOS, or Windows with WSL2
 - **Node.js**: v22.12.0 or higher, for native installs and builds from source (the Docker images bring their own Node.js 22). The installer installs Node.js 22 on a native install
 - **Database**: SQLite (included) or PostgreSQL 12+
+
+## CPU compatibility [#cpu]
+
+PicPeak processes images with [Sharp](https://sharp.pixelplumbing.com). On x86-64 Linux, Sharp's prebuilt binaries need the **x86-64-v2** instruction set (SSE4.2, POPCNT and others). This applies to the Docker images, the all-in-one image and native installs alike. 64-bit ARM hosts are not affected.
+
+Almost every physical x86-64 CPU sold since about 2010 has these instructions. The usual cause of trouble is a **virtual machine whose virtual CPU hides them**, even though the physical CPU has them.
+
+The server starts normally, so the problem only shows on the first image upload. Every image is then refused with an error containing:
+
+```text
+Could not load the "sharp" module
+Unsupported CPU: Prebuilt binaries for Linux x64 require v2 microarchitecture
+```
+
+Older versions report this as `Invalid image file`. The photo is fine: there is no need to investigate it, or your volumes, permissions, firewall or reverse proxy. Current versions name the CPU in the error and log `IMAGE PROCESSING IS UNAVAILABLE` at startup.
+
+### Check a host
+
+Run this on the machine or VM that runs PicPeak, not on the hypervisor:
+
+```bash
+for f in cx16 lahf_lm popcnt pni ssse3 sse4_1 sse4_2; do grep -qw "$f" /proc/cpuinfo || echo "missing: $f"; done
+```
+
+No output means the CPU exposes everything x86-64-v2 needs.
+
+### Proxmox VE
+
+New VMs created in the web interface default to `x86-64-v2-AES`, which works. VMs set to `kvm64`, which is also the default for VMs created without the web interface, or `qemu64` do not.
+
+1. Shut the VM down. A reboot from inside the guest does not apply the change.
+2. Open the VM, then **Hardware → Processors → Edit**.
+3. Set **Type** to `x86-64-v2-AES`, or `x86-64-v2` if the host CPU has no AES support.
+4. Start the VM.
+
+`host` works too and passes through every feature of the physical CPU, but it can break live migration between nodes with different CPUs. On a cluster, choose the newest CPU type that every node supports.
+
+Other hypervisors have an equivalent setting: pick a CPU model at Nehalem level or newer, or host passthrough.
 
 ## Docker requirements (recommended)
 

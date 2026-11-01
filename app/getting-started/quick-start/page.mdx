@@ -8,7 +8,7 @@ Get PicPeak running in under five minutes with Docker, running the steps yoursel
 Want a single command? [Simple Install](/getting-started/simple-install) installs Docker, generates everything, and starts the stack for you.
 </Callout>
 
-**Requirements:** Docker v20.10+ and Docker Compose v2.0+. At least 2 CPU cores, **4 GB RAM** (2 GB is workable only with [`UPLOAD_PROCESSOR_CONCURRENCY=1`](/deployment/docker#low-memory-hosts) — sharp/libvips decode peaks past 1.5 GB on heavy upload batches and OOM-kills the backend on smaller hosts, surfacing as 503s on thumbnails), 20 GB storage.
+**Requirements:** Docker v20.10+ and Docker Compose v2.0+. At least 2 CPU cores ([x86-64-v2 or ARM64](/deployment/system-requirements#cpu), which matters on Proxmox and other VMs), **4 GB RAM** (2 GB is workable only with [`UPLOAD_PROCESSOR_CONCURRENCY=1`](/deployment/docker#low-memory-hosts) — sharp/libvips decode peaks past 1.5 GB on heavy upload batches and OOM-kills the backend on smaller hosts, surfacing as 503s on thumbnails), 20 GB storage.
 
 <Steps>
 
