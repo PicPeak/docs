@@ -22,6 +22,7 @@ Common use cases:
 | `photo.uploaded` | Admin upload, API upload, guest upload, auto-import, or S3 prefix walker import |
 | `photo.deleted` | Single or bulk delete (NOT fired per-photo when an event is archived — receivers infer from `event.archived`) |
 | `selection.submitted` | A guest finished their selection or approved the edited photos (beta channel from v3.171.0-beta.0; see [Feedback](/features/feedback)) |
+| `external_scan.completed` | An external-media scan of a gallery finished and changed something. Beta channel; see below |
 
 ## Default payload shape
 
@@ -65,6 +66,29 @@ Every `event.*` payload uses the same canonical event sub-object. Fields you hav
 ```
 
 `kind` is `selection` (the guest finished their selection) or `approval` (the guest approved the edited photos). An `approval` also carries `rejected_count`. `guest_name` and `note` can be `null`.
+
+`external_scan.completed` has its own `data` shape:
+
+```json
+{
+  "event_id": 10,
+  "source": "Project/gallery",
+  "trigger": "watch",
+  "imported": [{ "photo_id": 1, "relpath": "Project/gallery/a.jpg" }],
+  "moved": [{ "photo_id": 2, "from": "Project/gallery/b.jpg", "to": "Project/gallery/sub/b.jpg" }],
+  "missing": [{ "photo_id": 3, "relpath": "Project/gallery/c.jpg" }],
+  "counts": { "imported": 1, "moved": 1, "missing": 1, "returned": 0, "refreshed": 0 },
+  "truncated": false,
+  "finished_at": "2026-11-02T18:02:00.000Z"
+}
+```
+
+- `trigger` is `watch` (a file changed), `sweep` (the timed pass, or a watcher catching up when it starts) or `manual` (the Import button, or a new gallery's first import).
+- Paths are relative to `EXTERNAL_MEDIA_ROOT`, the same value as `photos.external_relpath`.
+- Each list holds at most 200 entries. `counts` always has the true totals, and `truncated` is `true` when a list was cut.
+- A scan that changed nothing sends nothing. `missing` lists only rows newly marked by this scan, not everything that's missing.
+- `moved` comes from PicPeak's rename detection. A move it can't match arrives as `missing` plus `imported`.
+- A failed or interrupted scan sends nothing, and the next scan doesn't report what that one already did.
 
 <Callout type="warning">
 Webhook payloads include customer contact info (name, email, phone) and the gallery share token. Only point webhooks at receivers you trust — anything that receives the payload has everything it needs to message the customer or open the gallery.
