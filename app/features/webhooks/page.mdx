@@ -83,11 +83,11 @@ Every `event.*` payload uses the same canonical event sub-object. Fields you hav
 }
 ```
 
-- `trigger` is `watch` (a file changed), `sweep` (the timed pass, or a watcher catching up when it starts) or `manual` (the Import button, or a new gallery's first import).
+- `trigger` is `watch` (a new media file arrived), `sweep` (the timed pass, or a watcher catching up when it starts) or `manual` (**Import now**, **Rescan** or **Try again**, or a new gallery's first import).
 - Paths are relative to `EXTERNAL_MEDIA_ROOT`, the same value as `photos.external_relpath`.
 - Each list holds at most 200 entries. `counts` always has the true totals, and `truncated` is `true` when a list was cut.
 - A scan that changed nothing sends nothing. `missing` lists only rows newly marked by this scan, not everything that's missing.
-- `moved` comes from PicPeak's rename detection. A move it can't match arrives as `missing` plus `imported`.
+- `moved` comes from PicPeak's rename detection. A move it can't match can arrive as `missing` plus `imported`, if the old path is newly missing and the new file can be imported.
 - A failed or interrupted scan sends nothing, and the next scan doesn't report what that one already did.
 
 <Callout type="warning">
