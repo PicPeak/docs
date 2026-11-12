@@ -179,6 +179,38 @@ Confirm the exact wording with your tax advisor. PicPeak prints what you type an
 
 On the beta channel from v3.144.2-beta.0, the invoice PDF has a service-date row. When the service date falls on the invoice date, **Settings → CRM → Invoices → Service date equal to the invoice date** decides whether the row says so in words (the default), prints the date again, or is left out; a service period always prints. See [Admin Settings → CRM](/guides/admin-settings/crm). Stable (v3.134.x) has neither the setting nor the row.
 
+## Business in the United Kingdom
+
+When **Settings → CRM → Business profile → Country** is `GB`, invoices follow HMRC's rules for a full VAT invoice (VAT Notice 700 s.16.6). Every other country is unchanged.
+
+On the beta channel from v3.198.0-beta.0. Stable (v3.135.x) does not have the UK settings.
+
+- The issuer's VAT row reads **VAT Reg. No.**, and the service-date row reads **Tax point**. The VAT number is checked against HMRC's format when you save the business profile; `XI` numbers for Northern Ireland are accepted.
+- The line table has a **VAT** column with the rate for each line.
+- The VAT total is **rounded down** to the whole penny. This applies wherever PicPeak computes VAT: invoices, quotes, instalments, monthly drafts, hour billing, album products, print sales and reminder fees. Each instalment rounds its own VAT, so the instalments can add up to a penny or two less VAT than the quote, never more.
+- The footer prints the company details from the business profile's **UK legal details** card: registered name, part of the UK it is registered in, company number and registered office for a limited company or LLP, or the proprietor's or partners' names otherwise. The registered office field is only for an office that differs from the letterhead; left blank, a limited company or LLP gets the letterhead address printed as its registered office.
+
+### Invoices in another currency
+
+A UK VAT invoice in a currency other than pounds must also state its VAT in GBP. The invoice editor has a **GBP per EUR** (or whichever currency) rate field for this; PicPeak does not fetch rates. The PDF prints a **VAT in GBP** row with the rate under it.
+
+An invoice that carries VAT cannot be sent until the rate is entered: sending is refused, and a scheduled invoice stays scheduled and editable. An invoice with no VAT (zero-rated, reverse charge, or a business that is not VAT-registered) sends without a rate.
+
+Until the rate is entered:
+
+- **Bills list.** The invoice carries a **Needs GBP rate** badge. This is where to look for a scheduled invoice that has not gone out: the scheduler leaves it out of its batch instead of failing on every run, and picks it up once the rate is in.
+- **Mark delivered & send** and **Trigger invoice now** are refused as well, so nothing is half-sent.
+- **Instalments.** A rate entered on an invoice carries to every instalment it is split into, and to the monthly draft its items are added to.
+- **Invoices PicPeak creates itself** (quote conversions, print sales, hour billing, album products) start without a rate. Open each one and enter the rate before it can go out.
+
+### Late-payment notice
+
+**Settings → CRM → Invoices → UK: print the statutory late-payment notice** (off by default) prints a line under the payment conditions on invoices to customers set or inferred as a **business**: statutory interest at 8% a year above the Bank of England base rate, plus fixed compensation under the Late Payment of Commercial Debts (Interest) Act 1998. Both are based on the total including VAT. On a GBP invoice the line names the sum (£40, £70 or £100, by the size of the invoice); on another currency it names the scale.
+
+<Callout type="warning">
+Check the invoice layout and the late-payment wording with your accountant before you rely on them.
+</Callout>
+
 ## Per-customer feature override
 
 `customer_accounts.feature_bills` toggle on the customer detail page hides the bills tab for that customer when off. Gating is master AND per-customer — see [Customer accounts → Per-customer CRM toggles](/features/customer-accounts#per-customer-crm-toggles).

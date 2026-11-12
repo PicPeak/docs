@@ -36,6 +36,35 @@ From **CRM → Contracts**, click **New contract**. The editor surfaces:
 - **Signing-mode toggle** — in-browser canvas signature, wet-signed PDF upload, or both.
 - **Linked event** — optional. If set, the lineage card on the event shows the contract; signing the contract can optionally trigger a status update on the event.
 
+## Business in the United Kingdom
+
+When **Settings → CRM → Business profile → Country** is `GB`, a new contract starts from UK clauses instead of the European ones. Every other country is unchanged.
+
+On the beta channel from v3.198.0-beta.0. Stable (v3.135.x) does not have the UK clauses.
+
+| Replaced | By |
+|---|---|
+| CH / DE closing provisions | **Closing provisions (UK law)**: the law and courts of the jurisdiction set in the business profile (England and Wales, Scotland or Northern Ireland). A consumer living in another part of the UK can still sue at home. |
+| Data protection (GDPR / FADP) | **Data protection (UK GDPR)**: UK GDPR and the Data Protection Act 2018, with the right to complain to the Information Commission. |
+| Tiered cancellation fees | **Booking deposit and cancellation (UK)**: a reservation deposit; anything kept beyond it is limited to the loss you actually could not avoid. |
+
+Added after the image-rights clauses:
+
+- **Copyright and moral rights (UK)**: asserts your right to be named as the author (s.78 CDPA 1988).
+- **Portfolio and marketing use (UK)**: asks the customer's consent to show private-commission photos in your portfolio (s.85 CDPA 1988). The customer can withdraw it.
+
+For a **consumer** only, **Right to cancel within 14 days (UK consumers)** adds the 14-day cancellation notice and the model cancellation form (Consumer Contracts Regulations 2013). Whether a customer is a business or a consumer comes from **Business or consumer** on the customer page; left unset, a customer with a company name or a VAT ID counts as a business.
+
+The business profile's **UK legal details** card holds the legal form, registered name, company number, registered office, jurisdiction and proprietor or partner names. Contracts, quotes and invoices print them in the footer, as the Companies Act disclosure rules require.
+
+<Callout type="warning">
+**The UK clauses are examples, like every seeded block. Have a UK lawyer review them before you send a contract.** Questions to take to them:
+
+- Whether a shoot booked for a fixed date falls under the exception to the 14-day cancellation right (reg 28(1)(h) of the 2013 Regulations), or the customer must ask for work to start early.
+- How large a deposit you can keep on cancellation, and how you show the loss behind anything above it.
+- Whether the s.85 portfolio consent needs its own signature or tick box rather than a clause in the contract.
+</Callout>
+
 ## Sending a contract
 
 Contracts start from a template; see [Contract Templates & PDF Design](/features/crm/contract-templates) for templates, attachments, the PDF theme, and what is frozen at send. In builds with the pre-send review, **Send to customer** first shows what will go out — signers, attachments, price, template version and any problems — and sends from there.
