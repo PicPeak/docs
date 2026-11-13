@@ -10,7 +10,7 @@ Not released yet. The website embed ships with [PicPeak PR #2500](https://github
 
 ## Enable the feature
 
-The website embed is **off by default**. Turn it on under **Settings → Features → Website embed**. While it's off, no embed section appears in the event settings and every existing embed shows "This gallery is not available."
+The website embed is **off by default**. Turn it on under **Settings → Features → Website embed**. While it's off, no embed section appears in the event settings and every existing embed stays blank (see below).
 
 ## Which galleries can be embedded
 
@@ -20,7 +20,7 @@ Only a gallery that anyone could open anyway:
 - **active and published**, not archived, not expired, not paused,
 - **not a hidden gallery** (reveal mode with the gallery still hidden).
 
-If a gallery stops meeting one of these, its embed shows "This gallery is not available." and comes back on its own once the gallery qualifies again. Setting a password on an embedded gallery pauses the embed; the settings section says so.
+If a gallery stops meeting one of these, PicPeak no longer allows other websites to frame it: the browser blocks the frame, so the embed stays blank (the browser console reports a refused frame). It comes back on its own once the gallery qualifies again. Opened directly in a browser tab, the embed address shows "This gallery is not available." Setting a password on an embedded gallery pauses the embed; the settings section says so.
 
 ## Create the embed code
 

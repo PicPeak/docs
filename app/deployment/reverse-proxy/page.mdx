@@ -214,10 +214,10 @@ See [Environment Variables → Authentication cookies](/deployment/environment-v
 
 The [website embed](/features/website-embed) puts a gallery inside an `<iframe>` on another website. PicPeak allows framing on the embed path `/gallery/<slug>/embed/<token>` only and sends the allowed websites as `Content-Security-Policy: frame-ancestors`. A proxy in front of PicPeak breaks the embed when it adds its own framing headers to that path:
 
-- `X-Frame-Options: SAMEORIGIN` or `DENY` (Nginx Proxy Manager's **Block Common Exploits**, many hardening snippets, Traefik's `frameDeny` / `customFrameOptionsValue`),
-- a `Content-Security-Policy` with its own `frame-ancestors`, from the proxy or a CDN.
+- a `Content-Security-Policy` with its own `frame-ancestors`, from the proxy or a CDN. The browser enforces every policy it receives, so a second `frame-ancestors` that does not list your website blocks the frame even though PicPeak's own policy allows it.
+- `X-Frame-Options: SAMEORIGIN` or `DENY` (Nginx Proxy Manager's **Block Common Exploits**, many hardening snippets, Traefik's `frameDeny` / `customFrameOptionsValue`). Current browsers ignore `X-Frame-Options` when a `frame-ancestors` policy is present, but older browsers do not, and a proxy that replaces or drops PicPeak's `Content-Security-Policy` leaves `X-Frame-Options` as the only rule.
 
-The browser applies the strictest of these, so the frame stays blank and the console reports a refused frame. Leave the embed path out of such header rules. In nginx, a `location` with any `add_header` of its own does not inherit the `add_header` lines of the `server` block:
+Either way the frame stays blank and the console reports a refused frame. A blank frame also means the gallery itself no longer qualifies (see [which galleries can be embedded](/features/website-embed#which-galleries-can-be-embedded)), so check that first. Leave the embed path out of such header rules. In nginx, a `location` with any `add_header` of its own does not inherit the `add_header` lines of the `server` block:
 
 ```nginx
 # Before your other locations: the embed path without the site-wide framing headers
