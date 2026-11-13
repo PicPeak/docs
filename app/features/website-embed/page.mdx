@@ -18,9 +18,10 @@ Only a gallery that anyone could open anyway:
 
 - **no gallery password** (an embed never asks for one),
 - **active and published**, not archived, not expired, not paused,
-- **not a hidden gallery** (reveal mode with the gallery still hidden).
+- **not a hidden gallery** (reveal mode with the gallery still hidden),
+- **not waiting for a booking payment** (a payment-locked gallery opens once the deposit is paid).
 
-If a gallery stops meeting one of these, PicPeak no longer allows other websites to frame it: the browser blocks the frame, so the embed stays blank (the browser console reports a refused frame). It comes back on its own once the gallery qualifies again. Opened directly in a browser tab, the embed address shows "This gallery is not available." Setting a password on an embedded gallery pauses the embed; the settings section says so.
+If a gallery stops meeting one of these, PicPeak no longer allows other websites to frame it: the browser blocks the frame, so the embed stays blank (the browser console reports a refused frame). Once the gallery qualifies again, the embed works on the next page load of the website that shows it. Opened directly in a browser tab, the embed address shows "This gallery is not available." Setting a password on an embedded gallery pauses the embed; the settings section says so.
 
 ## Create the embed code
 
@@ -41,7 +42,7 @@ If a gallery stops meeting one of these, PicPeak no longer allows other websites
 ## What visitors see
 
 - The gallery name and a grid of the **published** photos, in pages of up to 60 with **Load more**. Videos are left out.
-- A lightbox with the **preview** size, never the original. The previous/next buttons and the arrow keys step through the photos; Escape closes it.
+- A lightbox with the **preview** size. As in the gallery, a preview that cannot be served falls back to the original, unless a download limit or photo sales withhold it. The previous/next buttons and the arrow keys step through the photos; Escape closes it.
 - A **View full gallery** link that opens the normal gallery in a new tab.
 
 Embed views are not counted as gallery visits and do not trigger the "gallery opened" notification.
@@ -63,17 +64,17 @@ PicPeak sends the list to the browser as `Content-Security-Policy: frame-ancesto
 
 ## Reverse proxies
 
-Your gallery pages normally carry `X-Frame-Options: SAMEORIGIN` and `frame-ancestors 'self'`, so no other website can frame them. PicPeak lifts this on the embed path `/gallery/<slug>/embed/<token>` only: the bundled frontend nginx and the [all-in-one image](/deployment/single-container) both do it.
+Your gallery pages normally carry `X-Frame-Options: SAMEORIGIN`, so no other website can frame them. PicPeak lifts this on the embed path `/gallery/<slug>/embed/<token>` only, and sends the allowed websites as `frame-ancestors` there: the bundled frontend nginx and the [all-in-one image](/deployment/single-container) both do it.
 
-A proxy of your own in front of PicPeak must not add its own framing headers on that path, or the browser refuses the embed. Check for:
+A proxy of your own in front of PicPeak can break the embed on that path. Check for:
 
-- `X-Frame-Options` added by the proxy (Nginx Proxy Manager's "Block Common Exploits" and many hardening snippets add `SAMEORIGIN`),
-- a `Content-Security-Policy` with its own `frame-ancestors`, set by the proxy or by a CDN such as Cloudflare.
+- a `Content-Security-Policy` with its own `frame-ancestors`, set by the proxy or by a CDN such as Cloudflare. The browser enforces it in addition to PicPeak's;
+- `X-Frame-Options` added by the proxy (many hardening snippets add `SAMEORIGIN`). Current browsers ignore it while PicPeak's `frame-ancestors` is present, older ones do not, and it is the only rule left if the proxy replaces PicPeak's `Content-Security-Policy`.
 
 See [Reverse Proxy → Website embed](/deployment/reverse-proxy#website-embed) for an example.
 
 ## Good to know
 
-- **The token is the switch.** The embed code works only with the current token. **New code** and **Remove** take effect at once.
+- **The token is the switch.** The embed code works only with the current token. **New code** and **Remove** take effect for every new page load; a page that is already open keeps the photos it has loaded until it is reloaded.
 - **The embed shows what guests see.** Photos that are hidden, still in review or rejected stay out of the embed, as they stay out of the gallery.
 - **Turning the feature off suspends, doesn't delete.** Existing embed codes stop working while the flag is off and work again when you turn it back on.
