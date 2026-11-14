@@ -6,6 +6,7 @@ export default {
   'reveal-mode': 'Reveal Mode & Download Sizes',
   pictransfer: 'PicTransfer',
   'live-slideshow': 'Live Slideshow',
+  'website-embed': 'Website Embed',
   'draft-mode': 'Draft Mode',
   'themes-branding': 'Themes & Branding',
   branding: 'Branding',
