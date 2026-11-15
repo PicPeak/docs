@@ -114,6 +114,8 @@ In production, an S3 endpoint that resolves to a private address (RFC 1918, loop
 Link-local, cloud-metadata, carrier-grade NAT, reserved and multicast addresses answer `S3_ENDPOINT_FORBIDDEN` and can never be approved. Every connection re-checks the DNS answers, so a hostname that resolved publicly when it was saved cannot later point uploads at an internal address. **Test connection** runs a real bucket check, and reuses the saved secret only against the endpoint it was saved for. (Beta channel from v3.142.1-beta.0, stable from v3.133.5.)
 ### Rsync destination settings
 
+The rsync destination needs the `rsync` and `ssh` programs inside the backend container. Builds containing [PicPeak PR #2525](https://github.com/PicPeak/picpeak/pull/2525) ship both in the official images (`backend` and the all-in-one image). Older images do not; there an rsync backup fails until you add them, and an image you build yourself is replaced again by every update.
+
 | Key | Default | What it does |
 |---|---|---|
 | `backup_rsync_host` | (required) | Hostname or IP of the rsync target. Must resolve to public addresses only; private, metadata, reserved and mixed public/private answers are refused. |
@@ -130,6 +132,22 @@ Rsync connects with `StrictHostKeyChecking=yes` and never learns a host key on f
 - put `known_hosts` in the same directory as the configured SSH key.
 
 With neither, pre-provisioned OpenSSH default user/global trust is used. Read-only trust files work. For a port other than 22 the entry is named `[host]:port`, as `ssh-keyscan -p` writes it. An unknown or changed key fails with `RSYNC_SSH_TRUST_REQUIRED`; if the selected trust file is missing, the backend logs the expected path at startup. The SSH command ignores local SSH configuration (aliases, proxies, jump hosts, ports from config) and connects to the vetted address while checking the key against the configured hostname. Mount the key and trust files persistently, outside the backed-up data. (Beta channel from v3.167.2-beta.0, stable from v3.134.2.)
+
+#### Test connection
+
+In builds containing [PicPeak PR #2527](https://github.com/PicPeak/picpeak/pull/2527), **Test connection** runs `rsync --list-only` against the configured remote path over the same SSH transport a backup uses. Older builds ran `ssh <host> echo …`, which rsync-only hosts such as a Hetzner Storage Box refuse, so the test failed although backups worked. A remote directory that does not exist yet is fine as long as its parent can be listed: the first backup creates it. A failure names the cause, for example `RSYNC_AUTH_FAILED` (the key was refused), `RSYNC_BINARY_MISSING` / `RSYNC_SSH_BINARY_MISSING` (the image lacks rsync or ssh), `RSYNC_CONNECTION_TIMEOUT`, `RSYNC_REMOTE_PATH_DENIED` or `RSYNC_SSH_TRUST_REQUIRED`. The test proves login and read access, not that the directory is writable.
+
+#### Example: Hetzner Storage Box
+
+| Key | Value |
+|---|---|
+| `backup_rsync_host` | `u123456.your-storagebox.de` |
+| `backup_rsync_port` | `23` (the Storage Box's SSH port for rsync) |
+| `backup_rsync_user` | `u123456` |
+| `backup_rsync_path` | a directory in the box, for example `picpeak` |
+| `backup_rsync_ssh_key` | `/app/data/ssh/backup_ed25519`, its public key added to the box's `authorized_keys` |
+
+Because the port is not 22, the `known_hosts` entry is named `[u123456.your-storagebox.de]:23`. Take the host key fingerprints from the Storage Box documentation or console, not from an unverified `ssh-keyscan`. Keep the key, the `known_hosts` file and the [manifest signing key](#manifest-signing-key) on a mounted volume or as secrets, so an update or a container rebuild does not lose them.
 ## Restore points
 
 On the beta channel from v3.167.3-beta.0 and stable from v3.134.2, every run to a **local** or **S3** destination copies every selected file into a new, standalone restore point (`backup-<uuid>/` locally, its own prefix on S3), together with the run's database dump. A restore point does not depend on earlier runs, so any one of them can be restored on its own. Plan destination capacity for `backup_retention_count` complete copies of the selected files.
@@ -137,6 +155,8 @@ On the beta channel from v3.167.3-beta.0 and stable from v3.134.2, every run to 
 A run that cannot copy a required file, the dump or the manifest fails; it is not recorded as a completed partial backup.
 
 **Rsync** keeps syncing into one mirror on the remote host, so only changed files are transferred and its manifests are recorded as incremental.
+
+In builds containing [PicPeak PR #2534](https://github.com/PicPeak/picpeak/pull/2534) each rsync run also copies its signed manifest to `<backup_rsync_path>/manifests/` on the remote, and the database dump is always part of the mirror, whatever `backup_exclude_patterns` say. Older builds kept the manifest only on the host, so an rsync backup could not be restored after the host was lost; the first run after the update writes the remote manifest. A run whose manifest cannot be uploaded fails. See [Restoring from an rsync destination](#restoring-from-an-rsync-destination).
 
 <Callout type="warning">
 **Legacy incremental backups.** Backups taken by older builds with the incremental setting only list the files that changed since their parent run. They are refused for a **full** or **files** restore, even with force, because they cannot prove a complete file set. Restore a legacy full backup or a new restore point instead, or use database-only or selective file recovery. The `backup_incremental` setting has no effect on new backups.
@@ -250,6 +270,8 @@ Local restore paths must lie inside `backup_destination_path` or `backup_manifes
 
 A `.picpeak` import is checked before and while it is extracted: too many entries (`PICPEAK_IMPORT_MAX_ENTRIES`), more unpacked bytes than `PICPEAK_IMPORT_MAX_EXPANDED_BYTES` or than the free space of the extraction directory, or an oversized `manifest.json` (`PICPEAK_IMPORT_MAX_MANIFEST_BYTES`) stop the import before anything is restored. See [Environment Variables](/deployment/environment-variables#backup-and-restore).
 
+In builds containing [PicPeak PR #2529](https://github.com/PicPeak/picpeak/pull/2529) the **Review & confirm** step lists every warning of the pre-flight check with a short explanation, for example that a full restore replaces the existing events and admin accounts. **Start restore** stays disabled until you tick *I have read the warnings and want to restore anyway*; that tick replaces the earlier *Force restore* option. A backup from an older version of the same release line is not a warning: it is the normal case, and the restore migrates the database to the running version. A backup from a newer version, from the other release line (beta vs. stable) or with an unreadable version still warns. A restore that stops in this check is recorded as *stopped before any change* and leaves the install as it was.
+
 The UI restore is a one-shot, full-rollback operation — run it on a fresh instance, not over a live one with newer data, unless you've thought through the consequences.
 
 In builds containing [PicPeak PR #1809](https://github.com/PicPeak/picpeak/pull/1809) a restore is stricter about what it accepts and what it reports:
@@ -301,6 +323,8 @@ tar -xzf backup/photos_20260428_022150.tar.gz -C /path/to/storage/
 - **Drift detection** — flags top-level directories under `STORAGE_PATH` that exist on disk but have **no** matching backup-path row. This is the canary for "a feature shipped without a matching backup row" — the most common cause of silent data loss on older installs.
 
 The Coverage tab auto-fetches on open. If everything is green, your next backup will capture what you'd expect.
+
+The **Backup coverage** card on the Dashboard tab is a different view: it shows what the last successful backup contains (database included or not, photos in the backup of all photos, archive files). In builds containing [PicPeak PR #2528](https://github.com/PicPeak/picpeak/pull/2528) these numbers are recorded by every run; older builds always showed "Excluded / 0 of 0", and runs recorded before the update show "—" until the next backup.
 
 ## Integrity tab
 
@@ -367,6 +391,24 @@ docker compose logs -f backend --tail=100
 ```
 
 When the boot log shows `Install-from-backup: restore completed successfully` followed by `Server running on port 3000`, the install is ready. Open the admin UI and log in with your original (pre-disaster) credentials.
+
+### Restoring from an rsync destination
+
+With builds containing [PicPeak PR #2534](https://github.com/PicPeak/picpeak/pull/2534) an rsync mirror (for example on a Hetzner Storage Box) carries its manifest and dump, so it can be restored on a new host:
+
+1. Put the original [manifest signing key](#manifest-signing-key) in place before the first boot (`BACKUP_MANIFEST_KEY` or `BACKUP_MANIFEST_KEY_FILE`).
+2. Copy the mirror back into the backup mount:
+
+   ```sh
+   mkdir -p ./backup/picpeak
+   rsync -a -e 'ssh -p 23' u123456@u123456.your-storagebox.de:picpeak/ ./backup/picpeak/
+   ```
+
+3. Restore it, either
+   - **at boot:** `touch ./backup/RESTORE_ON_INSTALL` and start the stack. The trigger also looks in `/backup/picpeak/manifests` and picks the newest manifest; or
+   - **in the wizard:** keep `backup_destination_path` at `/backup/picpeak`, open **Restore**, choose source **Local** and the manifest under `/backup/picpeak/manifests/`.
+
+Only runs made with such a build have a manifest on the remote. If your last rsync run is older, run one backup after updating before you rely on the mirror.
 
 ### Safety gates
 
