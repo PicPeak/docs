@@ -1,0 +1,99 @@
+import { Callout } from 'nextra/components'
+
+# What's New
+
+A short summary per [release channel](/deployment/release-channels): what changed in a
+way you would notice, which fixes are security fixes, and what you have to do when you
+upgrade.
+
+<Callout type="info">
+This page is updated for bigger steps, for example when beta features land on stable,
+not for every patch release. The full release notes stay the source of truth: the
+[GitHub releases](https://github.com/PicPeak/picpeak/releases) and the changelog
+([stable](https://github.com/PicPeak/picpeak/blob/stable/CHANGELOG.md),
+[beta](https://github.com/PicPeak/picpeak/blob/main/CHANGELOG.md)).
+</Callout>
+
+Last updated: 2026-11-16
+
+## Stable 3.135.x
+
+Stable is at **[v3.135.15](https://github.com/PicPeak/picpeak/releases/tag/v3.135.15)**.
+This covers v3.135.0 (2026-10-20) to v3.135.15 (2026-11-15). The stable line takes fixes
+only; new features arrive with the next promotion from beta.
+
+### Highlights
+
+- **Large PicTransfer files upload in chunks**, and sending files shows upload progress ([v3.135.15](https://github.com/PicPeak/picpeak/releases/tag/v3.135.15)).
+- **Rsync backups:** the connection test now uses rsync itself, so it works with rsync-only hosts such as a Hetzner Storage Box, and an rsync backup can be restored from the remote copy alone ([v3.135.15](https://github.com/PicPeak/picpeak/releases/tag/v3.135.15)). See [Backup and Restore](/guides/backup-restore#rsync-destination-settings).
+- **Safer restores:** a restore stays in maintenance until every database migration has run, shows that hold in its progress, and shows pre-flight warnings before it starts ([v3.135.14](https://github.com/PicPeak/picpeak/releases/tag/v3.135.14), [v3.135.15](https://github.com/PicPeak/picpeak/releases/tag/v3.135.15)).
+- **iPhone photos:** HEIC and HEIF files are accepted however the browser labels them, and HEVC-encoded HEIC is decoded through ffmpeg ([v3.135.6](https://github.com/PicPeak/picpeak/releases/tag/v3.135.6)).
+
+### Security
+
+- Downloads with a size cap or a watermark never fall back to the untouched original. Before, a photo that could not be resized or marked (HEIC, AVIF, camera RAW) shipped as the original ([v3.135.7](https://github.com/PicPeak/picpeak/releases/tag/v3.135.7)).
+- Admin uploads and the v1 API refuse a file named `.heic` / `.heif` that is not a readable image ([v3.135.7](https://github.com/PicPeak/picpeak/releases/tag/v3.135.7)).
+- sanitize-html updated to 2.18.1 and follow-redirects to 1.16.1 ([v3.135.2](https://github.com/PicPeak/picpeak/releases/tag/v3.135.2)).
+- Dependency updates for the vulnerability scanner findings of 2026-10-24 and 2026-11-12 ([v3.135.3](https://github.com/PicPeak/picpeak/releases/tag/v3.135.3), [v3.135.12](https://github.com/PicPeak/picpeak/releases/tag/v3.135.12)).
+
+### New features
+
+- The v1 API accepts video uploads on the photo endpoint ([v3.135.0](https://github.com/PicPeak/picpeak/releases/tag/v3.135.0)).
+
+### Notable fixes
+
+- The event date no longer shows one day early for viewers west of UTC ([v3.135.8](https://github.com/PicPeak/picpeak/releases/tag/v3.135.8)).
+- Files over 2 GiB upload on PostgreSQL; guest uploads honour **Max Video Size** and send large files in chunks ([v3.135.9](https://github.com/PicPeak/picpeak/releases/tag/v3.135.9), [v3.135.10](https://github.com/PicPeak/picpeak/releases/tag/v3.135.10)).
+- The "Google Photos" masonry mode shows its photos again, and the Carousel shows the preview instead of loading the original ([v3.135.10](https://github.com/PicPeak/picpeak/releases/tag/v3.135.10), [v3.135.11](https://github.com/PicPeak/picpeak/releases/tag/v3.135.11)).
+- Opening a Live Slideshow link no longer blocks rating, comments and downloads in the same browser ([v3.135.12](https://github.com/PicPeak/picpeak/releases/tag/v3.135.12)).
+- Folder navigation sits below the hero header, and the gallery offers only the feedback filters it allows ([v3.135.15](https://github.com/PicPeak/picpeak/releases/tag/v3.135.15)).
+- Abandoned S3 downloads no longer use up storage connections ([v3.135.5](https://github.com/PicPeak/picpeak/releases/tag/v3.135.5)).
+
+### Upgrade notes
+
+- No action needed. Migrations run on start. The one in v3.135.7 discards cached gallery ZIPs (they could hold an unwatermarked or uncapped photo), so the first "download all" per gallery builds its archive again.
+- The stable images do not include `rsync` and `openssh-client` yet. An rsync backup destination needs both inside the backend container; the beta images ship them (see below).
+
+## Beta 3.204.x
+
+Beta is at **[v3.204.2-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.204.2-beta.0)**.
+Everything below is on beta and not on stable. It is expected on stable with the next
+promotion. Beta has been collecting features since the last promotion (v3.132.1), so this
+is a selection, not a complete list.
+
+### Highlights
+
+- **Find my photos with a selfie:** a guest uploads one selfie and the gallery filters to the photos they appear in. Off by default, opt-in per gallery, needs face recognition, and the selfie is not stored ([v3.204.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.204.0-beta.0)).
+- **[Website embed](/features/website-embed):** show a gallery without a password as a photo grid on your own website. Off by default ([v3.203.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.203.0-beta.0)).
+- **Nested folders and two-stage delivery:** folders up to three levels deep, and a "first look, more to come" gallery with a **Full gallery is ready** step ([v3.164.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.164.0-beta.0)).
+- **Passkeys** for admin login ([v3.171.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.171.0-beta.0)).
+- **Backup restore tests:** a backup is fetched back, checked against its manifest and loaded into a throwaway database, plus tiered retention that keeps monthly restore points. The restore test is off by default ([v3.200.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.200.0-beta.0)).
+
+### Security
+
+- Hardened authorization, record lifecycle and input bounds: role changes stay within the acting admin's own permissions, sent mail and customer details are scoped to what the admin may see, and workflows run with at most their author's rights ([v3.203.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.203.0-beta.0), [PR 2499](https://github.com/PicPeak/picpeak/pull/2499)).
+- Only a gallery's owner can change who receives its gallery email (customer and admin address, assigned customer accounts); an assigned team member no longer can. Stable has no gallery team and is not affected ([v3.175.1-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.175.1-beta.0)).
+- After an admin changes a customer's email address, reset links and invitations sent to the old address can no longer set that account's password ([v3.174.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.174.0-beta.0)).
+
+### New features
+
+- Selling photos from priced galleries through Snipcart or Stripe, and configurable print orders ([v3.183.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.183.0-beta.0), [v3.189.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.189.0-beta.0), [v3.190.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.190.0-beta.0)).
+- Guest uploads can be held until you approve them; gallery team members with review of their uploads ([v3.171.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.171.0-beta.0), [v3.167.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.167.0-beta.0)).
+- Thumbnails cropped around each photo's subject, using faces where available ([v3.195.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.195.0-beta.0)).
+- Named favourite lists per guest, temporarily disabling a single gallery, and choosing a video's preview image ([v3.188.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.188.0-beta.0), [v3.186.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.186.0-beta.0), [v3.185.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.185.0-beta.0)).
+- Send the gallery link via WhatsApp with your own text ([v3.196.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.196.0-beta.0)).
+- CRM: client booking requests with availability, and a booking deposit that unlocks the gallery on payment ([v3.199.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.199.0-beta.0), [v3.200.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.200.0-beta.0)).
+- In-app updates from the admin UI, opt-in ([v3.165.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.165.0-beta.0)). See [In-App Updates](/deployment/self-update).
+
+### Notable fixes
+
+- Large galleries scroll faster: the Masonry, Mosaic, Story and Premium grids render only the visible part ([v3.189.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.189.0-beta.0)).
+- Large archive and video downloads no longer buffer in browser memory first ([v3.186.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.186.0-beta.0), [v3.187.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.187.0-beta.0)).
+- Portrait videos fit into the lightbox instead of being cropped ([v3.187.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.187.0-beta.0)).
+- An upload refused for an image limit names the limit instead of failing with a generic error ([v3.193.0-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.193.0-beta.0)).
+- The backup page shows what the last backup actually covered ([v3.204.2-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.204.2-beta.0)).
+
+### Upgrade notes
+
+- The backend and all-in-one images ship `rsync` and `openssh-client`, so an rsync backup destination works without a custom image. You still mount the SSH key and `known_hosts` yourself ([v3.204.2-beta.0](https://github.com/PicPeak/picpeak/releases/tag/v3.204.2-beta.0)).
+- Moving from stable to beta brings the deployment default changes and one-way migrations listed under [Upgrading → Beta: v3.165 to v3.175](/deployment/upgrading#beta-v3165-to-v3175) and [One-way changes on beta](/deployment/upgrading#one-way-changes-on-beta). Read them before switching an instance to beta.
