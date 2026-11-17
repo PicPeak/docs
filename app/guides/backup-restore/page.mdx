@@ -400,7 +400,7 @@ On every route you need:
 
 - the original [manifest signing key](#manifest-signing-key) (`BACKUP_MANIFEST_KEY` or `BACKUP_MANIFEST_KEY_FILE`): a manifest that does not verify is refused, wherever it is read from;
 - the SSH key file and its `known_hosts` entry, as for a backup run (see [SSH host keys](#ssh-host-keys));
-- free space in the restore's temporary directory (`TMPDIR`, by default `/tmp` in the container) for the dump plus the files being restored. The restore checks this before it downloads anything.
+- free space in the restore's temporary directory (`TMPDIR`, by default `/tmp` in the container) for the dump plus the files being restored. When that directory is on the same volume as the storage root, the restored files need room there too, so a full or files restore needs space for both copies. The restore checks this before it downloads anything.
 
 #### In the restore wizard
 
@@ -408,7 +408,7 @@ On every route you need:
 2. Open **Restore** and choose **Local Backup**. Restore points on the destination are listed next to the local ones and marked **Rsync destination**.
 3. Pick one, choose the restore type and confirm.
 
-The restore downloads the manifest again and verifies its signature. It then downloads only what the restore type needs into a private temporary directory: the dump for a database restore, the dump and the listed files for a full or files restore. Every checksum is verified against the manifest, the normal restore runs from that copy, and the copy is removed afterwards, also when the restore fails. The progress view shows the download file by file.
+The restore downloads the manifest again and verifies its signature. It then downloads only what the restore type needs into a private temporary directory: the dump for a database restore, the dump and the listed files for a full or files restore. No file may be larger than the manifest records, and media files are also held to `restore_max_file_size_mb`. A download that writes more than the manifest records is stopped. Every downloaded file is checked against the manifest's checksums before anything on the install changes. The normal restore then runs from that copy, and the copy is removed afterwards, also when the restore fails. The progress view shows the download file by file.
 
 If the destination cannot be read, the backup list says why, for example `RSYNC_AUTH_FAILED` or `RSYNC_CONNECTION_TIMEOUT`, and still lists the local restore points. Other errors:
 
@@ -416,7 +416,9 @@ If the destination cannot be read, the backup list says why, for example `RSYNC_
 |---|---|
 | `RESTORE_REMOTE_MANIFEST_NOT_FOUND` | No `manifests/` directory on the destination (backup made by an older build), or the selected manifest is no longer there. |
 | `RESTORE_REMOTE_FILE_MISSING` | Files the manifest lists are not on the destination (the mirror changed after the manifest was written). The message names them. |
-| `RESTORE_INSUFFICIENT_SPACE` | The download does not fit into the temporary directory. Free space there or point `TMPDIR` at a larger volume. |
+| `RESTORE_REMOTE_CHECKSUM_MISMATCH` | Downloaded files do not match the manifest. Nothing was restored. |
+| `RESTORE_REMOTE_DOWNLOAD_TOO_LARGE` | The destination sent more data than the manifest records. The download was stopped and nothing was restored. |
+| `RESTORE_INSUFFICIENT_SPACE` | The download (plus the restored copy, on a volume shared with storage) does not fit into the temporary directory. Free space there or point `TMPDIR` at a larger volume. |
 | `RESTORE_REMOTE_PATH_UNSAFE`, `RESTORE_REMOTE_MANIFEST_UNSUPPORTED` | The manifest names a path outside the mirror, or is not an rsync mirror manifest. Nothing is downloaded. |
 
 The destination keeps only the newest run's manifest, so the restore point offered is the mirror's current state.
@@ -434,7 +436,7 @@ BACKUP_RSYNC_PATH=picpeak
 BACKUP_RSYNC_SSH_KEY=/app/data/ssh/backup_ed25519
 ```
 
-Put the key and its `known_hosts` file in place, then write `rsync` into the trigger and start the stack:
+The default and the production compose files both pass these variables to the backend (with `BACKUP_SSH_KNOWN_HOSTS`). For the all-in-one image, pass them with `-e`. Put the key and its `known_hosts` file in place, then write `rsync` into the trigger and start the stack:
 
 ```sh
 echo rsync > ./backup/RESTORE_ON_INSTALL
