@@ -418,7 +418,7 @@ If the destination cannot be read, the backup list says why, for example `RSYNC_
 | `RESTORE_REMOTE_FILE_MISSING` | Files the manifest lists are not on the destination (the mirror changed after the manifest was written). The message names them. |
 | `RESTORE_REMOTE_CHECKSUM_MISMATCH` | Downloaded files do not match the manifest. Nothing was restored. |
 | `RESTORE_REMOTE_DOWNLOAD_TOO_LARGE` | The destination sent more data than the manifest records. The download was stopped and nothing was restored. |
-| `RESTORE_INSUFFICIENT_SPACE` | The download (plus the restored copy, on a volume shared with storage) does not fit into the temporary directory. Free space there or point `TMPDIR` at a larger volume. |
+| `RESTORE_INSUFFICIENT_SPACE` | The download (plus the restored copy, on a volume shared with storage) does not fit into the temporary directory, or a compressed dump would not fit there once expanded. Free space there or point `TMPDIR` at a larger volume. |
 | `RESTORE_REMOTE_PATH_UNSAFE`, `RESTORE_REMOTE_MANIFEST_UNSUPPORTED` | The manifest names a path outside the mirror, or is not an rsync mirror manifest. Nothing is downloaded. |
 
 The destination keeps only the newest run's manifest, so the restore point offered is the mirror's current state.
@@ -439,6 +439,7 @@ BACKUP_RSYNC_SSH_KEY=/app/data/ssh/backup_ed25519
 The default and the production compose files both pass these variables to the backend (with `BACKUP_SSH_KNOWN_HOSTS`). For the all-in-one image, pass them with `-e`. Put the key and its `known_hosts` file in place, then write `rsync` into the trigger and start the stack:
 
 ```sh
+mkdir -p ./backup
 echo rsync > ./backup/RESTORE_ON_INSTALL
 docker compose up -d
 ```
@@ -458,7 +459,7 @@ On a build without the direct restore, without network access from the host, or 
    ```
 
 3. Restore it, either
-   - **at boot:** `touch ./backup/RESTORE_ON_INSTALL` and start the stack. The trigger also looks in `/backup/picpeak/manifests` and picks the newest manifest; or
+   - **at boot:** `: > ./backup/RESTORE_ON_INSTALL` and start the stack. This leaves the trigger empty, also when a failed direct restore left `rsync` in it, so the boot restore looks locally: also in `/backup/picpeak/manifests`, where it picks the newest manifest; or
    - **in the wizard:** keep `backup_destination_path` at `/backup/picpeak`, open **Restore**, choose source **Local** and the manifest under `/backup/picpeak/manifests/`.
 
 Only runs made with a build containing PR #2534 have a manifest on the remote. If your last rsync run is older, run one backup after updating before you rely on the mirror.
