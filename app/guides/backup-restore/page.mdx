@@ -394,10 +394,61 @@ When the boot log shows `Install-from-backup: restore completed successfully` fo
 
 ### Restoring from an rsync destination
 
-With builds containing [PicPeak PR #2534](https://github.com/PicPeak/picpeak/pull/2534) an rsync mirror (for example on a Hetzner Storage Box) carries its manifest and dump, so it can be restored on a new host:
+With builds containing [PicPeak PR #2534](https://github.com/PicPeak/picpeak/pull/2534) an rsync mirror (for example on a Hetzner Storage Box) carries its signed manifest in `<backup_rsync_path>/manifests/` and its database dump. Builds containing [PicPeak PR #2559](https://github.com/PicPeak/picpeak/pull/2559) (stable: [PR #2560](https://github.com/PicPeak/picpeak/pull/2560)) restore it straight from the destination, also after the original host is gone. Nothing has to be copied back by hand.
 
-1. Put the original [manifest signing key](#manifest-signing-key) in place before the first boot (`BACKUP_MANIFEST_KEY` or `BACKUP_MANIFEST_KEY_FILE`).
-2. Copy the mirror back into the backup mount:
+On every route you need:
+
+- the original [manifest signing key](#manifest-signing-key) (`BACKUP_MANIFEST_KEY` or `BACKUP_MANIFEST_KEY_FILE`): a manifest that does not verify is refused, wherever it is read from;
+- the SSH key file and its `known_hosts` entry, as for a backup run (see [SSH host keys](#ssh-host-keys));
+- free space in the restore's temporary directory (`TMPDIR`, by default `/tmp` in the container) for the dump plus the files being restored. The restore checks this before it downloads anything.
+
+#### In the restore wizard
+
+1. Under **Backup**, set the destination to rsync with the host, port, user, remote path and SSH key of the mirror, then run **Test connection**. On a fresh host, complete the setup first.
+2. Open **Restore** and choose **Local Backup**. Restore points on the destination are listed next to the local ones and marked **Rsync destination**.
+3. Pick one, choose the restore type and confirm.
+
+The restore downloads the manifest again and verifies its signature. It then downloads only what the restore type needs into a private temporary directory: the dump for a database restore, the dump and the listed files for a full or files restore. Every checksum is verified against the manifest, the normal restore runs from that copy, and the copy is removed afterwards, also when the restore fails. The progress view shows the download file by file.
+
+If the destination cannot be read, the backup list says why, for example `RSYNC_AUTH_FAILED` or `RSYNC_CONNECTION_TIMEOUT`, and still lists the local restore points. Other errors:
+
+| Code | Meaning |
+|---|---|
+| `RESTORE_REMOTE_MANIFEST_NOT_FOUND` | No `manifests/` directory on the destination (backup made by an older build), or the selected manifest is no longer there. |
+| `RESTORE_REMOTE_FILE_MISSING` | Files the manifest lists are not on the destination (the mirror changed after the manifest was written). The message names them. |
+| `RESTORE_INSUFFICIENT_SPACE` | The download does not fit into the temporary directory. Free space there or point `TMPDIR` at a larger volume. |
+| `RESTORE_REMOTE_PATH_UNSAFE`, `RESTORE_REMOTE_MANIFEST_UNSUPPORTED` | The manifest names a path outside the mirror, or is not an rsync mirror manifest. Nothing is downloaded. |
+
+The destination keeps only the newest run's manifest, so the restore point offered is the mirror's current state.
+
+#### At boot on a fresh host
+
+The [install trigger](#how-the-trigger-works) can pull from the destination too. The new database holds no rsync settings yet, so name the destination in `.env`:
+
+```sh
+BACKUP_MANIFEST_KEY=<your off-host copy>
+BACKUP_RSYNC_HOST=u123456.your-storagebox.de
+BACKUP_RSYNC_PORT=23
+BACKUP_RSYNC_USER=u123456
+BACKUP_RSYNC_PATH=picpeak
+BACKUP_RSYNC_SSH_KEY=/app/data/ssh/backup_ed25519
+```
+
+Put the key and its `known_hosts` file in place, then write `rsync` into the trigger and start the stack:
+
+```sh
+echo rsync > ./backup/RESTORE_ON_INSTALL
+docker compose up -d
+```
+
+`rsync` picks the newest manifest on the destination that verifies; `rsync:manifests/backup-manifest-<id>.json` picks a specific one. The trigger only reaches the network when it says `rsync`, never when it is empty. The restored database brings the rsync backup settings back, so the `BACKUP_RSYNC_*` variables can be removed afterwards.
+
+#### Fallback: copy the mirror back by hand
+
+On a build without the direct restore, without network access from the host, or without the temporary space, copy the mirror into the backup mount and restore it as a local backup:
+
+1. Put the original manifest signing key in place before the first boot.
+2. Copy the mirror back:
 
    ```sh
    mkdir -p ./backup/picpeak
@@ -408,7 +459,7 @@ With builds containing [PicPeak PR #2534](https://github.com/PicPeak/picpeak/pul
    - **at boot:** `touch ./backup/RESTORE_ON_INSTALL` and start the stack. The trigger also looks in `/backup/picpeak/manifests` and picks the newest manifest; or
    - **in the wizard:** keep `backup_destination_path` at `/backup/picpeak`, open **Restore**, choose source **Local** and the manifest under `/backup/picpeak/manifests/`.
 
-Only runs made with such a build have a manifest on the remote. If your last rsync run is older, run one backup after updating before you rely on the mirror.
+Only runs made with a build containing PR #2534 have a manifest on the remote. If your last rsync run is older, run one backup after updating before you rely on the mirror.
 
 ### Safety gates
 
