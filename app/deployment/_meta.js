@@ -9,6 +9,7 @@ export default {
   'bot-protection': 'Bots and Scanners',
   'nas-example': 'Example: NAS at Home',
   'release-channels': 'Release Channels',
+  'whats-new': "What's New",
   upgrading: 'Upgrading',
   'self-update': 'In-App Updates',
   'repository-move': 'Repository and Image Move (2026)',
