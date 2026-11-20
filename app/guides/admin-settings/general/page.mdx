@@ -53,6 +53,8 @@ Where it is enforced:
 | **Allow self-registration for admins** | off | Exposes a public `/admin/register` form. Leave off in production. |
 | **Enable maintenance mode** | off | Blocks every non-admin request with a 503 + branded splash. Admin login still works so you can flip it back. |
 | **Use short gallery URLs** | off | New share links use a random short ID instead of the event slug. Existing links keep working. |
+| **Event codes** | off | Guests can open a gallery by typing its short code on `/code`. New galleries get a code while this is on. See [Event Codes](/features/event-codes). |
+| **Open the event-code page at the site root** | off | `/` leads to `/code` instead of the admin login. Needs event codes on; an enabled public landing page takes precedence. |
 
 <Callout type="warning">
 Maintenance mode is enforced by middleware (`backend/src/middleware/maintenance.js`) — if your reverse proxy caches the 503 response aggressively you may need to flush its cache after disabling.
