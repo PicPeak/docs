@@ -1,0 +1,109 @@
+import { Callout } from 'nextra/components'
+
+# Event Codes
+
+Event codes let you print **one card with one QR code for all your events**. The QR code always points to the same address, `https://<your-domain>/code`. Guests scan it, type the short code of their event (for example `K7M-4QX`) and land in that event's gallery.
+
+This is made for photo booth operators and anyone who hands out the same printed card at every event: the card never changes, only the code you tell the guests (on a printout from the booth, on the booth screen, on the invitation).
+
+The code is a **lookup, not a credential**. It leads to the gallery's normal share link, nothing more. A gallery with a password still asks for its password after the code.
+
+<Callout type="info">
+On the beta channel from v3.206.0-beta.0. Not on the stable channel yet.
+</Callout>
+
+## Turn event codes on
+
+Event codes are **off by default**. Turn them on under **Settings → General → Event codes** and save.
+
+- From then on, every **new** gallery gets a code when it is created. This includes duplicating a gallery and galleries created from a CRM quote or contract.
+- **Existing galleries do not get a code automatically.** Give a gallery a code on its own page (see below). This is deliberate: a gallery without a password is protected only by its long share link, and anyone who knows its code reaches that link, so you decide gallery by gallery which ones get a code.
+
+## Manage a gallery's code
+
+Open the gallery. The **Event code** card sits on the **Overview** tab, below the share link card. It shows the code and the address guests type it into.
+
+| Action | What it does |
+|---|---|
+| **Copy** | Copies the code as guests see it, e.g. `K7M-4QX`. |
+| **Copy link with the code filled in** | Copies `https://<your-domain>/code/K7M4QX`, which opens the gallery without typing. |
+| **Generate code** / **New code** | Creates a random code. A new code replaces the old one, which **stops working at once**, also on cards that are already printed. |
+| **Choose code** | Sets a code of your own. |
+| **Remove code** | The code stops working at once. The share link keeps working. |
+
+Generated codes have 6 characters and are shown in two groups (`K7M-4QX`). A code you choose must have **6 to 12 characters** from this set:
+
+```
+23456789ABCDEFGHJKMNPQRSTUVWXYZ
+```
+
+The digits `0` and `1` and the letters `O`, `I` and `L` are left out, so nothing on a printed card can be misread. A code can belong to one gallery only; if another gallery already uses it, PicPeak says so and keeps the old code.
+
+Guests can type the code in upper or lower case, with or without the dash or spaces.
+
+The card warns you when the gallery has **no password** ("anyone who knows the code can open it") and when it is **archived** (an archived gallery does not open with its code). Admins who are not allowed to see another owner's gallery links do not see that gallery's code card either. Changing or removing a code needs the permission to edit events.
+
+## When a code opens a gallery
+
+A code opens the gallery only while the gallery itself is live. For a gallery that is a **draft**, **expired**, **archived**, **paused** or deleted, the entry page says the code was not found, the same message as for a mistyped code. The gallery keeps its code in the meantime, so the code is not handed to another gallery. An archived gallery that you restore keeps its code; if it has none, use **Generate code** on its card.
+
+## Entry addresses
+
+| Address | What happens |
+|---|---|
+| `/code` | The entry page. Guests type the code and click **Open gallery**. |
+| `/code/K7M4QX` | The code is filled in and submitted straight away. |
+| `/code?code=K7M4QX` | Same as above. |
+
+After a valid code the guest lands on the gallery's share link. If the gallery has a password, the password page follows.
+
+### Open the entry page at the site root
+
+Under **Settings → General** you can also turn on **Open the event-code page at the site root**. Visitors to the bare address of your PicPeak (`https://<your-domain>/`) then land on `/code` instead of the admin login. It is **off by default** and only works while event codes are on; the checkbox is greyed out otherwise.
+
+If the [public landing page](/features/branding#public-landing-page) is switched on, it takes precedence: `/` keeps showing the landing page.
+
+## Make the QR code
+
+The QR code encodes the fixed address `https://<your-domain>/code`, so you make it once and use it on every card.
+
+**Ready-made card:** under **Print with the code** on the **Event code** card, **Table card (A6)** and **Poster (A4)** download a PDF with that QR code, the event name and the gallery's code printed large below it. The QR code is the same on every gallery's card; only the code differs. The buttons appear once the gallery has a code.
+
+**Your own design:** any QR code generator works. Use the address your guests reach PicPeak under, with `https://`.
+
+The QR code on a gallery's share link card (see [QR codes and printed cards](/features/gallery-management#qr-codes-and-printed-cards)) is a different thing: it leads to that one gallery.
+
+## Wrong codes and shared Wi-Fi
+
+To stop guessing, PicPeak counts wrong codes per network address:
+
+- **20 wrong codes in 15 minutes** per address (on IPv6, per `/64` network) are allowed.
+- **Valid codes do not count.** A whole venue behind one address can open galleries as often as it likes.
+- Once an address has reached 20 wrong codes, **every** lookup from it is refused for the rest of the 15 minutes, valid codes included. The entry page shows "Too many attempts. Please wait a few minutes and try again."
+- A code that cannot exist (wrong length or characters) is rejected by the page itself and does not count.
+
+At a venue where all guests share one Wi-Fi, they also share this budget. If many guests mistype at once, the venue can hit the limit and everyone there has to wait until the window ends; guests on mobile data are not affected. If PicPeak runs behind a reverse proxy, make sure it passes the real client address, otherwise all guests count as one address (`TRUST_PROXY`, see [Reverse Proxy](/deployment/reverse-proxy)).
+
+## For booth software: the v1 API
+
+The [public v1 API](/api) returns the code so booth software can show "Your album code: K7M-4QX" on screen or on a printout.
+
+`GET /api/v1/events/{id}/share-link` returns, next to `share_url`:
+
+| Field | Example | Meaning |
+|---|---|---|
+| `access_code` | `K7M4QX` | The code as stored. |
+| `access_code_display` | `K7M-4QX` | The code as guests see it. |
+| `access_code_url` | `https://<your-domain>/code/K7M4QX` | The entry page with the code filled in. |
+
+All three are `null` while event codes are switched off or the gallery has no code. `POST /api/v1/events` also returns `access_code` for the new gallery (`null` when it got none).
+
+## Turning event codes off
+
+When you switch **Event codes** off again:
+
+- Every code stops opening its gallery; the entry page answers "not found" for all of them.
+- `/` no longer leads to `/code`.
+- New galleries get no code, and codes cannot be generated or chosen. **Remove code** still works.
+- The codes stay stored. When you turn event codes back on, they work again.
+- The share links are not affected.

@@ -1,6 +1,7 @@
 export default {
   index: 'Overview',
   'gallery-management': 'Gallery Management',
+  'event-codes': 'Event Codes',
   'gallery-interface': 'Gallery Interface (Guest View)',
   'photo-categories': 'Photo Categories & Folders',
   'reveal-mode': 'Reveal Mode & Download Sizes',
